@@ -376,7 +376,6 @@ class Qoo10Crawler:
             r'/g/(\d+)',  # 짧은 형식: /g/123456
             r'/item/[^/]+/(\d+)',  # 긴 형식: /item/.../123456
             r'/item/[^/]+/(\d+)\?',  # 쿼리 파라미터 포함
-            r'/goods/goods\.aspx\?goodscode=(\d+)',  # 전체 경로
         ]
         
         for pattern in patterns:
@@ -403,7 +402,7 @@ class Qoo10Crawler:
                         return str(data['sku'])
                     if 'productID' in data:
                         return str(data['productID'])
-            except:
+            except (ValueError, json.JSONDecodeError, TypeError):
                 pass
         
         # 4. 메타 태그에서 추출 시도
