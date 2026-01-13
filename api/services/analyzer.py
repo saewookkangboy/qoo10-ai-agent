@@ -34,7 +34,8 @@ class ProductAnalyzer:
             "description_analysis": self._analyze_description(product_data),
             "price_analysis": self._analyze_price(product_data.get("price", {})),
             "review_analysis": self._analyze_reviews(product_data.get("reviews", {})),
-            "seo_analysis": self._analyze_seo(product_data)
+            "seo_analysis": self._analyze_seo(product_data),
+            "page_structure_analysis": self._analyze_page_structure(product_data.get("page_structure", {}))
         }
         
         # 종합 점수 계산
@@ -279,14 +280,152 @@ class ProductAnalyzer:
         
         return analysis
     
+    def _analyze_page_structure(self, page_structure: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        페이지 구조 분석
+        모든 div class를 분석하여 페이지의 구조적 완성도를 평가
+        """
+        analysis = {
+            "score": 0,
+            "total_classes": 0,
+            "key_elements_present": {},
+            "structure_completeness": {},
+            "recommendations": []
+        }
+        
+        if not page_structure:
+            analysis["recommendations"].append("페이지 구조 정보를 추출할 수 없습니다")
+            return analysis
+        
+        # 전체 class 수
+        all_classes = page_structure.get("all_div_classes", [])
+        analysis["total_classes"] = len(all_classes)
+        
+        # 기본 점수 (class가 많을수록 구조가 복잡하고 완성도가 높음)
+        if analysis["total_classes"] >= 50:
+            analysis["score"] += 20
+        elif analysis["total_classes"] >= 30:
+            analysis["score"] += 15
+        elif analysis["total_classes"] >= 20:
+            analysis["score"] += 10
+        else:
+            analysis["recommendations"].append("페이지 구조가 단순합니다. 더 많은 정보 요소를 추가하세요")
+        
+        # 주요 요소 존재 여부 확인
+        key_elements = page_structure.get("key_elements", {})
+        semantic_structure = page_structure.get("semantic_structure", {})
+        
+        # 필수 요소 체크
+        essential_elements = {
+            "product_info": "상품 정보",
+            "price_info": "가격 정보",
+            "image_info": "이미지 정보",
+            "description_elements": "상품 설명"
+        }
+        
+        for element_key, element_name in essential_elements.items():
+            # key_elements에서 확인
+            if element_key in key_elements and key_elements[element_key]:
+                analysis["key_elements_present"][element_key] = True
+                analysis["score"] += 15
+            # semantic_structure에서 확인
+            elif element_key in semantic_structure and semantic_structure[element_key]:
+                analysis["key_elements_present"][element_key] = True
+                analysis["score"] += 15
+            else:
+                analysis["key_elements_present"][element_key] = False
+                analysis["recommendations"].append(f"{element_name} 요소가 페이지에서 확인되지 않습니다")
+        
+        # 선택적 요소 체크
+        optional_elements = {
+            "review_info": "리뷰 정보",
+            "seller_info": "판매자 정보",
+            "shipping_info": "배송 정보",
+            "coupon_info": "쿠폰 정보",
+            "qpoint_info": "Qポイント 정보"
+        }
+        
+        optional_count = 0
+        for element_key, element_name in optional_elements.items():
+            # key_elements에서 확인
+            if element_key in key_elements and key_elements[element_key]:
+                analysis["key_elements_present"][element_key] = True
+                optional_count += 1
+            # semantic_structure에서 확인
+            elif element_key in semantic_structure and semantic_structure[element_key]:
+                analysis["key_elements_present"][element_key] = True
+                optional_count += 1
+            else:
+                analysis["key_elements_present"][element_key] = False
+        
+        # 선택적 요소 점수 (최대 20점)
+        if optional_count >= 4:
+            analysis["score"] += 20
+        elif optional_count >= 3:
+            analysis["score"] += 15
+        elif optional_count >= 2:
+            analysis["score"] += 10
+        elif optional_count >= 1:
+            analysis["score"] += 5
+        else:
+            analysis["recommendations"].append("추가 정보 요소(리뷰, 판매자 정보, 배송 정보 등)를 추가하면 신뢰도가 향상됩니다")
+        
+        # 구조 완성도 평가
+        structure_completeness = {
+            "has_product_name": len(semantic_structure.get("product_name_elements", [])) > 0,
+            "has_price": len(semantic_structure.get("price_elements", [])) > 0,
+            "has_images": len(semantic_structure.get("image_elements", [])) > 0,
+            "has_description": len(semantic_structure.get("description_elements", [])) > 0,
+            "has_reviews": len(semantic_structure.get("review_elements", [])) > 0,
+            "has_seller": len(semantic_structure.get("seller_elements", [])) > 0,
+            "has_shipping": len(semantic_structure.get("shipping_elements", [])) > 0,
+            "has_coupon": len(semantic_structure.get("coupon_elements", [])) > 0,
+            "has_qpoint": len(semantic_structure.get("qpoint_elements", [])) > 0
+        }
+        
+        analysis["structure_completeness"] = structure_completeness
+        
+        # 완성도 점수 계산
+        completeness_score = sum(1 for v in structure_completeness.values() if v)
+        if completeness_score >= 7:
+            analysis["score"] += 20
+        elif completeness_score >= 5:
+            analysis["score"] += 15
+        elif completeness_score >= 3:
+            analysis["score"] += 10
+        else:
+            analysis["recommendations"].append("페이지 구조가 불완전합니다. 필수 요소들을 추가하세요")
+        
+        # class 빈도 분석 (자주 사용되는 class는 중요한 요소일 가능성이 높음)
+        class_frequency = page_structure.get("class_frequency", {})
+        if class_frequency:
+            # 가장 많이 사용되는 class 상위 10개
+            top_classes = sorted(class_frequency.items(), key=lambda x: x[1], reverse=True)[:10]
+            analysis["top_classes"] = [{"class": cls, "frequency": freq} for cls, freq in top_classes]
+            
+            # 중요한 요소가 자주 사용되는지 확인
+            important_keywords = ["product", "goods", "price", "image", "detail", "description"]
+            important_class_count = sum(1 for cls, _ in top_classes if any(kw in cls.lower() for kw in important_keywords))
+            
+            if important_class_count >= 5:
+                analysis["score"] += 10
+            elif important_class_count >= 3:
+                analysis["score"] += 5
+        
+        # 점수 정규화 (0-100)
+        analysis["score"] = min(100, max(0, analysis["score"]))
+        
+        return analysis
+    
     def _calculate_overall_score(self, analysis_result: Dict[str, Any]) -> int:
         """종합 점수 계산"""
         weights = {
-            "image_analysis": 0.25,
-            "description_analysis": 0.25,
+            "image_analysis": 0.20,
+            "description_analysis": 0.20,
             "price_analysis": 0.15,
-            "review_analysis": 0.20,
-            "seo_analysis": 0.15
+            "review_analysis": 0.15,
+            "seo_analysis": 0.15,
+            "page_structure_analysis": 0.15
         }
         
         overall = 0

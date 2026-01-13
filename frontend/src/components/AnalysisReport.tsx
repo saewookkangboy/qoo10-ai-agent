@@ -114,6 +114,93 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
           </div>
         )}
 
+        {/* 페이지 구조 분석 카드 */}
+        {product_analysis?.page_structure_analysis && (
+          <div className="bg-white rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.08)] p-4 sm:p-6 mb-4 sm:mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <h2 className="text-xl sm:text-2xl font-bold text-[#1A1A1A]">
+                📐 페이지 구조 분석
+              </h2>
+              <HelpTooltip 
+                content="페이지의 모든 div class를 분석하여 구조적 완성도를 평가합니다.\n\n• 총 클래스 수: 페이지의 구조 복잡도\n• 주요 요소 존재 여부: 필수 정보 요소 확인\n• 구조 완성도: 각 정보 요소의 완성도 평가" 
+              />
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="text-sm text-[#4D4D4D] mb-1">총 클래스 수</div>
+                <div className="text-2xl font-bold text-[#1A1A1A]">
+                  {product_analysis.page_structure_analysis.total_classes}
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="text-sm text-[#4D4D4D] mb-1">구조 점수</div>
+                <div className="text-2xl font-bold text-[#1A1A1A]">
+                  {product_analysis.page_structure_analysis.score}
+                  <span className="text-base text-[#4D4D4D]">/ 100</span>
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="text-sm text-[#4D4D4D] mb-1">완성된 요소</div>
+                <div className="text-2xl font-bold text-[#1A1A1A]">
+                  {Object.values(product_analysis.page_structure_analysis.structure_completeness).filter(v => v).length}
+                  <span className="text-base text-[#4D4D4D]">/ {Object.keys(product_analysis.page_structure_analysis.structure_completeness).length}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 주요 요소 존재 여부 */}
+            <div className="mb-4">
+              <h3 className="text-base font-semibold text-[#1A1A1A] mb-2">주요 요소 확인</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                {Object.entries(product_analysis.page_structure_analysis.key_elements_present).map(([key, present]) => (
+                  <div key={key} className="flex items-center gap-2">
+                    <span className={present ? "text-green-500" : "text-red-500"}>
+                      {present ? "✓" : "✗"}
+                    </span>
+                    <span className="text-sm text-[#4D4D4D]">
+                      {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 상위 클래스 목록 */}
+            {product_analysis.page_structure_analysis.top_classes && 
+             product_analysis.page_structure_analysis.top_classes.length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-base font-semibold text-[#1A1A1A] mb-2">주요 사용 클래스 (상위 10개)</h3>
+                <div className="flex flex-wrap gap-2">
+                  {product_analysis.page_structure_analysis.top_classes.map((item, idx) => (
+                    <div 
+                      key={idx}
+                      className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm"
+                      title={`사용 횟수: ${item.frequency}`}
+                    >
+                      {item.class} ({item.frequency})
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 추천 사항 */}
+            {product_analysis.page_structure_analysis.recommendations.length > 0 && (
+              <div>
+                <h3 className="text-base font-semibold text-[#1A1A1A] mb-2">구조 개선 제안</h3>
+                <ul className="list-disc list-inside space-y-1">
+                  {product_analysis.page_structure_analysis.recommendations.map((rec, idx) => (
+                    <li key={idx} className="text-sm text-[#4D4D4D]">{rec}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 개선 제안 - 우선순위별 그룹핑 */}
         <div className="bg-white rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.08)] p-4 sm:p-6">
           <div className="flex items-center gap-2 mb-4 sm:mb-6">
@@ -200,8 +287,8 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
           </div>
         )}
 
-        {/* 리포트 다운로드 버튼 (Phase 2) */}
-        {analysisId && (
+        {/* 리포트 다운로드 버튼 (Phase 2) - 숨김 처리 */}
+        {false && analysisId && (
         <div className="mt-4 sm:mt-6 bg-white rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.08)] p-4 sm:p-6">
           <h2 className="text-xl sm:text-2xl font-bold text-[#1A1A1A] mb-4">
             📥 리포트 다운로드
@@ -210,9 +297,9 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
             분석 결과를 PDF, Excel, 또는 Markdown 형식으로 다운로드할 수 있습니다.
           </p>
           <div className="flex flex-wrap gap-3">
-            <DownloadButton format="pdf" label="PDF 다운로드" color="bg-red-600 hover:bg-red-700" analysisId={analysisId} />
-            <DownloadButton format="excel" label="Excel 다운로드" color="bg-green-600 hover:bg-green-700" analysisId={analysisId} />
-            <DownloadButton format="markdown" label="Markdown 다운로드" color="bg-blue-600 hover:bg-blue-700" analysisId={analysisId} />
+            <DownloadButton format="pdf" label="PDF 다운로드" color="bg-red-600 hover:bg-red-700" analysisId={analysisId!} />
+            <DownloadButton format="excel" label="Excel 다운로드" color="bg-green-600 hover:bg-green-700" analysisId={analysisId!} />
+            <DownloadButton format="markdown" label="Markdown 다운로드" color="bg-blue-600 hover:bg-blue-700" analysisId={analysisId!} />
           </div>
         </div>
         )}

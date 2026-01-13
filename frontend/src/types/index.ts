@@ -96,6 +96,7 @@ export interface ProductAnalysis {
   price_analysis: PriceAnalysis
   review_analysis: ReviewAnalysis
   seo_analysis: SEOAnalysis
+  page_structure_analysis?: PageStructureAnalysis
 }
 
 export interface ImageAnalysis {
@@ -136,6 +137,15 @@ export interface SEOAnalysis {
   keywords_in_description: boolean
   category_set: boolean
   brand_set: boolean
+  recommendations: string[]
+}
+
+export interface PageStructureAnalysis {
+  score: number
+  total_classes: number
+  key_elements_present: Record<string, boolean>
+  structure_completeness: Record<string, boolean>
+  top_classes?: Array<{ class: string; frequency: number }>
   recommendations: string[]
 }
 
