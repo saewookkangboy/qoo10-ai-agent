@@ -195,6 +195,7 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
         )}
 
         {/* 리포트 다운로드 버튼 (Phase 2) */}
+        {analysisId && (
         <div className="mt-4 sm:mt-6 bg-white rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.08)] p-4 sm:p-6">
           <h2 className="text-xl sm:text-2xl font-bold text-[#1A1A1A] mb-4">
             📥 리포트 다운로드
@@ -203,15 +204,12 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
             분석 결과를 PDF, Excel, 또는 Markdown 형식으로 다운로드할 수 있습니다.
           </p>
           <div className="flex flex-wrap gap-3">
-            {analysisId && (
-              <>
-                <DownloadButton format="pdf" label="PDF 다운로드" color="bg-red-600 hover:bg-red-700" analysisId={analysisId} />
-                <DownloadButton format="excel" label="Excel 다운로드" color="bg-green-600 hover:bg-green-700" analysisId={analysisId} />
-                <DownloadButton format="markdown" label="Markdown 다운로드" color="bg-blue-600 hover:bg-blue-700" analysisId={analysisId} />
-              </>
-            )}
+            <DownloadButton format="pdf" label="PDF 다운로드" color="bg-red-600 hover:bg-red-700" analysisId={analysisId} />
+            <DownloadButton format="excel" label="Excel 다운로드" color="bg-green-600 hover:bg-green-700" analysisId={analysisId} />
+            <DownloadButton format="markdown" label="Markdown 다운로드" color="bg-blue-600 hover:bg-blue-700" analysisId={analysisId} />
           </div>
         </div>
+        )}
       </div>
     </div>
   )

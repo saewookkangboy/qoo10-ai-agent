@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, HttpUrl, Field
 from typing import Optional, Dict, Any, List
+from pydantic import BaseModel, Field
 import uuid
 from datetime import datetime
 import os
@@ -18,6 +19,9 @@ from services.shop_analyzer import ShopAnalyzer
 from services.checklist_evaluator import ChecklistEvaluator
 from services.competitor_analyzer import CompetitorAnalyzer
 from services.report_generator import ReportGenerator
+from services.history_manager import HistoryManager
+from services.notification_service import NotificationService, NotificationType
+from services.batch_analyzer import BatchAnalyzer
 from services.seo_optimizer import SEOOptimizer
 from services.ai_seo_optimizer import AISEOOptimizer
 from services.geo_optimizer import GEOOptimizer
@@ -43,6 +47,11 @@ app.add_middleware(
 
 # 분석 결과 저장소 (임시 - 프로덕션에서는 DB 사용)
 analysis_store: Dict[str, Dict[str, Any]] = {}
+
+# 히스토리 관리자 및 알림 서비스 초기화
+history_manager = HistoryManager()
+notification_service = NotificationService()
+batch_analyzer = BatchAnalyzer()
 
 
 class AnalyzeRequest(BaseModel):
@@ -340,14 +349,37 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
             )
             
             # 결과 저장
-            analysis_store[analysis_id]["result"] = {
+            final_result = {
                 "product_analysis": analysis_result,
                 "recommendations": recommendations,
                 "checklist": checklist_result,
                 "competitor_analysis": competitor_result,
                 "product_data": product_data
             }
+            analysis_store[analysis_id]["result"] = final_result
             analysis_store[analysis_id]["status"] = "completed"
+            
+            # 히스토리 저장
+            history_manager.save_analysis_history(
+                analysis_id,
+                url,
+                url_type,
+                final_result
+            )
+            
+            # 알림 생성
+            notification_service.notify_analysis_completed(
+                analysis_id,
+                url,
+                analysis_result.get("overall_score", 0)
+            )
+            
+            # 임계값 알림
+            notification_service.notify_threshold_alert(
+                analysis_id,
+                url,
+                analysis_result.get("overall_score", 0)
+            )
         
         elif url_type == "shop":
             shop_data = await crawler.crawl_shop(url)
@@ -371,13 +403,36 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
             )
             
             # 결과 저장
-            analysis_store[analysis_id]["result"] = {
+            final_result = {
                 "shop_analysis": analysis_result,
                 "recommendations": recommendations,
                 "checklist": checklist_result,
                 "shop_data": shop_data
             }
+            analysis_store[analysis_id]["result"] = final_result
             analysis_store[analysis_id]["status"] = "completed"
+            
+            # 히스토리 저장
+            history_manager.save_analysis_history(
+                analysis_id,
+                url,
+                url_type,
+                final_result
+            )
+            
+            # 알림 생성
+            notification_service.notify_analysis_completed(
+                analysis_id,
+                url,
+                analysis_result.get("overall_score", 0)
+            )
+            
+            # 임계값 알림
+            notification_service.notify_threshold_alert(
+                analysis_id,
+                url,
+                analysis_result.get("overall_score", 0)
+            )
         
         else:
             analysis_store[analysis_id]["status"] = "failed"

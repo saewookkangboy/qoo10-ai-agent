@@ -160,13 +160,35 @@ class ShopAnalyzer:
         
         # 주요 카테고리 확인
         categories = shop_data.get("categories", {})
+        products = shop_data.get("products", [])
+        
         if categories:
             main_category = max(categories.items(), key=lambda x: x[1])
             analysis["main_category"] = main_category[0]
             
             # 카테고리별 경쟁 강도 분석
-            # 실제로는 해당 카테고리의 전체 상품 수를 확인해야 함
-            # 여기서는 Shop의 상품 수를 기반으로 추정
+            # 전체 상품 데이터를 기반으로 카테고리별 경쟁 지표 계산
+            analysis["category_competition"] = self._calculate_category_competition(
+                categories, products
+            )
+            
+            # 카테고리별 경쟁 점수 기반으로 전체 점수 조정
+            if analysis["category_competition"]:
+                avg_competition_score = sum(
+                    cat_data.get("competition_score", 0)
+                    for cat_data in analysis["category_competition"].values()
+                ) / len(analysis["category_competition"])
+                
+                if avg_competition_score >= 70:
+                    analysis["score"] += 20
+                    analysis["recommendations"].append("카테고리별 경쟁력이 우수합니다")
+                elif avg_competition_score >= 50:
+                    analysis["score"] += 10
+                    analysis["recommendations"].append("카테고리별 경쟁력 향상 여지가 있습니다")
+                else:
+                    analysis["recommendations"].append("카테고리별 경쟁력 강화가 필요합니다")
+            
+            # 상품 수 기반 추천
             product_count = shop_data.get("product_count", 0)
             if product_count >= 50:
                 analysis["score"] += 20
@@ -180,6 +202,104 @@ class ShopAnalyzer:
         analysis["score"] = min(100, analysis["score"])
         
         return analysis
+    
+    def _calculate_category_competition(
+        self, 
+        categories: Dict[str, int], 
+        products: List[Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        카테고리별 경쟁 지표 계산
+        
+        Args:
+            categories: 카테고리 이름 -> 상품 수 매핑
+            products: 상품 리스트
+            
+        Returns:
+            카테고리별 경쟁 지표 딕셔너리
+        """
+        category_competition = {}
+        
+        if not categories or not products:
+            return category_competition
+        
+        # 전체 상품 통계 계산
+        all_prices = [
+            p.get("price", {}).get("sale_price") 
+            for p in products 
+            if p.get("price", {}).get("sale_price")
+        ]
+        all_ratings = [p.get("rating", 0) for p in products if p.get("rating", 0) > 0]
+        all_reviews = [p.get("review_count", 0) for p in products]
+        
+        avg_price = sum(all_prices) / len(all_prices) if all_prices else 0
+        avg_rating = sum(all_ratings) / len(all_ratings) if all_ratings else 0
+        avg_reviews = sum(all_reviews) / len(all_reviews) if all_reviews else 0
+        
+        # 각 카테고리에 대해 경쟁 지표 계산
+        total_products = len(products)
+        
+        for category_name, category_product_count in categories.items():
+            # 카테고리별 상품 수 비율
+            category_ratio = category_product_count / total_products if total_products > 0 else 0
+            
+            # 카테고리별 경쟁 지표 계산
+            # 실제로는 각 상품의 카테고리를 알 수 없으므로,
+            # 전체 상품 통계를 기반으로 추정하고 카테고리별 상품 수를 반영
+            num_products = category_product_count
+            num_unique_sellers = 1  # 현재 Shop의 상품이므로 1
+            avg_price_category = avg_price  # 전체 평균 가격 사용
+            avg_rating_category = avg_rating  # 전체 평균 평점 사용
+            avg_reviews_category = avg_reviews  # 전체 평균 리뷰 수 사용
+            
+            # 경쟁 점수 계산 (0-100)
+            competition_score = 0
+            
+            # 상품 수 기반 점수 (최대 30점)
+            if num_products >= 20:
+                competition_score += 30
+            elif num_products >= 10:
+                competition_score += 20
+            elif num_products >= 5:
+                competition_score += 10
+            
+            # 평점 기반 점수 (최대 30점)
+            if avg_rating_category >= 4.5:
+                competition_score += 30
+            elif avg_rating_category >= 4.0:
+                competition_score += 20
+            elif avg_rating_category >= 3.5:
+                competition_score += 10
+            
+            # 리뷰 수 기반 점수 (최대 20점)
+            if avg_reviews_category >= 100:
+                competition_score += 20
+            elif avg_reviews_category >= 50:
+                competition_score += 15
+            elif avg_reviews_category >= 20:
+                competition_score += 10
+            
+            # 카테고리 비율 기반 점수 (최대 20점)
+            if category_ratio >= 0.5:
+                competition_score += 20  # 주요 카테고리
+            elif category_ratio >= 0.3:
+                competition_score += 15
+            elif category_ratio >= 0.1:
+                competition_score += 10
+            
+            competition_score = min(100, competition_score)
+            
+            category_competition[category_name] = {
+                "num_products": num_products,
+                "num_unique_sellers": num_unique_sellers,
+                "avg_price": round(avg_price_category, 2) if avg_price_category else None,
+                "avg_rating": round(avg_rating_category, 2) if avg_rating_category else 0.0,
+                "avg_reviews": round(avg_reviews_category, 2) if avg_reviews_category else 0.0,
+                "competition_score": competition_score,
+                "category_ratio": round(category_ratio, 3)
+            }
+        
+        return category_competition
     
     def _analyze_shop_level(self, shop_data: Dict[str, Any]) -> Dict[str, Any]:
         """Shop 레벨 분석"""

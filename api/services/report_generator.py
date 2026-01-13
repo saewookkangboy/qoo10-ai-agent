@@ -7,6 +7,24 @@ from datetime import datetime
 import json
 import io
 
+# XML 보안: defusedxml을 사용하여 XML bomb/vector 공격 방지
+# openpyxl이 Excel 파일(XLSX)을 파싱할 때 내부적으로 XML을 사용하므로
+# defusedxml을 import하여 자동으로 보호됩니다.
+try:
+    import defusedxml.ElementTree as ET
+    # openpyxl이 사용하는 XML 파서를 defusedxml으로 대체
+    # 이렇게 하면 openpyxl.load_workbook()을 호출할 때 자동으로 보호됩니다.
+    import defusedxml
+    defusedxml.defuse_stdlib()
+except ImportError:
+    # defusedxml이 설치되지 않은 경우 경고
+    import warnings
+    warnings.warn(
+        "defusedxml is not installed. XML parsing is not protected against "
+        "XML bomb/vector attacks. Please install defusedxml for security.",
+        UserWarning
+    )
+
 
 class ReportGenerator:
     """리포트 생성기"""
@@ -65,6 +83,12 @@ class ReportGenerator:
         # 실제 구현 시 openpyxl 또는 pandas 사용
         # 여기서는 JSON 형태로 반환 (실제 구현 필요)
         
+        # 보안 참고: openpyxl.load_workbook()을 사용하여 Excel 파일을 읽을 때,
+        # 파일 상단에서 defusedxml이 이미 import되어 있으므로
+        # XML bomb/vector 공격으로부터 자동으로 보호됩니다.
+        # defusedxml.defuse_stdlib()이 호출되어 표준 라이브러리의 XML 파서가
+        # 안전한 버전으로 대체됩니다.
+        
         excel_data = {
             "metadata": {
                 "generated_at": datetime.now().isoformat(),
@@ -76,6 +100,17 @@ class ReportGenerator:
         }
         
         # Excel 생성 (실제로는 openpyxl 사용)
+        # 예시 코드:
+        # from openpyxl import Workbook
+        # wb = Workbook()
+        # ws = wb.active
+        # ... 데이터 작성 ...
+        # buffer = io.BytesIO()
+        # wb.save(buffer)
+        # return buffer.getvalue()
+        # 
+        # Excel 파일을 읽는 경우 (예: openpyxl.load_workbook(file_path)):
+        # defusedxml이 이미 활성화되어 있으므로 자동으로 보호됩니다.
         # 여기서는 JSON을 반환 (실제 구현 필요)
         return json.dumps(excel_data, ensure_ascii=False, indent=2).encode('utf-8')
     
@@ -165,16 +200,20 @@ class ReportGenerator:
             
             # 가격 분석
             price_analysis = product_analysis.get("price_analysis", {})
+            sale_price = price_analysis.get('sale_price') if price_analysis.get('sale_price') is not None else 0
+            discount_rate = price_analysis.get('discount_rate') if price_analysis.get('discount_rate') is not None else 0
             lines.append(f"#### 가격 분석: {price_analysis.get('score', 0)}/100")
-            lines.append(f"- 판매가: {price_analysis.get('sale_price', 0):,}엔")
-            lines.append(f"- 할인율: {price_analysis.get('discount_rate', 0)}%")
+            lines.append(f"- 판매가: {sale_price:,}엔")
+            lines.append(f"- 할인율: {discount_rate}%")
             lines.append("\n")
             
             # 리뷰 분석
             review_analysis = product_analysis.get("review_analysis", {})
+            rating = review_analysis.get('rating') if review_analysis.get('rating') is not None else 0.0
+            review_count = review_analysis.get('review_count') if review_analysis.get('review_count') is not None else 0
             lines.append(f"#### 리뷰 분석: {review_analysis.get('score', 0)}/100")
-            lines.append(f"- 평점: {review_analysis.get('rating', 0):.1f}/5.0")
-            lines.append(f"- 리뷰 수: {review_analysis.get('review_count', 0):,}개")
+            lines.append(f"- 평점: {rating:.1f}/5.0")
+            lines.append(f"- 리뷰 수: {review_count:,}개")
             lines.append("\n")
         
         # Shop 분석

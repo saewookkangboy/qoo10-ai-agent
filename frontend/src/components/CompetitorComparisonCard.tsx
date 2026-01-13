@@ -45,7 +45,7 @@ function CompetitorComparisonCard({ competitorAnalysis }: CompetitorComparisonCa
           <div className="text-xs sm:text-sm text-[#4D4D4D] mb-1">가격 포지셔닝</div>
           <div className="text-lg sm:text-xl font-bold">{getPositionLabel(comparison.price_position)}</div>
           <div className="text-xs sm:text-sm mt-1">
-            평균: {comparison.price_stats.average.toLocaleString()}엔
+            평균: {comparison.price_stats?.average != null ? comparison.price_stats.average.toLocaleString() : 'N/A'}엔
           </div>
         </div>
 
@@ -53,7 +53,7 @@ function CompetitorComparisonCard({ competitorAnalysis }: CompetitorComparisonCa
           <div className="text-xs sm:text-sm text-[#4D4D4D] mb-1">평점 포지셔닝</div>
           <div className="text-lg sm:text-xl font-bold">{getPositionLabel(comparison.rating_position)}</div>
           <div className="text-xs sm:text-sm mt-1">
-            평균: {comparison.rating_stats.average.toFixed(1)}점
+            평균: {comparison.rating_stats?.average != null ? comparison.rating_stats.average.toFixed(1) : 'N/A'}점
           </div>
         </div>
 
@@ -61,7 +61,7 @@ function CompetitorComparisonCard({ competitorAnalysis }: CompetitorComparisonCa
           <div className="text-xs sm:text-sm text-[#4D4D4D] mb-1">리뷰 포지셔닝</div>
           <div className="text-lg sm:text-xl font-bold">{getPositionLabel(comparison.review_position)}</div>
           <div className="text-xs sm:text-sm mt-1">
-            평균: {comparison.review_stats.average.toLocaleString()}개
+            평균: {comparison.review_stats?.average != null ? comparison.review_stats.average.toLocaleString() : 'N/A'}개
           </div>
         </div>
       </div>
