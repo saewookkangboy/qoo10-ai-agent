@@ -1,7 +1,7 @@
 """
 Qoo10 Sales Intelligence Agent - FastAPI Main Application
 """
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, HttpUrl, Field
@@ -864,7 +864,7 @@ async def generate_aio_report(request: AnalyzeRequest, format: str = "json"):
         )
 
 
-# TODO: In @api/main.py around lines 899 - 903, The route currently uses a path parameter for URLs which breaks on embedded slashes; change the endpoint to accept the target URL as a query parameter instead of a path segment: update the decorator on get_score_trend (remove "{url}" from the path), modify the function signature to take url: str as a query arg (keep days: int = 30), and keep the call to history_manager.get_score_trend(url, days=days); also update any callers/tests to pass the URL via the query string (e.g., ?url=...) so full URLs with slashes are handled correctly.
+# TODO: In @api/main.py arounIn @api/main.py around lines 1003 - 1085, Add an admin authentication dependency and apply it to all admin routes: implement a verify_admin_key dependency (using APIKeyHeader / Security or Depends) that checks the incoming key against the ADMIN_API_KEY env var and raises HTTPException(403) on mismatch, and then add that dependency parameter (e.g., _: None = Depends(verify_admin_key) or _: None = Security(verify_admin_key)) to each admin endpoint function (get_analysis_logs, get_error_logs, get_score_statistics, get_analysis_statistics, get_user_analysis_logs, get_analysis_results_list, get_ai_insight_report) so all /api/v1/admin/* routes perform the authorization check.ines 899 - 903, The route currently uses a path parameter for URLs which breaks on embedded slashes; change the endpoint to accept the target URL as a query parameter instead of a path segment: update the decorator on get_score_trend (remove "{url}" from the path), modify the function signature to take url: str as a query arg (keep days: int = 30), and keep the call to history_manager.get_score_trend(url, days=days); also update any callers/tests to pass the URL via the query string (e.g., ?url=...) so full URLs with slashes are handled correctly.
 # 히스토리 관리 API (Phase 3)
 @app.get("/api/v1/history")
 async def get_history(
@@ -899,8 +899,8 @@ async def get_history_by_id(analysis_id: str):
     return history_item
 
 
-@app.get("/api/v1/history/url/{url}/trend")
-async def get_score_trend(url: str, days: int = 30):
+@app.get("/api/v1/history/url/trend")
+async def get_score_trend(url: str = Query(...), days: int = 30):
     """점수 추이 조회"""
     trend = history_manager.get_score_trend(url, days=days)
     return {"trend": trend}

@@ -9,6 +9,7 @@ import AIInsightReport from '../components/admin/AIInsightReport'
 
 function AdminPage() {
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [scoreStats, setScoreStats] = useState<any>(null)
   const [analysisStats, setAnalysisStats] = useState<any>(null)
   const [analysisLogs, setAnalysisLogs] = useState<any>(null)
@@ -44,6 +45,7 @@ function AdminPage() {
       setAiReport(reportData)
     } catch (error) {
       console.error('Failed to load admin data:', error)
+      setError(error instanceof Error ? error.message : 'Failed to load admin data')
     } finally {
       setLoading(false)
     }
@@ -53,6 +55,16 @@ function AdminPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F5F5F5]">
         <LoadingSpinner />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F5]">
+        <div className="text-center">
+          <p className="text-red-500 text-lg font-medium">{error}</p>
+        </div>
       </div>
     )
   }
