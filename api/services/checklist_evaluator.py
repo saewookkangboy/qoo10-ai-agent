@@ -313,24 +313,38 @@ class ChecklistEvaluator:
         shop_data: Optional[Dict[str, Any]],
         analysis_result: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """상품 등록 완료 체크"""
+        """상품 등록 완료 체크 - 실제 추출된 데이터 구조에 맞게 개선"""
         if not product_data:
             return {"passed": False, "recommendation": "상품 데이터가 없습니다"}
         
-        has_name = bool(product_data.get("product_name"))
-        has_description = bool(product_data.get("description"))
-        has_images = bool(product_data.get("images", {}).get("thumbnail"))
+        product_name = product_data.get("product_name", "")
+        description = product_data.get("description", "")
+        images = product_data.get("images", {})
+        thumbnail = images.get("thumbnail")
+        detail_images = images.get("detail_images", [])
+        
+        # 상품명 확인 (빈 문자열이나 "상품명 없음"이 아닌지 확인)
+        has_name = bool(product_name) and product_name != "상품명 없음" and len(product_name.strip()) > 0
+        
+        # 상품 설명 확인 (최소 길이 확인)
+        has_description = bool(description) and len(description.strip()) > 50
+        
+        # 이미지 확인 (썸네일 또는 상세 이미지)
+        has_images = bool(thumbnail) or len(detail_images) > 0
         
         if has_name and has_description and has_images:
-            return {"passed": True}
+            return {
+                "passed": True,
+                "recommendation": f"상품 등록 완료 (상품명: {product_name[:30]}..., 이미지: {len(detail_images) + (1 if thumbnail else 0)}개)"
+            }
         else:
             missing = []
             if not has_name:
                 missing.append("상품명")
             if not has_description:
-                missing.append("상품 설명")
+                missing.append("상품 설명 (최소 50자 이상)")
             if not has_images:
-                missing.append("이미지")
+                missing.append("이미지 (썸네일 또는 상세 이미지)")
             return {
                 "passed": False,
                 "recommendation": f"{', '.join(missing)}을(를) 등록하세요"
@@ -387,20 +401,35 @@ class ChecklistEvaluator:
         shop_data: Optional[Dict[str, Any]],
         analysis_result: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """가격 설정 체크"""
+        """가격 설정 체크 - 실제 추출된 데이터 구조에 맞게 개선"""
         if not product_data:
             return {"passed": False, "recommendation": "상품 데이터가 없습니다"}
         
         price = product_data.get("price", {})
         sale_price = price.get("sale_price")
+        original_price = price.get("original_price")
+        discount_rate = price.get("discount_rate", 0)
         
-        if sale_price and sale_price > 0:
-            return {"passed": True}
-        else:
+        # 판매가가 설정되어 있는지 확인
+        if not sale_price or sale_price <= 0:
             return {
                 "passed": False,
                 "recommendation": "판매가를 설정하세요"
             }
+        
+        # 정가와 할인율이 설정되어 있는지 확인 (선택사항이지만 권장)
+        if original_price and discount_rate > 0:
+            return {
+                "passed": True,
+                "recommendation": f"가격 설정 완료 (판매가: {sale_price}円, 할인율: {discount_rate}%)"
+            }
+        elif sale_price:
+            return {
+                "passed": True,
+                "recommendation": f"판매가 설정 완료 ({sale_price}円). 할인율 설정을 고려하세요"
+            }
+        
+        return {"passed": True}
     
     async def _check_shipping_info(
         self,
@@ -408,19 +437,30 @@ class ChecklistEvaluator:
         shop_data: Optional[Dict[str, Any]],
         analysis_result: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """배송 정보 체크"""
+        """배송 정보 체크 - 실제 추출된 데이터 구조에 맞게 개선"""
         if not product_data:
             return {"passed": False, "recommendation": "상품 데이터가 없습니다"}
         
         shipping_info = product_data.get("shipping_info", {})
-        has_shipping_fee = shipping_info.get("shipping_fee") is not None
+        shipping_fee = shipping_info.get("shipping_fee")
+        free_shipping = shipping_info.get("free_shipping", False)
         
-        if has_shipping_fee:
-            return {"passed": True}
+        # 배송비 정보가 설정되어 있는지 확인 (무료배송 포함)
+        if free_shipping or (shipping_fee is not None and shipping_fee >= 0):
+            if free_shipping:
+                return {
+                    "passed": True,
+                    "recommendation": "무료배송이 설정되어 있습니다"
+                }
+            else:
+                return {
+                    "passed": True,
+                    "recommendation": f"배송비 정보 설정 완료 ({shipping_fee}円)"
+                }
         else:
             return {
                 "passed": False,
-                "recommendation": "배송비 정보를 설정하세요"
+                "recommendation": "배송비 정보를 설정하세요 (무료배송 포함)"
             }
     
     async def _check_page_optimization(
@@ -491,17 +531,32 @@ class ChecklistEvaluator:
         shop_data: Optional[Dict[str, Any]],
         analysis_result: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """프로모션 활용 체크"""
+        """프로모션 활용 체크 - 실제 추출된 데이터 구조에 맞게 개선"""
+        promotion_items = []
+        
+        # Shop 쿠폰 확인
         if shop_data:
             coupons = shop_data.get("coupons", [])
             if coupons and len(coupons) > 0:
-                return {"passed": True}
+                promotion_items.append(f"샵 쿠폰 {len(coupons)}개")
         
+        # 상품 할인 확인
         if product_data:
             price = product_data.get("price", {})
             discount_rate = price.get("discount_rate", 0)
+            coupon_discount = price.get("coupon_discount")
+            
             if discount_rate > 0:
-                return {"passed": True}
+                promotion_items.append(f"상품 할인 {discount_rate}%")
+            
+            if coupon_discount:
+                promotion_items.append(f"쿠폰 할인 {coupon_discount}円")
+        
+        if promotion_items:
+            return {
+                "passed": True,
+                "recommendation": f"프로모션 설정 완료: {', '.join(promotion_items)}"
+            }
         
         return {
             "passed": False,

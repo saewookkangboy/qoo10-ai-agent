@@ -4,6 +4,7 @@ import RecommendationCard from './RecommendationCard'
 import ChecklistCard from './ChecklistCard'
 import CompetitorComparisonCard from './CompetitorComparisonCard'
 import DownloadButton from './DownloadButton'
+import HelpTooltip from './HelpTooltip'
 
 interface AnalysisReportProps {
   result: {
@@ -115,9 +116,14 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
 
         {/* 개선 제안 - 우선순위별 그룹핑 */}
         <div className="bg-white rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.08)] p-4 sm:p-6">
-          <h2 className="text-xl sm:text-2xl font-bold text-[#1A1A1A] mb-4 sm:mb-6">
-            💡 매출 강화 아이디어
-          </h2>
+          <div className="flex items-center gap-2 mb-4 sm:mb-6">
+            <h2 className="text-xl sm:text-2xl font-bold text-[#1A1A1A]">
+              💡 매출 강화 아이디어
+            </h2>
+            <HelpTooltip 
+              content="Qoo10 큐텐 대학의 판매 노하우를 기반으로 한 개선 제안입니다.\n\n• High Priority: 즉시 개선이 필요한 항목\n• Medium Priority: 단기적으로 개선하면 효과를 볼 수 있는 항목\n• Low Priority: 장기적으로 고려하면 좋은 개선 사항\n\n각 제안을 단계적으로 실행하시면 매출 증대에 도움이 됩니다." 
+            />
+          </div>
           
           {/* High Priority */}
           {highPriorityRecs.length > 0 && (

@@ -1,8 +1,11 @@
 import { CompetitorAnalysis } from '../types'
+import HelpTooltip from './HelpTooltip'
 
 interface CompetitorComparisonCardProps {
   competitorAnalysis: CompetitorAnalysis
 }
+
+const helpContent = '경쟁사 비교 분석은 히트 상품을 만드는 핵심 방법입니다.\n\n• 가격 포지셔닝: 경쟁사 대비 가격 경쟁력을 파악합니다\n• 평점 포지셔닝: 상품 품질과 고객 만족도를 비교합니다\n• 리뷰 포지셔닝: 고객 신뢰도와 인기도를 분석합니다\n\n차별화 포인트를 찾아 경쟁 우위를 확보하고, 경쟁사 분석 기반 제안을 통해 매출을 증대시킬 수 있습니다.'
 
 function CompetitorComparisonCard({ competitorAnalysis }: CompetitorComparisonCardProps) {
   // 안전한 기본값 처리
@@ -63,9 +66,12 @@ function CompetitorComparisonCard({ competitorAnalysis }: CompetitorComparisonCa
 
   return (
     <div className="bg-white rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.08)] p-4 sm:p-6">
-      <h2 className="text-xl sm:text-2xl font-bold text-[#1A1A1A] mb-4 sm:mb-6">
-        🔍 경쟁사 비교 분석
-      </h2>
+      <div className="flex items-center gap-2 mb-4 sm:mb-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-[#1A1A1A]">
+          🔍 경쟁사 비교 분석
+        </h2>
+        <HelpTooltip content={helpContent} />
+      </div>
 
       {/* 비교 요약 */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">

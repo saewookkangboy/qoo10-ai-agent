@@ -417,19 +417,47 @@ class Qoo10Crawler:
         return None
     
     def _extract_product_name(self, soup: BeautifulSoup) -> str:
-        """상품명 추출 (AI 학습 기반)"""
+        """상품명 추출 (AI 학습 기반) - 실제 Qoo10 페이지 구조에 맞게 개선"""
         default_selectors = [
             'h1.product-name',
             'h1[itemprop="name"]',
             '.product_name',
-            'h1'
+            'h1',
+            '#goods_name',
+            '.goods_name',
+            'title'  # fallback으로 title 태그도 확인
         ]
         
         def extract_func(soup_obj, selector):
             if selector:
-                elem = soup_obj.select_one(selector)
-                if elem:
-                    return elem.get_text(strip=True)
+                if selector == 'title':
+                    # title 태그에서 상품명 추출 (Qoo10 형식: "상품명 | Qoo10")
+                    title_elem = soup_obj.find('title')
+                    if title_elem:
+                        title_text = title_elem.get_text(strip=True)
+                        # "|" 또는 "｜"로 분리하여 첫 번째 부분 추출
+                        if '|' in title_text:
+                            return title_text.split('|')[0].strip()
+                        elif '｜' in title_text:
+                            return title_text.split('｜')[0].strip()
+                        # "Qoo10"이 포함된 경우 제거
+                        if 'Qoo10' in title_text:
+                            return title_text.replace('Qoo10', '').strip()
+                        return title_text
+                else:
+                    elem = soup_obj.select_one(selector)
+                    if elem:
+                        text = elem.get_text(strip=True)
+                        if text and text != "" and len(text) > 3:  # 의미있는 텍스트인지 확인
+                            return text
+            
+            # 추가 시도: 페이지 내에서 가장 큰 h1 태그 찾기
+            h1_tags = soup_obj.find_all('h1')
+            for h1 in h1_tags:
+                text = h1.get_text(strip=True)
+                if text and len(text) > 10:  # 상품명은 보통 10자 이상
+                    return text
+            
             return "상품명 없음"
         
         return self._extract_with_learning(
@@ -440,12 +468,16 @@ class Qoo10Crawler:
         )
     
     def _extract_category(self, soup: BeautifulSoup) -> Optional[str]:
-        """카테고리 추출 (AI 학습 기반)"""
+        """카테고리 추출 (AI 학습 기반) - 실제 Qoo10 페이지 구조에 맞게 개선"""
         default_selectors = [
             'meta[property="product:category"]',
             'nav.breadcrumb a',
             'ol.breadcrumb a',
-            '.category'
+            '.category',
+            'nav[class*="breadcrumb"] a',
+            'ol[class*="breadcrumb"] a',
+            'a[href*="/category/"]',
+            'a[href*="/cat/"]'
         ]
         
         def extract_func(soup_obj, selector):
@@ -456,19 +488,45 @@ class Qoo10Crawler:
                         return elem.get('content')
                 else:
                     elems = soup_obj.select(selector)
-                    if elems and len(elems) > 1:
-                        return elems[-1].get_text(strip=True)
+                    if elems:
+                        # 마지막 링크가 보통 카테고리
+                        for elem in reversed(elems):
+                            text = elem.get_text(strip=True)
+                            href = elem.get('href', '')
+                            # URL에서 카테고리 추출
+                            if '/category/' in href or '/cat/' in href:
+                                category_match = re.search(r'/(?:category|cat)/([^/]+)', href)
+                                if category_match:
+                                    return category_match.group(1)
+                            # 텍스트가 의미있는 경우
+                            if text and len(text) > 2 and text not in ['ホーム', 'Home', 'トップ', 'Top']:
+                                return text
             
-            # 기본 방법
+            # 기본 방법: 메타 태그
             category_elem = soup_obj.find('meta', {'property': 'product:category'})
             if category_elem:
                 return category_elem.get('content')
             
-            breadcrumb = soup_obj.find('nav', class_='breadcrumb') or soup_obj.find('ol', class_='breadcrumb')
+            # 브레드크럼에서 추출
+            breadcrumb = soup_obj.find('nav', class_=re.compile(r'breadcrumb', re.I)) or \
+                        soup_obj.find('ol', class_=re.compile(r'breadcrumb', re.I))
             if breadcrumb:
                 links = breadcrumb.find_all('a')
                 if len(links) > 1:
-                    return links[-1].get_text(strip=True)
+                    # 마지막 링크가 카테고리일 가능성이 높음
+                    last_link = links[-1]
+                    text = last_link.get_text(strip=True)
+                    if text and len(text) > 2:
+                        return text
+            
+            # URL에서 카테고리 추출 시도
+            category_links = soup_obj.find_all('a', href=re.compile(r'/category/|/cat/'))
+            if category_links:
+                for link in category_links:
+                    href = link.get('href', '')
+                    match = re.search(r'/(?:category|cat)/([^/]+)', href)
+                    if match:
+                        return match.group(1)
             
             return None
         
@@ -495,45 +553,95 @@ class Qoo10Crawler:
         return None
     
     def _extract_price(self, soup: BeautifulSoup) -> Dict[str, Any]:
-        """가격 정보 추출 (AI 학습 기반)"""
+        """가격 정보 추출 (AI 학습 기반) - 실제 Qoo10 페이지 구조에 맞게 개선"""
         price_data = {
             "original_price": None,
             "sale_price": None,
-            "discount_rate": 0
+            "discount_rate": 0,
+            "coupon_discount": None,  # 쿠폰 할인 정보 추가
+            "qpoint_info": None  # Qポイント 정보 추가
         }
         
-        default_selectors = [
+        # 판매가 추출 (다양한 선택자 시도)
+        sale_price_selectors = [
             '.price',
             '.product-price',
             '[itemprop="price"]',
-            '.sale_price'
+            '.sale_price',
+            '#price',
+            '.goods_price',
+            'td.price',
+            'span.price',
+            'div.price'
         ]
         
-        def extract_func(soup_obj, selector):
-            if selector:
-                price_elem = soup_obj.select_one(selector)
-                if price_elem:
-                    price_text = price_elem.get_text(strip=True)
-                    price = self._parse_price(price_text)
-                    if price:
-                        return price
-            return None
+        # "商品価格" 텍스트를 포함하는 요소 찾기
+        price_section = soup.find(string=re.compile(r'商品価格|가격|価格'))
+        if price_section:
+            parent = price_section.find_parent()
+            if parent:
+                # 부모 요소에서 가격 숫자 찾기
+                price_text = parent.get_text()
+                price = self._parse_price(price_text)
+                if price:
+                    price_data["sale_price"] = price
         
-        sale_price = self._extract_with_learning(
-            "price",
-            soup,
-            default_selectors,
-            extract_func
-        )
+        # 선택자를 통한 가격 추출
+        for selector in sale_price_selectors:
+            price_elem = soup.select_one(selector)
+            if price_elem:
+                price_text = price_elem.get_text(strip=True)
+                price = self._parse_price(price_text)
+                if price and not price_data["sale_price"]:
+                    price_data["sale_price"] = price
+                    break
         
-        if sale_price:
-            price_data["sale_price"] = sale_price
+        # 정가 찾기 (취소선이 있는 가격)
+        original_price_patterns = [
+            soup.find(class_=re.compile(r'original|정가|定価|元の価格|元価格')),
+            soup.find('del'),
+            soup.find('s'),
+            soup.find(string=re.compile(r'~~\d+円|定価.*\d+円'))
+        ]
         
-        # 정가 찾기
-        original_price_elem = soup.find(class_=re.compile(r'original|정가|定価'))
-        if original_price_elem:
-            original_text = original_price_elem.get_text(strip=True)
-            price_data["original_price"] = self._parse_price(original_text)
+        for pattern in original_price_patterns:
+            if pattern:
+                if hasattr(pattern, 'get_text'):
+                    original_text = pattern.get_text(strip=True)
+                else:
+                    # string 객체인 경우
+                    parent = pattern.find_parent()
+                    if parent:
+                        original_text = parent.get_text(strip=True)
+                    else:
+                        original_text = str(pattern)
+                
+                original_price = self._parse_price(original_text)
+                if original_price:
+                    price_data["original_price"] = original_price
+                    break
+        
+        # 쿠폰 할인 정보 추출
+        coupon_section = soup.find(string=re.compile(r'クーポン割引|쿠폰|割引'))
+        if coupon_section:
+            parent = coupon_section.find_parent()
+            if parent:
+                coupon_text = parent.get_text()
+                # "プラス0割引" 또는 "最大0円" 같은 패턴 찾기
+                coupon_match = re.search(r'プラス(\d+)割引|最大(\d+)円', coupon_text)
+                if coupon_match:
+                    discount = coupon_match.group(1) or coupon_match.group(2)
+                    price_data["coupon_discount"] = int(discount) if discount.isdigit() else None
+        
+        # Qポイント 정보 추출
+        qpoint_section = soup.find(string=re.compile(r'Qポイント|Qポイント獲得'))
+        if qpoint_section:
+            parent = qpoint_section.find_parent()
+            if parent:
+                qpoint_text = parent.get_text()
+                qpoint_match = re.search(r'最大(\d+)P', qpoint_text)
+                if qpoint_match:
+                    price_data["qpoint_info"] = int(qpoint_match.group(1))
         
         # 할인율 계산
         if price_data["original_price"] and price_data["sale_price"]:
@@ -552,56 +660,116 @@ class Qoo10Crawler:
             return None
     
     def _extract_images(self, soup: BeautifulSoup) -> Dict[str, List[str]]:
-        """이미지 정보 추출"""
+        """이미지 정보 추출 - 실제 Qoo10 페이지 구조에 맞게 개선"""
         images = {
             "thumbnail": None,
             "detail_images": []
         }
         
-        # 썸네일 이미지
+        # 썸네일 이미지 (다양한 선택자 시도)
         thumbnail_selectors = [
             'img.product-thumbnail',
             'img[itemprop="image"]',
             '.product-image img',
-            'img.main-image'
+            'img.main-image',
+            '#goods_img img',
+            '.goods_img img',
+            '.thumbnail img',
+            'img[class*="thumbnail"]',
+            'img[class*="main"]',
+            'img[class*="product"]'
         ]
         
         for selector in thumbnail_selectors:
             img = soup.select_one(selector)
             if img:
-                images["thumbnail"] = img.get('src') or img.get('data-src')
-                break
+                src = img.get('src') or img.get('data-src') or img.get('data-original')
+                if src:
+                    # 상대 경로를 절대 경로로 변환
+                    if src.startswith('//'):
+                        src = 'https:' + src
+                    elif src.startswith('/'):
+                        src = 'https://www.qoo10.jp' + src
+                    images["thumbnail"] = src
+                    break
         
-        # 상세 이미지
+        # 상세 이미지 (다양한 선택자 시도)
         detail_img_selectors = [
             '.product-detail img',
             '.detail-images img',
-            '.product-images img'
+            '.product-images img',
+            '#goods_detail img',
+            '.goods_detail img',
+            'div[class*="detail"] img',
+            'div[class*="description"] img',
+            'div[class*="content"] img'
         ]
+        
+        seen_images = set()
+        if images["thumbnail"]:
+            seen_images.add(images["thumbnail"])
         
         for selector in detail_img_selectors:
             imgs = soup.select(selector)
             for img in imgs:
-                src = img.get('src') or img.get('data-src')
-                if src and src not in images["detail_images"]:
-                    images["detail_images"].append(src)
+                src = img.get('src') or img.get('data-src') or img.get('data-original')
+                if src:
+                    # 상대 경로를 절대 경로로 변환
+                    if src.startswith('//'):
+                        src = 'https:' + src
+                    elif src.startswith('/'):
+                        src = 'https://www.qoo10.jp' + src
+                    
+                    # 중복 제거 및 유효한 이미지 URL인지 확인
+                    if src not in seen_images and ('http' in src or src.startswith('//')):
+                        # 작은 아이콘이나 배너 이미지 제외
+                        if not any(exclude in src.lower() for exclude in ['icon', 'logo', 'banner', 'button']):
+                            images["detail_images"].append(src)
+                            seen_images.add(src)
         
         return images
     
     def _extract_description(self, soup: BeautifulSoup) -> str:
-        """상품 설명 추출 (AI 학습 기반)"""
+        """상품 설명 추출 (AI 학습 기반) - 실제 Qoo10 페이지 구조에 맞게 개선"""
         default_selectors = [
             '.product-description',
             '[itemprop="description"]',
             '.description',
-            '.product-detail'
+            '.product-detail',
+            '#goods_detail',
+            '.goods_detail',
+            '.detail_description',
+            'div[class*="detail"]',
+            'div[class*="description"]'
         ]
         
         def extract_func(soup_obj, selector):
             if selector:
                 desc_elem = soup_obj.select_one(selector)
                 if desc_elem:
-                    return desc_elem.get_text(strip=True)
+                    # HTML 태그 제거하고 텍스트만 추출
+                    text = desc_elem.get_text(separator='\n', strip=True)
+                    if text and len(text) > 50:  # 의미있는 설명인지 확인
+                        return text
+            
+            # 추가 시도: 메타 description 태그 확인
+            meta_desc = soup_obj.find('meta', {'name': 'description'})
+            if meta_desc:
+                desc_content = meta_desc.get('content', '')
+                if desc_content and len(desc_content) > 50:
+                    return desc_content
+            
+            # JSON-LD 스키마에서 설명 추출
+            json_ld = soup_obj.find('script', {'type': 'application/ld+json'})
+            if json_ld:
+                try:
+                    import json
+                    data = json.loads(json_ld.string)
+                    if isinstance(data, dict) and 'description' in data:
+                        return data['description']
+                except:
+                    pass
+            
             return ""
         
         return self._extract_with_learning(
@@ -628,38 +796,91 @@ class Qoo10Crawler:
         return [k.strip() for k in keywords if k.strip()]
     
     def _extract_reviews(self, soup: BeautifulSoup) -> Dict[str, Any]:
-        """리뷰 정보 추출"""
+        """리뷰 정보 추출 - 실제 Qoo10 페이지 구조에 맞게 개선"""
         reviews_data = {
             "rating": 0.0,
             "review_count": 0,
             "reviews": []
         }
         
-        # 평점 추출
-        rating_elem = soup.find('meta', {'itemprop': 'ratingValue'}) or \
-                     soup.find(class_=re.compile(r'rating|평점'))
-        if rating_elem:
-            rating_text = rating_elem.get('content') or rating_elem.get_text(strip=True)
-            try:
-                reviews_data["rating"] = float(re.findall(r'\d+\.?\d*', rating_text)[0])
-            except:
-                pass
+        # 평점 추출 (다양한 패턴 시도)
+        rating_patterns = [
+            ('meta', {'itemprop': 'ratingValue'}),
+            ('meta', {'property': 'product:ratingValue'}),
+            ('span', {'class': re.compile(r'rating|star|score', re.I)}),
+            ('div', {'class': re.compile(r'rating|star|score', re.I)}),
+        ]
         
-        # 리뷰 수 추출
-        review_count_elem = soup.find('meta', {'itemprop': 'reviewCount'}) or \
-                           soup.find(string=re.compile(r'レビュー|리뷰'))
-        if review_count_elem:
-            count_text = review_count_elem.get('content') if hasattr(review_count_elem, 'get') else str(review_count_elem)
-            numbers = re.findall(r'\d+', count_text)
-            if numbers:
-                reviews_data["review_count"] = int(numbers[0])
+        for tag, attrs in rating_patterns:
+            rating_elem = soup.find(tag, attrs)
+            if rating_elem:
+                rating_text = rating_elem.get('content') or rating_elem.get_text(strip=True)
+                try:
+                    # "4.8(150)" 같은 형식에서 평점 추출
+                    rating_match = re.search(r'(\d+\.?\d*)', rating_text)
+                    if rating_match:
+                        reviews_data["rating"] = float(rating_match.group(1))
+                        break
+                except:
+                    pass
         
-        # 리뷰 텍스트 (최근 리뷰)
-        review_elements = soup.select('.review-item, .review-text, [itemprop="reviewBody"]')
-        for elem in review_elements[:10]:  # 최근 10개만
-            review_text = elem.get_text(strip=True)
-            if review_text:
-                reviews_data["reviews"].append(review_text)
+        # 리뷰 수 추출 (다양한 패턴 시도)
+        review_count_patterns = [
+            ('meta', {'itemprop': 'reviewCount'}),
+            ('meta', {'property': 'product:reviewCount'}),
+            (None, {'string': re.compile(r'レビュー.*\((\d+)\)|리뷰.*\((\d+)\)|review.*\((\d+)\)', re.I)}),
+        ]
+        
+        for tag, attrs in review_count_patterns:
+            if tag:
+                review_count_elem = soup.find(tag, attrs)
+            else:
+                # string 검색
+                review_count_elem = soup.find(string=attrs.get('string'))
+            
+            if review_count_elem:
+                if hasattr(review_count_elem, 'get'):
+                    count_text = review_count_elem.get('content', '')
+                else:
+                    # string 객체인 경우
+                    count_text = str(review_count_elem)
+                    # "4.8(150)" 같은 형식에서 리뷰 수 추출
+                    count_match = re.search(r'\((\d+)\)', count_text)
+                    if count_match:
+                        reviews_data["review_count"] = int(count_match.group(1))
+                        break
+                
+                # 숫자 추출
+                numbers = re.findall(r'\d+', count_text)
+                if numbers:
+                    reviews_data["review_count"] = int(numbers[0])
+                    break
+        
+        # 리뷰 텍스트 (최근 리뷰) - 다양한 선택자 시도
+        review_selectors = [
+            '.review-item',
+            '.review-text',
+            '[itemprop="reviewBody"]',
+            '.review_content',
+            '.review-body',
+            'div[class*="review"]',
+            'p[class*="review"]'
+        ]
+        
+        seen_reviews = set()
+        for selector in review_selectors:
+            review_elements = soup.select(selector)
+            for elem in review_elements[:20]:  # 최대 20개
+                review_text = elem.get_text(strip=True)
+                if review_text and len(review_text) > 10:  # 의미있는 리뷰인지 확인
+                    # 중복 제거
+                    if review_text not in seen_reviews:
+                        reviews_data["reviews"].append(review_text)
+                        seen_reviews.add(review_text)
+                        if len(reviews_data["reviews"]) >= 10:  # 최대 10개
+                            break
+            if len(reviews_data["reviews"]) >= 10:
+                break
         
         return reviews_data
     
@@ -683,23 +904,62 @@ class Qoo10Crawler:
         return seller_info
     
     def _extract_shipping_info(self, soup: BeautifulSoup) -> Dict[str, Any]:
-        """배송 정보 추출"""
+        """배송 정보 추출 - 실제 Qoo10 페이지 구조에 맞게 개선"""
         shipping_info = {
             "shipping_fee": None,
             "shipping_method": None,
-            "estimated_delivery": None
+            "estimated_delivery": None,
+            "free_shipping": False,  # 무료배송 여부
+            "return_policy": None  # 반품 정책 정보
         }
         
-        # 배송비 정보 찾기
-        shipping_elem = soup.find(string=re.compile(r'送料|배송비|Shipping'))
+        # 배송비 정보 찾기 (다양한 패턴 시도)
+        shipping_patterns = [
+            r'送料[：:]\s*(\d+)円',
+            r'送料[：:]\s*無料',
+            r'送料[：:]\s*FREE',
+            r'配送料[：:]\s*(\d+)円',
+            r'배송비[：:]\s*(\d+)円',
+            r'Shipping[：:]\s*(\d+)円'
+        ]
+        
+        # 배송 관련 텍스트 찾기
+        shipping_elem = soup.find(string=re.compile(r'送料|배송비|Shipping|配送'))
         if shipping_elem:
             parent = shipping_elem.find_parent()
             if parent:
                 shipping_text = parent.get_text(strip=True)
-                # 숫자 추출
-                numbers = re.findall(r'\d+', shipping_text)
-                if numbers:
-                    shipping_info["shipping_fee"] = int(numbers[0])
+                
+                # 무료배송 확인
+                if '無料' in shipping_text or 'FREE' in shipping_text.upper() or '무료' in shipping_text:
+                    shipping_info["free_shipping"] = True
+                    shipping_info["shipping_fee"] = 0
+                else:
+                    # 숫자 추출
+                    for pattern in shipping_patterns:
+                        match = re.search(pattern, shipping_text)
+                        if match:
+                            if match.group(1):
+                                shipping_info["shipping_fee"] = int(match.group(1))
+                            break
+                    
+                    # 패턴 매칭 실패 시 숫자만 추출
+                    if not shipping_info["shipping_fee"]:
+                        numbers = re.findall(r'\d+', shipping_text)
+                        if numbers:
+                            shipping_info["shipping_fee"] = int(numbers[0])
+        
+        # 반품 정책 정보 추출
+        return_elem = soup.find(string=re.compile(r'返品|반품|返却|Return'))
+        if return_elem:
+            parent = return_elem.find_parent()
+            if parent:
+                return_text = parent.get_text(strip=True)
+                # "返品無料" 또는 "返品無料サービス" 확인
+                if '返品無料' in return_text or '無料返品' in return_text:
+                    shipping_info["return_policy"] = "free_return"
+                elif '返品' in return_text:
+                    shipping_info["return_policy"] = "return_available"
         
         return shipping_info
     
@@ -755,30 +1015,70 @@ class Qoo10Crawler:
         return None
     
     def _extract_shop_name(self, soup: BeautifulSoup) -> str:
-        """Shop 이름 추출"""
+        """Shop 이름 추출 - 실제 Qoo10 Shop 페이지 구조에 맞게 개선"""
         # 여러 가능한 선택자 시도
         selectors = [
             'h1.shop-name',
             'h1',
             '.shop-title',
-            '[itemprop="name"]'
+            '[itemprop="name"]',
+            '#shop_name',
+            '.shop_name',
+            'title'  # fallback으로 title 태그도 확인
         ]
         
         for selector in selectors:
-            elem = soup.select_one(selector)
-            if elem:
-                text = elem.get_text(strip=True)
-                if text and len(text) > 0:
-                    return text
+            if selector == 'title':
+                # title 태그에서 Shop 이름 추출 (Qoo10 형식: "Shop 이름 | Qoo10")
+                title_elem = soup.find('title')
+                if title_elem:
+                    title_text = title_elem.get_text(strip=True)
+                    # "|" 또는 "｜"로 분리하여 첫 번째 부분 추출
+                    if '|' in title_text:
+                        return title_text.split('|')[0].strip()
+                    elif '｜' in title_text:
+                        return title_text.split('｜')[0].strip()
+                    # "Qoo10"이 포함된 경우 제거
+                    if 'Qoo10' in title_text:
+                        return title_text.replace('Qoo10', '').strip()
+                    return title_text
+            else:
+                elem = soup.select_one(selector)
+                if elem:
+                    text = elem.get_text(strip=True)
+                    if text and len(text) > 0 and text != "Shop 이름 없음":
+                        # 의미있는 텍스트인지 확인 (너무 짧거나 일반적인 텍스트 제외)
+                        if len(text) > 2 and text not in ['ホーム', 'Home', 'トップ', 'Top', 'Qoo10']:
+                            return text
         
         return "Shop 이름 없음"
     
     def _extract_shop_level(self, soup: BeautifulSoup) -> Optional[str]:
-        """Shop 레벨 추출"""
+        """Shop 레벨 추출 - 실제 Qoo10 Shop 페이지 구조에 맞게 개선"""
+        # POWER 95% 같은 패턴 찾기 (우선 확인)
+        power_patterns = [
+            r'POWER\s*(\d+)%',
+            r'パワー\s*(\d+)%',
+            r'POWER\s*(\d+)',
+            r'パワー\s*(\d+)'
+        ]
+        
+        for pattern in power_patterns:
+            power_elem = soup.find(string=re.compile(pattern, re.I))
+            if power_elem:
+                # POWER 퍼센트 추출
+                match = re.search(pattern, str(power_elem), re.I)
+                if match:
+                    power_percent = int(match.group(1))
+                    if power_percent >= 90:
+                        return "power"
+                    elif power_percent >= 70:
+                        return "excellent"
+        
         # POWER, 우수 셀러, 일반 셀러 등 텍스트 찾기
         level_text = soup.find(string=re.compile(r'POWER|パワー|우수|일반|excellent|normal|power', re.I))
         if level_text:
-            text = level_text.lower()
+            text = str(level_text).lower()
             if 'power' in text or 'パワー' in text:
                 return "power"
             elif 'excellent' in text or '우수' in text:
@@ -786,45 +1086,101 @@ class Qoo10Crawler:
             elif 'normal' in text or '일반' in text:
                 return "normal"
         
-        # POWER 95% 같은 패턴 찾기
-        power_elem = soup.find(string=re.compile(r'POWER\s*\d+%', re.I))
-        if power_elem:
+        # "byPower grade" 같은 패턴 찾기
+        power_grade = soup.find(string=re.compile(r'byPower\s*grade|Power\s*grade', re.I))
+        if power_grade:
             return "power"
         
         return "unknown"
     
     def _extract_follower_count(self, soup: BeautifulSoup) -> int:
-        """팔로워 수 추출"""
-        # 팔로워 텍스트 찾기
+        """팔로워 수 추출 - 실제 Qoo10 Shop 페이지 구조에 맞게 개선"""
+        # 팔로워 텍스트 찾기 (다양한 패턴 시도)
+        follower_patterns = [
+            r'フォロワー[_\s]*(\d{1,3}(?:,\d{3})*)',
+            r'フォロワー[_\s]*(\d+)',
+            r'팔로워[_\s]*(\d{1,3}(?:,\d{3})*)',
+            r'팔로워[_\s]*(\d+)',
+            r'follower[_\s]*(\d{1,3}(?:,\d{3})*)',
+            r'follower[_\s]*(\d+)'
+        ]
+        
+        # 패턴 매칭 시도
+        for pattern in follower_patterns:
+            follower_elem = soup.find(string=re.compile(pattern, re.I))
+            if follower_elem:
+                match = re.search(pattern, str(follower_elem), re.I)
+                if match:
+                    try:
+                        # 쉼표 제거 후 숫자 변환
+                        count_str = match.group(1).replace(',', '').replace('_', '')
+                        return int(count_str)
+                    except:
+                        pass
+        
+        # 기본 방법: 팔로워 텍스트 찾기
         follower_text = soup.find(string=re.compile(r'フォロワー|팔로워|follower', re.I))
         if follower_text:
             parent = follower_text.find_parent()
             if parent:
                 text = parent.get_text(strip=True)
-                # 숫자 추출
-                numbers = re.findall(r'[\d,]+', text.replace(',', ''))
+                # "フォロワー_50,357_" 같은 형식에서 숫자 추출
+                numbers = re.findall(r'[\d,]+', text.replace(',', '').replace('_', ''))
                 if numbers:
                     try:
                         return int(numbers[0])
                     except:
                         pass
+        
         return 0
     
     def _extract_product_count(self, soup: BeautifulSoup) -> int:
-        """상품 수 추출"""
+        """상품 수 추출 - 실제 Qoo10 Shop 페이지 구조에 맞게 개선"""
         # "全ての商品 (16)" 같은 패턴 찾기
-        product_text = soup.find(string=re.compile(r'全ての商品|전체 상품|商品.*\(\d+\)', re.I))
-        if product_text:
-            numbers = re.findall(r'\((\d+)\)', product_text)
-            if numbers:
-                try:
-                    return int(numbers[0])
-                except:
-                    pass
+        product_patterns = [
+            r'全ての商品\s*\((\d+)\)',
+            r'전체\s*상품\s*\((\d+)\)',
+            r'商品.*\((\d+)\)',
+            r'全ての商品[：:]\s*(\d+)',
+            r'商品数[：:]\s*(\d+)'
+        ]
         
-        # 상품 리스트에서 개수 세기
-        product_items = soup.select('.product-item, .goods-item, [data-goods-code]')
-        return len(product_items)
+        for pattern in product_patterns:
+            product_text = soup.find(string=re.compile(pattern, re.I))
+            if product_text:
+                match = re.search(pattern, str(product_text), re.I)
+                if match:
+                    try:
+                        return int(match.group(1))
+                    except:
+                        pass
+        
+        # 상품 리스트에서 개수 세기 (다양한 선택자 시도)
+        product_selectors = [
+            '.product-item',
+            '.goods-item',
+            '[data-goods-code]',
+            'div[class*="product"]',
+            'div[class*="goods"]',
+            'div[class*="item"]',
+            'li[class*="product"]',
+            'li[class*="goods"]'
+        ]
+        
+        seen_products = set()
+        for selector in product_selectors:
+            product_items = soup.select(selector)
+            for item in product_items:
+                # 상품명이나 가격이 있는지 확인하여 실제 상품인지 판단
+                name = item.select_one('.product-name, .goods-name, h3, h4, [title]')
+                price = item.select_one('.price, .goods-price, [class*="price"]')
+                if name or price:
+                    # 중복 제거를 위한 식별자 생성
+                    item_id = item.get('data-goods-code') or item.get('id') or str(item)
+                    if item_id not in seen_products:
+                        seen_products.add(item_id)
+        
+        return len(seen_products) if seen_products else 0
     
     def _extract_shop_categories(self, soup: BeautifulSoup) -> Dict[str, int]:
         """Shop 카테고리 분포 추출 (개선 버전)"""
@@ -900,27 +1256,49 @@ class Qoo10Crawler:
                 product["product_type"] = self._detect_product_type(product["product_name"])
                 product["keywords"] = self._extract_product_keywords(product["product_name"])
             
-            # 가격 추출
-            price_selectors = [
-                '.price', '.goods-price', '.sale-price', 
-                '[class*="price"]', '.cost', '.amount'
-            ]
-            for selector in price_selectors:
-                price_elem = item.select_one(selector)
-                if price_elem:
-                    price_text = price_elem.get_text(strip=True)
-                    price = self._parse_price(price_text)
-                    if price:
-                        product["price"]["sale_price"] = price
-                        break
+            # 가격 추출 (실제 Qoo10 Shop 페이지 구조에 맞게 개선)
+            # "~~6,500円~~**4,500円**" 같은 형식 처리
+            item_text = item.get_text()
             
-            # 정가 추출
-            original_price_elem = item.select_one('.original-price, .list-price, [class*="original"]')
-            if original_price_elem:
-                original_text = original_price_elem.get_text(strip=True)
-                original_price = self._parse_price(original_text)
-                if original_price:
-                    product["price"]["original_price"] = original_price
+            # 정가와 판매가 모두 추출
+            price_patterns = [
+                r'~~(\d{1,3}(?:,\d{3})*)円~~\s*\*\*(\d{1,3}(?:,\d{3})*)円\*\*',  # ~~6,500円~~**4,500円**
+                r'~~(\d+)円~~\s*(\d+)円',  # ~~6500円~~4500円
+                r'定価[：:]\s*(\d{1,3}(?:,\d{3})*)円.*価格[：:]\s*(\d{1,3}(?:,\d{3})*)円',
+                r'(\d{1,3}(?:,\d{3})*)円.*(\d{1,3}(?:,\d{3})*)円'
+            ]
+            
+            for pattern in price_patterns:
+                match = re.search(pattern, item_text)
+                if match:
+                    try:
+                        original_str = match.group(1).replace(',', '')
+                        sale_str = match.group(2).replace(',', '')
+                        original_price = int(original_str)
+                        sale_price = int(sale_str)
+                        if original_price > sale_price:
+                            product["price"]["original_price"] = original_price
+                            product["price"]["sale_price"] = sale_price
+                            break
+                    except:
+                        pass
+            
+            # 판매가만 있는 경우
+            if not product["price"]["sale_price"]:
+                price_selectors = [
+                    '.price', '.goods-price', '.sale-price', 
+                    '[class*="price"]', '.cost', '.amount',
+                    'strong', 'b'  # **4,500円** 같은 형식
+                ]
+                for selector in price_selectors:
+                    price_elem = item.select_one(selector)
+                    if price_elem:
+                        price_text = price_elem.get_text(strip=True)
+                        # "**4,500円**" 같은 형식에서 숫자만 추출
+                        price = self._parse_price(price_text)
+                        if price:
+                            product["price"]["sale_price"] = price
+                            break
             
             # 평점 추출
             rating_selectors = [
@@ -939,20 +1317,27 @@ class Qoo10Crawler:
                     except:
                         pass
             
-            # 리뷰 수 추출
+            # 리뷰 수 추출 (실제 Qoo10 Shop 페이지 구조에 맞게 개선)
+            # "レビュー (**565**)" 같은 형식 처리
             review_patterns = [
-                r'レビュー\s*\((\d+)\)',
+                r'レビュー\s*\(\*\*(\d+)\*\*\)',  # レビュー (**565**)
+                r'レビュー\s*\((\d+)\)',  # レビュー (565)
+                r'리뷰\s*\(\*\*(\d+)\*\*\)',
                 r'리뷰\s*\((\d+)\)',
+                r'review\s*\(\*\*(\d+)\*\*\)',
                 r'review\s*\((\d+)\)',
-                r'\((\d+)\)'
+                r'\((\d+)\)'  # 마지막 fallback
             ]
-            item_text = item.get_text()
+            
             for pattern in review_patterns:
                 match = re.search(pattern, item_text, re.I)
                 if match:
                     try:
-                        product["review_count"] = int(match.group(1))
-                        break
+                        review_count = int(match.group(1))
+                        # 의미있는 리뷰 수인지 확인 (너무 큰 숫자는 제외)
+                        if 0 < review_count < 100000:
+                            product["review_count"] = review_count
+                            break
                     except:
                         pass
             
@@ -1026,32 +1411,88 @@ class Qoo10Crawler:
         return keywords[:10]  # 최대 10개
     
     def _extract_shop_coupons(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
-        """Shop 쿠폰 정보 추출"""
+        """Shop 쿠폰 정보 추출 - 실제 Qoo10 Shop 페이지 구조에 맞게 개선"""
         coupons = []
         
-        # 쿠폰 요소 찾기
-        coupon_elements = soup.select('.coupon-item, .discount-coupon')
+        # 쿠폰 요소 찾기 (다양한 선택자 시도)
+        coupon_selectors = [
+            '.coupon-item',
+            '.discount-coupon',
+            'div[class*="coupon"]',
+            'li[class*="coupon"]',
+            '[class*="クーポン"]',
+            '[class*="割引"]'
+        ]
         
-        for elem in coupon_elements:
-            coupon = {
-                "discount_rate": 0,
-                "min_amount": 0,
-                "valid_until": None
-            }
-            
-            # 할인율
-            discount_text = elem.get_text()
-            discount_match = re.search(r'(\d+)%', discount_text)
-            if discount_match:
-                coupon["discount_rate"] = int(discount_match.group(1))
-            
-            # 최소 금액
-            amount_match = re.search(r'(\d+)[,円]以上', discount_text)
-            if amount_match:
-                coupon["min_amount"] = int(amount_match.group(1))
-            
-            if coupon["discount_rate"] > 0:
-                coupons.append(coupon)
+        seen_coupons = set()
+        
+        for selector in coupon_selectors:
+            coupon_elements = soup.select(selector)
+            for elem in coupon_elements:
+                coupon = {
+                    "discount_rate": 0,
+                    "min_amount": 0,
+                    "valid_until": None,
+                    "description": ""
+                }
+                
+                # 쿠폰 텍스트 추출
+                discount_text = elem.get_text(strip=True)
+                
+                # 할인율 추출 (다양한 패턴)
+                discount_patterns = [
+                    r'(\d+)%off',
+                    r'(\d+)%OFF',
+                    r'(\d+)%割引',
+                    r'(\d+)%',
+                    r'off\s*(\d+)%',
+                    r'割引\s*(\d+)%'
+                ]
+                
+                for pattern in discount_patterns:
+                    discount_match = re.search(pattern, discount_text, re.I)
+                    if discount_match:
+                        coupon["discount_rate"] = int(discount_match.group(1))
+                        break
+                
+                # 최소 금액 추출 (다양한 패턴)
+                amount_patterns = [
+                    r'(\d{1,3}(?:,\d{3})*)[,円]以上',
+                    r'(\d+)[,円]以上',
+                    r'(\d{1,3}(?:,\d{3})*)[,円]以上の',
+                    r'(\d+)[,円]以上の',
+                    r'(\d{1,3}(?:,\d{3})*)[,円]以上購入',
+                    r'(\d+)[,円]以上購入'
+                ]
+                
+                for pattern in amount_patterns:
+                    amount_match = re.search(pattern, discount_text)
+                    if amount_match:
+                        amount_str = amount_match.group(1).replace(',', '')
+                        coupon["min_amount"] = int(amount_str)
+                        break
+                
+                # 유효 기간 추출
+                date_patterns = [
+                    r'(\d{4}\.\d{2}\.\d{2})\s*[~〜]\s*(\d{4}\.\d{2}\.\d{2})',
+                    r'(\d{4}-\d{2}-\d{2})\s*[~〜]\s*(\d{4}-\d{2}-\d{2})',
+                    r'(\d{4}/\d{2}/\d{2})\s*[~〜]\s*(\d{4}/\d{2}/\d{2})'
+                ]
+                
+                for pattern in date_patterns:
+                    date_match = re.search(pattern, discount_text)
+                    if date_match:
+                        coupon["valid_until"] = date_match.group(2)
+                        break
+                
+                # 쿠폰 설명
+                coupon["description"] = discount_text[:100]  # 최대 100자
+                
+                # 중복 제거 (할인율과 최소 금액이 같은 쿠폰)
+                coupon_key = f"{coupon['discount_rate']}_{coupon['min_amount']}"
+                if coupon_key not in seen_coupons and coupon["discount_rate"] > 0:
+                    coupons.append(coupon)
+                    seen_coupons.add(coupon_key)
         
         return coupons
     

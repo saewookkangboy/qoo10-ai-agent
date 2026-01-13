@@ -1,8 +1,11 @@
 import { Recommendation } from '../types'
+import HelpTooltip from './HelpTooltip'
 
 interface RecommendationCardProps {
   recommendation: Recommendation
 }
+
+const helpContent = '개선 제안은 Qoo10 큐텐 대학의 판매 노하우를 기반으로 생성되었습니다.\n\n• High Priority: 즉시 개선이 필요한 항목으로 매출에 직접적인 영향을 미칩니다\n• Medium Priority: 단기적으로 개선하면 효과를 볼 수 있는 항목입니다\n• Low Priority: 장기적으로 고려하면 좋은 개선 사항입니다\n\n각 제안의 실행 방법을 따라 단계적으로 개선하시면 매출 증대에 도움이 됩니다.'
 
 function RecommendationCard({ recommendation }: RecommendationCardProps) {
   const getPriorityColor = (priority: string) => {
@@ -45,9 +48,12 @@ function RecommendationCard({ recommendation }: RecommendationCardProps) {
       {/* 헤더 */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3 sm:mb-4">
         <div className="flex-1">
-          <h3 className="text-base sm:text-lg font-semibold text-[#1A1A1A] mb-2">
-            {recommendation.title}
-          </h3>
+          <div className="flex items-center gap-2 mb-2">
+            <h3 className="text-base sm:text-lg font-semibold text-[#1A1A1A]">
+              {recommendation.title}
+            </h3>
+            <HelpTooltip content={helpContent} />
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-block px-2 sm:px-3 py-1 text-xs font-medium rounded bg-white text-[#4D4D4D] border border-[#E6E6E6]">
               {recommendation.category}

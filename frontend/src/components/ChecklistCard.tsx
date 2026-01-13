@@ -1,8 +1,11 @@
 import { ChecklistResult } from '../types'
+import HelpTooltip from './HelpTooltip'
 
 interface ChecklistCardProps {
   checklist: ChecklistResult
 }
+
+const helpContent = '이 체크리스트는 Qoo10 큐텐 대학의 판매 준비 가이드를 기반으로 합니다.\n\n• 상품 등록: 상품명, 설명, 이미지 등 필수 정보를 확인합니다\n• 가격 설정: 판매가, 할인율, 쿠폰 할인 등을 점검합니다\n• 배송 정보: 배송비, 배송 방법, 통관 정보를 확인합니다\n• 프로모션: 샵 쿠폰, 상품 할인, 광고 활용 여부를 점검합니다\n\n완성도가 높을수록 검색 노출과 전환율이 향상됩니다.'
 
 function ChecklistCard({ checklist }: ChecklistCardProps) {
   const overallCompletion = checklist.overall_completion
@@ -16,9 +19,12 @@ function ChecklistCard({ checklist }: ChecklistCardProps) {
   return (
     <div className="bg-white rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.08)] p-4 sm:p-6">
       <div className="flex items-center justify-between mb-4 sm:mb-6">
-        <h2 className="text-xl sm:text-2xl font-bold text-[#1A1A1A]">
-          📋 메뉴얼 기반 체크리스트
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl sm:text-2xl font-bold text-[#1A1A1A]">
+            📋 메뉴얼 기반 체크리스트
+          </h2>
+          <HelpTooltip content={helpContent} />
+        </div>
         <div className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg ${getCompletionColor(overallCompletion)}`}>
           <div className="text-xs sm:text-sm text-[#4D4D4D] mb-1">전체 완성도</div>
           <div className="text-2xl sm:text-3xl font-bold">{overallCompletion}%</div>

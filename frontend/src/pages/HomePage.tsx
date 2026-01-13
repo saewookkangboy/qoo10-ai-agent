@@ -3,11 +3,13 @@ import { useNavigate, Link } from 'react-router-dom'
 import { analyzeService } from '../services/api'
 import URLInput from '../components/URLInput'
 import LoadingSpinner from '../components/LoadingSpinner'
+import ManualSearch from '../components/ManualSearch'
 
 function HomePage() {
   const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showManual, setShowManual] = useState(false)
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -86,13 +88,26 @@ function HomePage() {
                   <p className="text-xs sm:text-sm text-[#4D4D4D] leading-relaxed mb-2">
                     Qoo10 상품 또는 Shop URL을 입력하면 자동으로 분석합니다.
                   </p>
-                  <p className="text-xs text-[#808080] font-mono break-all">
+                  <p className="text-xs text-[#808080] font-mono break-all mb-3">
                     예: https://www.qoo10.jp/gmkt.inc/Goods/Goods.aspx?goodscode=...
                   </p>
+                  <button
+                    onClick={() => setShowManual(!showManual)}
+                    className="text-xs sm:text-sm text-[#0066CC] hover:text-[#004499] font-medium underline"
+                  >
+                    📚 Qoo10 큐텐 대학 메뉴얼 검색 {showManual ? '▲' : '▼'}
+                  </button>
                 </div>
               </div>
             </div>
           </div>
+
+          {/* 메뉴얼 검색 섹션 */}
+          {showManual && (
+            <div className="mt-4 sm:mt-6">
+              <ManualSearch onClose={() => setShowManual(false)} />
+            </div>
+          )}
         </div>
       </div>
     </div>
