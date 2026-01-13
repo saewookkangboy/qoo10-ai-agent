@@ -29,7 +29,7 @@ pip install -r requirements.txt
 ### 패키지 목록
 
 #### 웹 프레임워크
-- **fastapi==0.104.1** - FastAPI 웹 프레임워크
+- **fastapi>=0.109.1** - FastAPI 웹 프레임워크
 - **uvicorn[standard]==0.24.0** - ASGI 서버
 - **pydantic==2.5.0** - 데이터 검증 및 설정 관리
 - **python-multipart==0.0.6** - 멀티파트 폼 데이터 처리
@@ -43,7 +43,7 @@ pip install -r requirements.txt
 - **selenium==4.15.2** - 브라우저 자동화
 
 #### 이미지 처리
-- **pillow==10.1.0** - 이미지 처리 라이브러리
+- **pillow>=10.2.0** - 이미지 처리 라이브러리
 
 #### 환경 설정
 - **python-dotenv==1.0.0** - 환경 변수 관리
@@ -52,7 +52,7 @@ pip install -r requirements.txt
 - **aiofiles==23.2.1** - 비동기 파일 I/O
 
 #### 보안
-- **defusedxml==0.7.1** - XML 보안 처리 (중복 포함)
+- **defusedxml==0.7.1** - XML 보안 처리 (requirements.txt에 중복 항목 존재, 중복 제거 권장)
 
 #### 데이터 처리
 - **numpy==1.26.2** - 수치 연산
@@ -63,7 +63,7 @@ pip install -r requirements.txt
 - **anthropic==0.7.7** - Anthropic (Claude) API 클라이언트
 
 #### 데이터베이스
-- **psycopg2-binary==2.9.9** - PostgreSQL 어댑터
+- **psycopg2-binary>=2.9.11** - PostgreSQL 어댑터 (보안 패치 적용 버전) 또는 **psycopg>=3.1.0** - PostgreSQL 어댑터 (psycopg3, 마이그레이션 시)
 - **sqlalchemy==2.0.23** - ORM (Object-Relational Mapping)
 
 #### 리포트 생성
@@ -163,16 +163,98 @@ npm install
 #### 설정 방법
 
 ##### 로컬 개발
+
+> **참고**: 최신 안정 버전의 PostgreSQL(예: PostgreSQL 16) 또는 프로젝트에서 지원하는 버전을 사용하는 것을 권장합니다. 특정 버전이 필요한 경우 프로젝트 문서를 확인하세요.
+
+###### macOS
+
 ```bash
-# PostgreSQL 설치 (macOS)
-brew install postgresql@14
-brew services start postgresql@14
+# PostgreSQL 설치 (Homebrew - macOS 전용)
+brew install postgresql@16  # 또는 최신 안정 버전
+brew services start postgresql@16
 
 # 데이터베이스 생성
 createdb qoo10_ai_agent
 
 # 환경 변수 설정
 DATABASE_URL=postgresql://user:password@localhost:5432/qoo10_ai_agent
+```
+
+###### Linux
+
+**apt를 사용하는 경우 (Ubuntu/Debian):**
+```bash
+# PostgreSQL 설치
+sudo apt update
+sudo apt install postgresql postgresql-contrib
+
+# PostgreSQL 서비스 시작
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+
+# 데이터베이스 생성
+sudo -u postgres createdb qoo10_ai_agent
+```
+
+**yum을 사용하는 경우 (CentOS/RHEL):**
+```bash
+# PostgreSQL 설치
+sudo yum install postgresql-server postgresql-contrib
+
+# PostgreSQL 초기화 및 시작
+sudo postgresql-setup initdb
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+
+# 데이터베이스 생성
+sudo -u postgres createdb qoo10_ai_agent
+```
+
+**Docker를 사용하는 경우:**
+```bash
+# PostgreSQL 컨테이너 실행
+docker run --name qoo10-postgres \
+  -e POSTGRES_PASSWORD=your_password \
+  -e POSTGRES_DB=qoo10_ai_agent \
+  -p 5432:5432 \
+  -d postgres:16
+
+# 환경 변수 설정
+DATABASE_URL=postgresql://postgres:your_password@localhost:5432/qoo10_ai_agent
+```
+
+###### Windows
+
+**공식 설치 프로그램 사용:**
+1. [PostgreSQL 공식 웹사이트](https://www.postgresql.org/download/windows/)에서 설치 프로그램 다운로드
+2. 설치 마법사를 따라 PostgreSQL 설치 (최신 안정 버전 권장)
+3. 설치 중 비밀번호 설정
+4. pgAdmin 또는 명령 프롬프트에서 데이터베이스 생성:
+   ```sql
+   CREATE DATABASE qoo10_ai_agent;
+   ```
+
+**WSL(Windows Subsystem for Linux) 사용 (권장):**
+```bash
+# WSL에서 Linux 설치 방법과 동일하게 진행
+sudo apt update
+sudo apt install postgresql postgresql-contrib
+sudo systemctl start postgresql
+sudo -u postgres createdb qoo10_ai_agent
+```
+
+**환경 변수 설정 (모든 플랫폼 공통):**
+```bash
+# DATABASE_URL 형식:
+# postgresql://[사용자명]:[비밀번호]@[호스트]:[포트]/[데이터베이스명]
+DATABASE_URL=postgresql://user:password@localhost:5432/qoo10_ai_agent
+
+# 실제 값 예시:
+# - user: postgres (기본값) 또는 생성한 사용자명
+# - password: 설치 시 설정한 비밀번호
+# - host: localhost (로컬) 또는 원격 서버 주소
+# - port: 5432 (PostgreSQL 기본 포트)
+# - database: qoo10_ai_agent (생성한 데이터베이스명)
 ```
 
 ##### 프로덕션 (Railway)
@@ -229,11 +311,13 @@ VITE_API_URL=http://localhost:8080
 
 ### 전체 시스템 설치 가이드
 
+> **참고**: 아래의 모든 명령어는 프로젝트 루트 디렉토리(`qoo10-ai-agent/`)에서 실행하는 것을 전제로 합니다.
+
 #### 1단계: 백엔드 설정
 
 ```bash
-# 1. 프로젝트 디렉토리로 이동
-cd /Users/chunghyo/qoo10-ai-agent/api
+# 1. 백엔드 디렉토리로 이동
+cd api
 
 # 2. 가상 환경 생성 및 활성화
 python -m venv venv
@@ -259,7 +343,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8080
 
 ```bash
 # 1. 프론트엔드 디렉토리로 이동
-cd /Users/chunghyo/qoo10-ai-agent/frontend
+cd frontend
 
 # 2. Node.js 패키지 설치
 npm install
@@ -291,13 +375,13 @@ psql qoo10_ai_agent
 #### 4단계: 외부 API 키 발급
 
 1. **OpenAI API 키 발급**
-   - https://platform.openai.com/ 접속
+   - <https://platform.openai.com/> 접속
    - 계정 생성 및 로그인
    - API Keys 메뉴에서 새 키 생성
    - `.env` 파일에 `OPENAI_API_KEY` 설정
 
 2. **Anthropic API 키 발급**
-   - https://console.anthropic.com/ 접속
+   - <https://console.anthropic.com/> 접속
    - 계정 생성 및 로그인
    - API Keys 메뉴에서 새 키 생성
    - `.env` 파일에 `ANTHROPIC_API_KEY` 설정
