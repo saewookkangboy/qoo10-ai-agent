@@ -1,0 +1,116 @@
+{
+  "phases": [
+    {
+      "phase": "Phase 1",
+      "name": "MVP 개발",
+      "duration": "3개월",
+      "checklist": [
+        {
+          "id": "phase1_001",
+          "title": "프로젝트 초기화 완료",
+          "status": "completed",
+          "completed_at": "2026-01-13"
+        },
+        {
+          "id": "phase1_002",
+          "title": "FastAPI 서버 구축 완료",
+          "status": "pending"
+        },
+        {
+          "id": "phase1_003",
+          "title": "크롤링 서비스 구현 완료",
+          "status": "pending"
+        },
+        {
+          "id": "phase1_004",
+          "title": "AI 분석 서비스 구현 완료",
+          "status": "pending"
+        },
+        {
+          "id": "phase1_005",
+          "title": "React 프론트엔드 구축 완료",
+          "status": "pending"
+        },
+        {
+          "id": "phase1_006",
+          "title": "F1: URL 입력 기능 완료",
+          "status": "pending"
+        },
+        {
+          "id": "phase1_007",
+          "title": "F2: 상품 상세페이지 분석 완료",
+          "status": "pending"
+        },
+        {
+          "id": "phase1_008",
+          "title": "F4: 매출 강화 아이디어 제안 완료",
+          "status": "pending"
+        },
+        {
+          "id": "phase1_009",
+          "title": "F6: 리포트 시각화 완료",
+          "status": "pending"
+        },
+        {
+          "id": "phase1_010",
+          "title": "통합 테스트 완료",
+          "status": "pending"
+        },
+        {
+          "id": "phase1_011",
+          "title": "배포 환경 설정 완료",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "phase": "Phase 2",
+      "name": "확장 기능 개발",
+      "duration": "4-6개월",
+      "checklist": [
+        {
+          "id": "phase2_001",
+          "title": "F3: Shop 카테고리 분석 완료",
+          "status": "pending"
+        },
+        {
+          "id": "phase2_002",
+          "title": "F5: 메뉴얼 기반 체크리스트 완료",
+          "status": "pending"
+        },
+        {
+          "id": "phase2_003",
+          "title": "F7: 경쟁사 비교 분석 완료",
+          "status": "pending"
+        },
+        {
+          "id": "phase2_004",
+          "title": "F8: 리포트 다운로드 완료",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "phase": "Phase 3",
+      "name": "고급 기능 개발",
+      "duration": "7-9개월",
+      "checklist": [
+        {
+          "id": "phase3_001",
+          "title": "F9: 히스토리 관리 완료",
+          "status": "pending"
+        },
+        {
+          "id": "phase3_002",
+          "title": "F10: 알림 기능 완료",
+          "status": "pending"
+        },
+        {
+          "id": "phase3_003",
+          "title": "F11: 배치 분석 완료",
+          "status": "pending"
+        }
+      ]
+    }
+  ]
+}

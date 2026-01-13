@@ -1,0 +1,20 @@
+# Railway 배포 시 제외할 파일들
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.env
+.env.local
+*.db
+*.sqlite
+*.log
+venv/
+env/
+ENV/
+.venv

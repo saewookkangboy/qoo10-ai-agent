@@ -1,0 +1,308 @@
+{
+  "checklists": [
+    {
+      "id": "checklist_001",
+      "category": "판매 준비",
+      "title": "판매 준비 체크리스트",
+      "description": "Qoo10 Japan에서 판매를 시작하기 위한 필수 준비 사항",
+      "items": [
+        {
+          "id": "item_001",
+          "title": "상품 등록 완료",
+          "description": "상품명, 설명, 이미지 등 기본 정보 입력 완료",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_002",
+          "title": "검색어 설정 완료",
+          "description": "검색어 필드에 키워드 입력 완료",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_003",
+          "title": "카테고리 및 브랜드 등록 완료",
+          "description": "적절한 카테고리 선택 및 브랜드 등록 완료",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_004",
+          "title": "가격 설정 완료",
+          "description": "정가, 판매가, 할인율 설정 완료",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_005",
+          "title": "배송 정보 설정 완료",
+          "description": "배송 방법, 배송비, 배송 기간 설정 완료",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_006",
+          "title": "재고 관리 설정 완료",
+          "description": "재고 수량 및 재고 관리 방법 설정 완료",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        }
+      ]
+    },
+    {
+      "id": "checklist_002",
+      "category": "매출 증대",
+      "title": "매출 증대를 위한 10가지 전략 체크리스트",
+      "description": "큐텐 대학 메뉴얼 기반 매출 상승 전략 적용 여부",
+      "items": [
+        {
+          "id": "item_007",
+          "title": "상품 페이지 최적화",
+          "description": "이미지 품질, 설명 완성도, 레이아웃 최적화",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_008",
+          "title": "검색 키워드 최적화",
+          "description": "상품명, 검색어에 인기 키워드 포함",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_009",
+          "title": "가격 전략 수립",
+          "description": "경쟁사 대비 적정 가격 설정, 가격 심리학 활용",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_010",
+          "title": "고객 리뷰 관리",
+          "description": "리뷰 모니터링, 부정 리뷰 대응, 리뷰 활용",
+          "status": "pending",
+          "auto_checkable": false,
+          "manual_check": true
+        },
+        {
+          "id": "item_011",
+          "title": "프로모션 활용",
+          "description": "샵 쿠폰, 상품 할인, 이벤트 참가",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_012",
+          "title": "광고 전략 수립",
+          "description": "파워랭크업, 스마트세일즈, 플러스 전시 등 광고 활용",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_013",
+          "title": "배송 옵션 다양화",
+          "description": "다양한 배송 방법 제공, 배송비 최적화",
+          "status": "pending",
+          "auto_checkable": false,
+          "manual_check": true
+        },
+        {
+          "id": "item_014",
+          "title": "고객 서비스 개선",
+          "description": "문의 대응 속도, 고객 만족도 향상",
+          "status": "pending",
+          "auto_checkable": false,
+          "manual_check": true
+        },
+        {
+          "id": "item_015",
+          "title": "데이터 분석 기반 의사결정",
+          "description": "Qoo10 Analytics 활용, 데이터 기반 개선",
+          "status": "pending",
+          "auto_checkable": false,
+          "manual_check": true
+        },
+        {
+          "id": "item_016",
+          "title": "지속적인 개선 및 테스트",
+          "description": "A/B 테스트, 지속적인 최적화",
+          "status": "pending",
+          "auto_checkable": false,
+          "manual_check": true
+        }
+      ]
+    },
+    {
+      "id": "checklist_003",
+      "category": "광고/프로모션",
+      "title": "광고 및 프로모션 체크리스트",
+      "description": "Qoo10 Japan의 광고 및 프로모션 기능 활용 여부",
+      "items": [
+        {
+          "id": "item_017",
+          "title": "파워랭크업 광고 활용",
+          "description": "검색형 광고 설정 (200엔부터)",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_018",
+          "title": "스마트세일즈 광고 활용",
+          "description": "알고리즘 기반 자동 노출 광고 설정",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_019",
+          "title": "플러스 전시 광고 활용",
+          "description": "전시형 광고 설정",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_020",
+          "title": "키워드 플러스 광고 활용",
+          "description": "특정 키워드 검색 시 노출 광고 설정",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_021",
+          "title": "샵 쿠폰 설정",
+          "description": "할인 쿠폰 생성 및 설정",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_022",
+          "title": "상품 할인 설정",
+          "description": "상품별 할인율 설정",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_023",
+          "title": "샘플마켓 참가 (가능한 경우)",
+          "description": "상품 수량 10개 이상인 경우 샘플마켓 참가 신청",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_024",
+          "title": "메가할인/메가포 대비 준비",
+          "description": "이벤트 기간 대비 상품 준비, 가격 전략, 광고 예산 배분",
+          "status": "pending",
+          "auto_checkable": false,
+          "manual_check": true
+        }
+      ]
+    },
+    {
+      "id": "checklist_004",
+      "category": "상품 페이지",
+      "title": "상품 페이지 완성도 체크리스트",
+      "description": "고객 전환율을 높이기 위한 상품 페이지 최적화",
+      "items": [
+        {
+          "id": "item_025",
+          "title": "썸네일 이미지 품질",
+          "description": "해상도 800x800 이상, 명확한 이미지",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_026",
+          "title": "상세 이미지 5개 이상",
+          "description": "다각도, 상세, 사용 예시 이미지 제공",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_027",
+          "title": "상품 설명 500자 이상",
+          "description": "상세하고 구조화된 상품 설명",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_028",
+          "title": "검색어 최적화",
+          "description": "인기 키워드 포함, 검색어 필드 활용",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_029",
+          "title": "평점 4.0 이상",
+          "description": "고객 만족도 유지",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        },
+        {
+          "id": "item_030",
+          "title": "리뷰 10개 이상",
+          "description": "신뢰도 향상을 위한 충분한 리뷰",
+          "status": "pending",
+          "auto_checkable": true,
+          "manual_check": false
+        }
+      ]
+    },
+    {
+      "id": "checklist_005",
+      "category": "Shop 운영",
+      "title": "Shop 레벨 향상 체크리스트",
+      "description": "Shop 레벨 상승을 위한 운영 지표",
+      "items": [
+        {
+          "id": "item_031",
+          "title": "일반 셀러 → 우수 셀러",
+          "description": "월 매출 100만엔 이상, 평점 4.5 이상",
+          "status": "pending",
+          "auto_checkable": false,
+          "manual_check": true
+        },
+        {
+          "id": "item_032",
+          "title": "우수 셀러 → 파워 셀러",
+          "description": "월 매출 500만엔 이상, 평점 4.7 이상",
+          "status": "pending",
+          "auto_checkable": false,
+          "manual_check": true
+        },
+        {
+          "id": "item_033",
+          "title": "정산 리드타임 단축",
+          "description": "레벨 상승으로 정산 리드타임 단축 (15일 → 10일 → 5일)",
+          "status": "pending",
+          "auto_checkable": false,
+          "manual_check": true
+        }
+      ]
+    }
+  ]
+}

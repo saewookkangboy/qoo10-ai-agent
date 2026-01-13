@@ -1,0 +1,310 @@
+{
+  "todos": [
+    {
+      "id": "todo_001",
+      "description": "F1: URL 입력 및 분석 시작 기능 구현",
+      "priority": "high",
+      "status": "pending",
+      "milestone": "Phase 1",
+      "created_at": "2026-01-13T00:00:00Z",
+      "category": "backend",
+      "dependencies": [],
+      "subtasks": [
+        "URL 형식 검증 로직 구현",
+        "Qoo10 도메인 확인 로직",
+        "URL 접근 가능 여부 확인",
+        "분석 타입 결정 (상품/Shop)",
+        "분석 작업 큐 시스템 구축",
+        "분석 ID 생성 및 반환"
+      ]
+    },
+    {
+      "id": "todo_002",
+      "description": "F2: 상품 상세페이지 분석 기능 구현",
+      "priority": "high",
+      "status": "pending",
+      "milestone": "Phase 1",
+      "created_at": "2026-01-13T00:00:00Z",
+      "category": "backend",
+      "dependencies": ["todo_001"],
+      "subtasks": [
+        "상품 기본 정보 수집 (상품명, 번호, 카테고리, 브랜드)",
+        "이미지 정보 수집 및 분석 (썸네일, 상세 이미지)",
+        "상품 설명 텍스트 수집",
+        "가격 정보 수집 (정가, 판매가, 할인율)",
+        "리뷰 정보 수집 (평점, 리뷰 수, 리뷰 텍스트)",
+        "이미지 품질 평가 알고리즘 구현",
+        "SEO 키워드 분석 로직 구현",
+        "가격 전략 분석 로직 구현",
+        "리뷰 분석 및 부정 리뷰 패턴 감지"
+      ]
+    },
+    {
+      "id": "todo_003",
+      "description": "F4: 매출 강화 아이디어 제안 기능 구현",
+      "priority": "high",
+      "status": "pending",
+      "milestone": "Phase 1",
+      "created_at": "2026-01-13T00:00:00Z",
+      "category": "backend",
+      "dependencies": ["todo_002"],
+      "subtasks": [
+        "메뉴얼 지식베이스 구축 (큐텐 대학 메뉴얼 학습)",
+        "SEO 최적화 제안 로직 구현",
+        "광고 전략 제안 로직 구현 (파워랭크업, 스마트세일즈 등)",
+        "프로모션 제안 로직 구현 (샵 쿠폰, 샘플마켓 등)",
+        "상품 페이지 개선 제안 로직 구현",
+        "우선순위 계산 알고리즘 구현",
+        "액션 아이템 생성 로직"
+      ]
+    },
+    {
+      "id": "todo_004",
+      "description": "F6: 리포트 시각화 (카드 형태) 구현",
+      "priority": "high",
+      "status": "pending",
+      "milestone": "Phase 1",
+      "created_at": "2026-01-13T00:00:00Z",
+      "category": "frontend",
+      "dependencies": ["todo_002", "todo_003"],
+      "subtasks": [
+        "카드 레이아웃 컴포넌트 개발",
+        "핵심 지표 카드 컴포넌트 (점수 게이지)",
+        "분석 결과 카드 컴포넌트 (이미지, 설명, 가격, 리뷰)",
+        "개선 제안 카드 컴포넌트 (우선순위별)",
+        "반응형 디자인 구현 (모바일/태블릿/데스크톱)",
+        "색상 코딩 시스템 (점수별 색상)",
+        "인터랙션 구현 (카드 클릭, 모달 표시)"
+      ]
+    },
+    {
+      "id": "todo_005",
+      "description": "FastAPI 서버 구축",
+      "priority": "high",
+      "status": "pending",
+      "milestone": "Phase 1",
+      "created_at": "2026-01-13T00:00:00Z",
+      "category": "backend",
+      "dependencies": [],
+      "subtasks": [
+        "FastAPI 프로젝트 초기화",
+        "API 라우트 구조 설계",
+        "POST /api/v1/analyze 엔드포인트 구현",
+        "GET /api/v1/analyze/{analysis_id} 엔드포인트 구현",
+        "에러 핸들링 및 예외 처리",
+        "Swagger/OpenAPI 문서 자동 생성 설정",
+        "CORS 설정",
+        "로깅 시스템 구축"
+      ]
+    },
+    {
+      "id": "todo_006",
+      "description": "크롤링 서비스 구현",
+      "priority": "high",
+      "status": "pending",
+      "milestone": "Phase 1",
+      "created_at": "2026-01-13T00:00:00Z",
+      "category": "backend",
+      "dependencies": ["todo_005"],
+      "subtasks": [
+        "웹 크롤링 라이브러리 선택 및 설정 (BeautifulSoup, Selenium 등)",
+        "Qoo10 상품 페이지 파싱 로직",
+        "Qoo10 Shop 페이지 파싱 로직",
+        "robots.txt 준수 확인",
+        "요청 제한 및 재시도 로직",
+        "데이터 검증 및 정규화",
+        "에러 처리 및 로깅"
+      ]
+    },
+    {
+      "id": "todo_007",
+      "description": "AI 분석 서비스 구현",
+      "priority": "high",
+      "status": "pending",
+      "milestone": "Phase 1",
+      "created_at": "2026-01-13T00:00:00Z",
+      "category": "backend",
+      "dependencies": ["todo_006"],
+      "subtasks": [
+        "이미지 분석 모듈 (품질 평가, 해상도 확인)",
+        "자연어 처리 모듈 (SEO 키워드 추출, 텍스트 분석)",
+        "가격 분석 모듈 (경쟁사 비교, 가격 포지셔닝)",
+        "리뷰 분석 모듈 (감성 분석, 부정 키워드 감지)",
+        "점수 계산 알고리즘 구현",
+        "AI 모델 통합 (선택사항: OpenAI, Claude 등)"
+      ]
+    },
+    {
+      "id": "todo_008",
+      "description": "React 프로젝트 초기화",
+      "priority": "high",
+      "status": "pending",
+      "milestone": "Phase 1",
+      "created_at": "2026-01-13T00:00:00Z",
+      "category": "frontend",
+      "dependencies": [],
+      "subtasks": [
+        "React + TypeScript 프로젝트 생성",
+        "프로젝트 구조 설정",
+        "라우팅 설정 (React Router)",
+        "상태 관리 설정 (Redux/Zustand 선택)",
+        "API 클라이언트 설정 (Axios/Fetch)",
+        "스타일링 설정 (Tailwind CSS 또는 styled-components)",
+        "환경 변수 설정"
+      ]
+    },
+    {
+      "id": "todo_009",
+      "description": "URL 입력 컴포넌트 개발",
+      "priority": "high",
+      "status": "pending",
+      "milestone": "Phase 1",
+      "created_at": "2026-01-13T00:00:00Z",
+      "category": "frontend",
+      "dependencies": ["todo_008"],
+      "subtasks": [
+        "URL 입력 필드 컴포넌트",
+        "URL 유효성 검사 (실시간)",
+        "제출 버튼 및 로딩 상태 표시",
+        "에러 메시지 표시",
+        "분석 진행률 표시 (0-100%)",
+        "API 연동"
+      ]
+    },
+    {
+      "id": "todo_010",
+      "description": "리포트 카드 컴포넌트 개발",
+      "priority": "high",
+      "status": "pending",
+      "milestone": "Phase 1",
+      "created_at": "2026-01-13T00:00:00Z",
+      "category": "frontend",
+      "dependencies": ["todo_004", "todo_008"],
+      "subtasks": [
+        "헤더 섹션 (상품명, 분석 일시, 종합 점수)",
+        "핵심 지표 카드 (4개: 이미지, 설명, 가격, 리뷰)",
+        "분석 결과 카드 (상세 정보)",
+        "개선 제안 카드 (우선순위별)",
+        "필터/정렬 기능",
+        "모달 컴포넌트 (상세 정보 표시)"
+      ]
+    },
+    {
+      "id": "todo_011",
+      "description": "F3: Shop 카테고리 분석 기능 구현",
+      "priority": "medium",
+      "status": "pending",
+      "milestone": "Phase 2",
+      "created_at": "2026-01-13T00:00:00Z",
+      "category": "backend",
+      "dependencies": ["todo_002"],
+      "subtasks": [
+        "Shop 정보 수집",
+        "카테고리 포지셔닝 분석",
+        "경쟁사 분석 (Top 10)",
+        "Shop 레벨 분석",
+        "레벨 상승 방안 제시"
+      ]
+    },
+    {
+      "id": "todo_012",
+      "description": "F5: 메뉴얼 기반 체크리스트 기능 구현",
+      "priority": "medium",
+      "status": "pending",
+      "milestone": "Phase 2",
+      "created_at": "2026-01-13T00:00:00Z",
+      "category": "backend",
+      "dependencies": ["todo_002"],
+      "subtasks": [
+        "판매 준비 체크리스트 로직",
+        "매출 증대 체크리스트 로직 (10가지 전략)",
+        "광고/프로모션 체크리스트 로직",
+        "자동 체크 기능 (데이터 기반)",
+        "완성도 계산 알고리즘"
+      ]
+    },
+    {
+      "id": "todo_013",
+      "description": "F7: 경쟁사 비교 분석 기능 구현",
+      "priority": "medium",
+      "status": "pending",
+      "milestone": "Phase 2",
+      "created_at": "2026-01-13T00:00:00Z",
+      "category": "backend",
+      "dependencies": ["todo_011"],
+      "subtasks": [
+        "동일 카테고리 Top 10 상품 수집",
+        "비교 항목 분석 (가격, 평점, 리뷰, 광고)",
+        "차별화 포인트 도출",
+        "비교 테이블 데이터 생성"
+      ]
+    },
+    {
+      "id": "todo_014",
+      "description": "F8: 리포트 다운로드 기능 구현",
+      "priority": "medium",
+      "status": "pending",
+      "milestone": "Phase 2",
+      "created_at": "2026-01-13T00:00:00Z",
+      "category": "backend",
+      "dependencies": ["todo_004"],
+      "subtasks": [
+        "PDF 생성 기능",
+        "Excel 생성 기능",
+        "리포트 템플릿 디자인",
+        "다운로드 API 엔드포인트 구현"
+      ]
+    },
+    {
+      "id": "todo_015",
+      "description": "데이터베이스 설계 및 구축",
+      "priority": "high",
+      "status": "pending",
+      "milestone": "Phase 1",
+      "created_at": "2026-01-13T00:00:00Z",
+      "category": "backend",
+      "dependencies": [],
+      "subtasks": [
+        "데이터베이스 선택 (PostgreSQL, MongoDB 등)",
+        "스키마 설계 (분석 결과, 사용자, 히스토리)",
+        "인덱스 설계",
+        "마이그레이션 스크립트 작성",
+        "ORM 설정 (SQLAlchemy, Prisma 등)"
+      ]
+    },
+    {
+      "id": "todo_016",
+      "description": "테스트 코드 작성",
+      "priority": "medium",
+      "status": "pending",
+      "milestone": "Phase 1",
+      "created_at": "2026-01-13T00:00:00Z",
+      "category": "testing",
+      "dependencies": ["todo_005", "todo_008"],
+      "subtasks": [
+        "단위 테스트 작성 (백엔드)",
+        "단위 테스트 작성 (프론트엔드)",
+        "통합 테스트 작성",
+        "E2E 테스트 작성",
+        "테스트 커버리지 설정"
+      ]
+    },
+    {
+      "id": "todo_017",
+      "description": "배포 환경 설정",
+      "priority": "medium",
+      "status": "pending",
+      "milestone": "Phase 1",
+      "created_at": "2026-01-13T00:00:00Z",
+      "category": "devops",
+      "dependencies": ["todo_005", "todo_008"],
+      "subtasks": [
+        "Docker 컨테이너 설정",
+        "CI/CD 파이프라인 구축",
+        "환경 변수 관리",
+        "로깅 및 모니터링 설정",
+        "스케일링 전략 수립"
+      ]
+    }
+  ]
+}
