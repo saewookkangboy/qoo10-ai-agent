@@ -58,6 +58,17 @@ export const analyzeService = {
     
     return poll()
   },
+
+  /**
+   * 리포트 다운로드
+   */
+  async downloadReport(analysisId: string, format: 'pdf' | 'excel' | 'markdown'): Promise<Blob> {
+    const response = await api.get(
+      `/api/v1/analyze/${analysisId}/download?format=${format}`,
+      { responseType: 'blob' }
+    )
+    return response.data
+  },
 }
 
 export default api

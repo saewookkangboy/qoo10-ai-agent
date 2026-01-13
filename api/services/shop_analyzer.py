@@ -150,14 +150,34 @@ class ShopAnalyzer:
         return analysis
     
     def _analyze_competitors(self, shop_data: Dict[str, Any]) -> Dict[str, Any]:
-        """경쟁사 분석 (간단한 버전)"""
+        """경쟁사 분석 (강화 버전)"""
         analysis = {
             "score": 70,  # 기본 점수
+            "main_category": None,
+            "category_competition": {},
             "recommendations": []
         }
         
-        # 실제 경쟁사 분석은 Phase 2에서 구현
-        analysis["recommendations"].append("동일 카테고리 Top 10 상품과 비교 분석 필요")
+        # 주요 카테고리 확인
+        categories = shop_data.get("categories", {})
+        if categories:
+            main_category = max(categories.items(), key=lambda x: x[1])
+            analysis["main_category"] = main_category[0]
+            
+            # 카테고리별 경쟁 강도 분석
+            # 실제로는 해당 카테고리의 전체 상품 수를 확인해야 함
+            # 여기서는 Shop의 상품 수를 기반으로 추정
+            product_count = shop_data.get("product_count", 0)
+            if product_count >= 50:
+                analysis["score"] += 20
+                analysis["recommendations"].append("상품 라인업이 충분합니다")
+            elif product_count >= 20:
+                analysis["score"] += 10
+                analysis["recommendations"].append("상품 수를 더 늘리면 경쟁력이 향상됩니다")
+            else:
+                analysis["recommendations"].append("상품 라인업 확대가 필요합니다")
+        
+        analysis["score"] = min(100, analysis["score"])
         
         return analysis
     

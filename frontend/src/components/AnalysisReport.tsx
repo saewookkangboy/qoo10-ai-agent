@@ -1,18 +1,26 @@
-import { ProductAnalysis, Recommendation } from '../types'
+import { ProductAnalysis, Recommendation, ChecklistResult, CompetitorAnalysis } from '../types'
 import ScoreCard from './ScoreCard'
 import RecommendationCard from './RecommendationCard'
+import ChecklistCard from './ChecklistCard'
+import CompetitorComparisonCard from './CompetitorComparisonCard'
+import DownloadButton from './DownloadButton'
 
 interface AnalysisReportProps {
   result: {
-    product_analysis: ProductAnalysis
+    product_analysis?: ProductAnalysis
+    shop_analysis?: any
     recommendations: Recommendation[]
-    product_data: any
+    checklist?: ChecklistResult
+    competitor_analysis?: CompetitorAnalysis
+    product_data?: any
+    shop_data?: any
   }
+  analysisId?: string
 }
 
-function AnalysisReport({ result }: AnalysisReportProps) {
-  const { product_analysis, recommendations } = result
-  const overallScore = product_analysis.overall_score
+function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
+  const { product_analysis, shop_analysis, recommendations, checklist, competitor_analysis } = result
+  const overallScore = product_analysis?.overall_score || shop_analysis?.overall_score || 0
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return {
@@ -80,28 +88,30 @@ function AnalysisReport({ result }: AnalysisReportProps) {
         </div>
 
         {/* 핵심 지표 카드 그리드 - 반응형 */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-4 sm:mb-6">
-          <ScoreCard
-            title="이미지"
-            score={product_analysis.image_analysis.score}
-            analysis={product_analysis.image_analysis}
-          />
-          <ScoreCard
-            title="설명"
-            score={product_analysis.description_analysis.score}
-            analysis={product_analysis.description_analysis}
-          />
-          <ScoreCard
-            title="가격"
-            score={product_analysis.price_analysis.score}
-            analysis={product_analysis.price_analysis}
-          />
-          <ScoreCard
-            title="리뷰"
-            score={product_analysis.review_analysis.score}
-            analysis={product_analysis.review_analysis}
-          />
-        </div>
+        {product_analysis && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-4 sm:mb-6">
+            <ScoreCard
+              title="이미지"
+              score={product_analysis.image_analysis.score}
+              analysis={product_analysis.image_analysis}
+            />
+            <ScoreCard
+              title="설명"
+              score={product_analysis.description_analysis.score}
+              analysis={product_analysis.description_analysis}
+            />
+            <ScoreCard
+              title="가격"
+              score={product_analysis.price_analysis.score}
+              analysis={product_analysis.price_analysis}
+            />
+            <ScoreCard
+              title="리뷰"
+              score={product_analysis.review_analysis.score}
+              analysis={product_analysis.review_analysis}
+            />
+          </div>
+        )}
 
         {/* 개선 제안 - 우선순위별 그룹핑 */}
         <div className="bg-white rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.08)] p-4 sm:p-6">
@@ -168,6 +178,39 @@ function AnalysisReport({ result }: AnalysisReportProps) {
               <p className="text-[#4D4D4D] text-sm sm:text-base">개선 제안이 없습니다.</p>
             </div>
           )}
+        </div>
+
+        {/* 체크리스트 카드 (Phase 2) */}
+        {checklist && (
+          <div className="mt-4 sm:mt-6">
+            <ChecklistCard checklist={checklist} />
+          </div>
+        )}
+
+        {/* 경쟁사 비교 카드 (Phase 2) */}
+        {competitor_analysis && (
+          <div className="mt-4 sm:mt-6">
+            <CompetitorComparisonCard competitorAnalysis={competitor_analysis} />
+          </div>
+        )}
+
+        {/* 리포트 다운로드 버튼 (Phase 2) */}
+        <div className="mt-4 sm:mt-6 bg-white rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.08)] p-4 sm:p-6">
+          <h2 className="text-xl sm:text-2xl font-bold text-[#1A1A1A] mb-4">
+            📥 리포트 다운로드
+          </h2>
+          <p className="text-sm text-[#4D4D4D] mb-4">
+            분석 결과를 PDF, Excel, 또는 Markdown 형식으로 다운로드할 수 있습니다.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {analysisId && (
+              <>
+                <DownloadButton format="pdf" label="PDF 다운로드" color="bg-red-600 hover:bg-red-700" analysisId={analysisId} />
+                <DownloadButton format="excel" label="Excel 다운로드" color="bg-green-600 hover:bg-green-700" analysisId={analysisId} />
+                <DownloadButton format="markdown" label="Markdown 다운로드" color="bg-blue-600 hover:bg-blue-700" analysisId={analysisId} />
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

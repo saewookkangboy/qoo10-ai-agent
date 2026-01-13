@@ -15,6 +15,9 @@ from services.crawler import Qoo10Crawler
 from services.analyzer import ProductAnalyzer
 from services.recommender import SalesEnhancementRecommender
 from services.shop_analyzer import ShopAnalyzer
+from services.checklist_evaluator import ChecklistEvaluator
+from services.competitor_analyzer import CompetitorAnalyzer
+from services.report_generator import ReportGenerator
 from services.seo_optimizer import SEOOptimizer
 from services.ai_seo_optimizer import AISEOOptimizer
 from services.geo_optimizer import GEOOptimizer
@@ -201,6 +204,91 @@ async def get_analysis_result(analysis_id: str):
     }
 
 
+@app.get("/api/v1/analyze/{analysis_id}/download")
+async def download_report(
+    analysis_id: str,
+    format: str = "pdf"
+):
+    """
+    리포트 다운로드
+    
+    - analysis_id로 분석 리포트를 다운로드합니다
+    - format: pdf, excel, markdown
+    """
+    if analysis_id not in analysis_store:
+        raise HTTPException(
+            status_code=404,
+            detail="Analysis not found"
+        )
+    
+    analysis = analysis_store[analysis_id]
+    
+    if analysis["status"] != "completed":
+        raise HTTPException(
+            status_code=400,
+            detail="Analysis is not completed yet"
+        )
+    
+    result = analysis["result"]
+    product_data = result.get("product_data")
+    shop_data = result.get("shop_data")
+    
+    # 리포트 생성기 초기화
+    report_generator = ReportGenerator()
+    
+    try:
+        if format.lower() == "pdf":
+            report_bytes = report_generator.generate_pdf_report(
+                result,
+                product_data,
+                shop_data
+            )
+            from fastapi.responses import Response
+            return Response(
+                content=report_bytes,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f"attachment; filename=analysis_report_{analysis_id}.pdf"}
+            )
+        
+        elif format.lower() == "excel":
+            report_bytes = report_generator.generate_excel_report(
+                result,
+                product_data,
+                shop_data
+            )
+            from fastapi.responses import Response
+            return Response(
+                content=report_bytes,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f"attachment; filename=analysis_report_{analysis_id}.xlsx"}
+            )
+        
+        elif format.lower() == "markdown":
+            report_content = report_generator.generate_markdown_report(
+                result,
+                product_data,
+                shop_data
+            )
+            from fastapi.responses import Response
+            return Response(
+                content=report_content.encode('utf-8'),
+                media_type="text/markdown",
+                headers={"Content-Disposition": f"attachment; filename=analysis_report_{analysis_id}.md"}
+            )
+        
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid format. Use 'pdf', 'excel', or 'markdown'"
+            )
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Report generation failed: {str(e)}"
+        )
+
+
 def is_valid_qoo10_url(url: str) -> bool:
     """Qoo10 URL 유효성 검증"""
     valid_domains = ["qoo10.jp", "qoo10.com", "www.qoo10.jp", "www.qoo10.com"]
@@ -238,10 +326,25 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                 analysis_result
             )
             
+            # 체크리스트 평가 (Phase 2)
+            checklist_evaluator = ChecklistEvaluator()
+            checklist_result = await checklist_evaluator.evaluate_checklist(
+                product_data=product_data,
+                analysis_result=analysis_result
+            )
+            
+            # 경쟁사 분석 (Phase 2)
+            competitor_analyzer = CompetitorAnalyzer()
+            competitor_result = await competitor_analyzer.analyze_competitors(
+                product_data
+            )
+            
             # 결과 저장
             analysis_store[analysis_id]["result"] = {
                 "product_analysis": analysis_result,
                 "recommendations": recommendations,
+                "checklist": checklist_result,
+                "competitor_analysis": competitor_result,
                 "product_data": product_data
             }
             analysis_store[analysis_id]["status"] = "completed"
@@ -260,10 +363,18 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                 analysis_result
             )
             
+            # 체크리스트 평가 (Phase 2)
+            checklist_evaluator = ChecklistEvaluator()
+            checklist_result = await checklist_evaluator.evaluate_checklist(
+                shop_data=shop_data,
+                analysis_result=analysis_result
+            )
+            
             # 결과 저장
             analysis_store[analysis_id]["result"] = {
                 "shop_analysis": analysis_result,
                 "recommendations": recommendations,
+                "checklist": checklist_result,
                 "shop_data": shop_data
             }
             analysis_store[analysis_id]["status"] = "completed"

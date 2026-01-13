@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { analyzeService } from '../services/api'
 import { AnalysisResult } from '../types'
 import AnalysisReport from '../components/AnalysisReport'
@@ -7,6 +7,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 
 function AnalysisPage() {
   const { analysisId } = useParams<{ analysisId: string }>()
+  const navigate = useNavigate()
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -79,7 +80,21 @@ function AnalysisPage() {
   }
 
   if (result && result.status === 'completed' && result.result) {
-    return <AnalysisReport result={result.result} />
+    return (
+      <div>
+        <div className="bg-white border-b border-[#E6E6E6] px-4 sm:px-6 py-3 sm:py-4">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <button
+              onClick={() => navigate('/')}
+              className="text-sm sm:text-base text-[#0066CC] hover:text-[#004499] font-medium"
+            >
+              ← 새로운 분석
+            </button>
+          </div>
+        </div>
+        <AnalysisReport result={result.result} analysisId={analysisId} />
+      </div>
+    )
   }
 
   return null
