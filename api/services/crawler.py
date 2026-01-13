@@ -426,7 +426,7 @@ class Qoo10Crawler:
     
     async def crawl_product(self, url: str) -> Dict[str, Any]:
         """
-        상품 페이지 크롤링 (다양한 URL 형식 지원)
+        상품 페이지 크롤링 (초기 개발 기준 단순화 버전)
         
         Args:
             url: Qoo10 상품 URL (다양한 형식 지원: /g/XXXXX, /item/.../XXXXX, ?goodscode=XXXXX 등)
@@ -435,26 +435,34 @@ class Qoo10Crawler:
             상품 데이터 딕셔너리
         """
         try:
-            # URL 정규화 (다양한 형식을 표준 형식으로 변환 시도)
+            # URL 정규화
             normalized_url = self._normalize_product_url(url)
             
-            # HTTP 요청 (정규화된 URL 사용)
-            response = await self._make_request(normalized_url)
-            response.raise_for_status()
+            # 정규화된 URL 검증
+            if not normalized_url or 'qoo10.jp' not in normalized_url:
+                raise Exception(f"유효하지 않은 URL입니다: {url}")
             
+            # HTTP 요청
+            response = await self._make_request(normalized_url)
+            
+            # 응답 상태 확인
+            if response.status_code != 200:
+                raise Exception(f"페이지를 가져올 수 없습니다 (상태 코드: {response.status_code})")
+            
+            # 응답 내용 확인
+            if not response.text or len(response.text) < 100:
+                raise Exception("페이지 내용이 비어있거나 너무 짧습니다")
+            
+            # HTML 파싱
             soup = BeautifulSoup(response.text, 'lxml')
             
-            # 상품 기본 정보 추출 (AI 학습 기반 선택자 사용)
-            # 페이지 구조 추출은 선택적으로 수행 (성능 최적화)
-            page_structure = None
-            try:
-                page_structure = self._extract_page_structure(soup)
-            except Exception:
-                # 페이지 구조 추출 실패해도 계속 진행
-                pass
+            # 파싱 결과 확인
+            if not soup or not soup.find('body'):
+                raise Exception("페이지를 파싱할 수 없습니다")
             
+            # 필수 데이터만 추출 (성능 최적화)
             product_data = {
-                "url": normalized_url,  # 정규화된 URL 사용
+                "url": normalized_url,
                 "product_code": self._extract_product_code(normalized_url, soup),
                 "product_name": self._extract_product_name(soup),
                 "category": self._extract_category(soup),
@@ -466,25 +474,46 @@ class Qoo10Crawler:
                 "reviews": self._extract_reviews(soup),
                 "seller_info": self._extract_seller_info(soup),
                 "shipping_info": self._extract_shipping_info(soup),
-                "is_move_product": self._extract_move_product(soup),  # MOVE 상품 여부 추가
-                "qpoint_info": self._extract_qpoint_info(soup),  # Qポイント 정보 추가
-                "coupon_info": self._extract_coupon_info(soup),  # 쿠폰 상세 정보 추가
-                "page_structure": page_structure  # 페이지 구조 및 모든 div class 정보 추가
             }
             
-            # 데이터베이스 저장은 비동기로 처리 (성능 최적화)
-            # 저장 실패해도 분석은 계속 진행
+            # 선택적 데이터 (실패해도 계속 진행)
+            try:
+                product_data["is_move_product"] = self._extract_move_product(soup)
+            except:
+                product_data["is_move_product"] = False
+            
+            try:
+                product_data["qpoint_info"] = self._extract_qpoint_info(soup)
+            except:
+                product_data["qpoint_info"] = {}
+            
+            try:
+                product_data["coupon_info"] = self._extract_coupon_info(soup)
+            except:
+                product_data["coupon_info"] = {}
+            
+            # 페이지 구조는 선택적 (성능 최적화)
+            try:
+                product_data["page_structure"] = self._extract_page_structure(soup)
+            except:
+                product_data["page_structure"] = None
+            
+            # 데이터베이스 저장 (실패해도 무시)
             try:
                 self.db.save_crawled_product(product_data)
             except:
-                pass  # 저장 실패해도 무시
+                pass
+            
+            # 필수 데이터 검증
+            if not product_data.get("product_name"):
+                raise Exception("상품명을 추출할 수 없습니다. 페이지 구조가 변경되었을 수 있습니다.")
             
             return product_data
         
         except httpx.HTTPError as e:
-            raise Exception(f"HTTP error while crawling: {str(e)}")
+            raise Exception(f"HTTP 오류: {str(e)}")
         except Exception as e:
-            raise Exception(f"Error crawling product: {str(e)}")
+            raise Exception(f"크롤링 오류: {str(e)}")
     
     def _extract_with_learning(
         self,
@@ -545,30 +574,39 @@ class Qoo10Crawler:
         return extract_func(soup, None) if extract_func else None
     
     def _normalize_product_url(self, url: str) -> str:
-        """Qoo10 상품 URL 정규화 (다양한 형식을 표준 형식으로 변환)"""
+        """
+        Qoo10 상품 URL 정규화 (다양한 형식을 표준 형식으로 변환)
+        초기 개발 기준 단순화 버전
+        """
+        # 이미 정규화된 URL인지 확인
+        if 'gmkt.inc/Goods/Goods.aspx?goodscode=' in url:
+            return url
+        
         # URL에서 상품 코드 추출
         product_code = None
         
-        # 다양한 패턴에서 상품 코드 추출
+        # 다양한 패턴에서 상품 코드 추출 (우선순위 순서)
         patterns = [
-            (r'goodscode=(\d+)', 1),
-            (r'/g/(\d+)', 1),
-            (r'/item/[^/]+/(\d+)', 1),
-            (r'/item/[^/]+/(\d+)\?', 1),
+            (r'goodscode=(\d+)', 1),  # ?goodscode=123456
+            (r'/g/(\d+)', 1),  # /g/123456
+            (r'/item/[^/]+/(\d+)', 1),  # /item/category/123456
+            (r'/item/[^/]+/(\d+)\?', 1),  # /item/category/123456?param=value
         ]
         
         for pattern, group in patterns:
             match = re.search(pattern, url, re.IGNORECASE)
             if match:
                 product_code = match.group(group)
-                break
+                if product_code and product_code.isdigit():
+                    break
         
         # 상품 코드가 있으면 표준 형식으로 변환
         if product_code:
             # 표준 형식: https://www.qoo10.jp/gmkt.inc/Goods/Goods.aspx?goodscode=XXXXX
-            return f"https://www.qoo10.jp/gmkt.inc/Goods/Goods.aspx?goodscode={product_code}"
+            normalized = f"https://www.qoo10.jp/gmkt.inc/Goods/Goods.aspx?goodscode={product_code}"
+            return normalized
         
-        # 변환할 수 없으면 원본 반환
+        # 변환할 수 없으면 원본 반환 (추후 검증에서 실패 처리)
         return url
     
     def _extract_product_code(self, url: str, soup: BeautifulSoup) -> Optional[str]:

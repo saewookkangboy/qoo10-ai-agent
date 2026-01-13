@@ -11,6 +11,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000,  // 30초 타임아웃 설정
 })
 
 export const analyzeService = {
@@ -18,8 +19,17 @@ export const analyzeService = {
    * 분석 시작
    */
   async startAnalysis(request: AnalyzeRequest): Promise<AnalyzeResponse> {
-    const response = await api.post<AnalyzeResponse>('/api/v1/analyze', request)
-    return response.data
+    try {
+      const response = await api.post<AnalyzeResponse>('/api/v1/analyze', request, {
+        timeout: 10000,  // 분석 시작은 10초 타임아웃 (빠른 응답 필요)
+      })
+      return response.data
+    } catch (error: any) {
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('요청 시간이 초과되었습니다. 다시 시도해주세요.')
+      }
+      throw error
+    }
   },
 
   /**

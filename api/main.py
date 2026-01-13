@@ -11,7 +11,14 @@ import uuid
 from datetime import datetime
 import os
 import re
+import logging
 from dotenv import load_dotenv
+
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 from services.crawler import Qoo10Crawler
 from services.analyzer import ProductAnalyzer
@@ -129,29 +136,38 @@ async def start_analysis(
     - 분석은 백그라운드에서 비동기로 진행됩니다
     - analysis_id를 반환하여 결과 조회에 사용합니다
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
         url_str = str(request.url)
+        logger.info(f"Analysis request received - URL: {url_str}")
         
         # URL 검증
+        if not url_str or len(url_str.strip()) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="URL을 입력해주세요."
+            )
+        
         if not is_valid_qoo10_url(url_str):
             raise HTTPException(
                 status_code=400,
-                detail="Invalid Qoo10 URL. Please provide a valid Qoo10 product or shop URL."
+                detail="유효한 Qoo10 URL을 입력해주세요. (예: https://www.qoo10.jp/g/123456)"
             )
         
         # URL 타입 결정
         url_type = request.url_type or detect_url_type(url_str)
         
+        if url_type == "unknown":
+            raise HTTPException(
+                status_code=400,
+                detail="상품 또는 Shop URL을 입력해주세요."
+            )
+        
         # 분석 ID 생성
         analysis_id = str(uuid.uuid4())
-        
-        # 분석 작업 시작 (백그라운드)
-        background_tasks.add_task(
-            perform_analysis,
-            analysis_id,
-            url_str,
-            url_type
-        )
+        logger.info(f"Analysis ID generated: {analysis_id}, Type: {url_type}")
         
         # 초기 상태 저장 (진행 상태 포함)
         analysis_store[analysis_id] = {
@@ -168,6 +184,16 @@ async def start_analysis(
             "result": None
         }
         
+        # 분석 작업 시작 (백그라운드)
+        background_tasks.add_task(
+            perform_analysis,
+            analysis_id,
+            url_str,
+            url_type
+        )
+        
+        logger.info(f"Background task started: {analysis_id}")
+        
         return AnalyzeResponse(
             analysis_id=analysis_id,
             status="processing",
@@ -178,9 +204,10 @@ async def start_analysis(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Failed to start analysis: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Analysis failed to start: {str(e)}"
+            detail=f"분석 시작 실패: {str(e)}"
         )
 
 
@@ -191,6 +218,7 @@ async def get_analysis_result(analysis_id: str):
     
     - analysis_id로 분석 결과를 조회합니다
     - status가 "completed"일 때만 결과를 반환합니다
+    - 진행 상태(progress) 정보도 함께 반환합니다
     """
     if analysis_id not in analysis_store:
         raise HTTPException(
@@ -200,25 +228,30 @@ async def get_analysis_result(analysis_id: str):
     
     analysis = analysis_store[analysis_id]
     
+    # 기본 응답 구조
+    response = {
+        "analysis_id": analysis_id,
+        "status": analysis["status"]
+    }
+    
+    # 진행 상태 추가
+    if "progress" in analysis:
+        response["progress"] = analysis["progress"]
+    
     if analysis["status"] == "processing":
-        return {
-            "analysis_id": analysis_id,
-            "status": "processing",
-            "message": "Analysis is still in progress"
-        }
+        response["message"] = "Analysis is still in progress"
+        return response
     
     if analysis["status"] == "failed":
-        return {
-            "analysis_id": analysis_id,
-            "status": "failed",
-            "error": analysis.get("error")
-        }
+        response["error"] = analysis.get("error", "Unknown error")
+        return response
     
-    return {
-        "analysis_id": analysis_id,
-        "status": "completed",
-        "result": analysis["result"]
-    }
+    # 완료된 경우 결과 반환
+    if analysis["status"] == "completed":
+        response["result"] = analysis.get("result")
+        return response
+    
+    return response
 
 
 @app.get("/api/v1/analyze/{analysis_id}/download")
@@ -388,136 +421,262 @@ def _update_progress(analysis_id: str, stage: str, percentage: int, message: str
         }
 
 async def perform_analysis(analysis_id: str, url: str, url_type: str):
-    """분석 수행 (백그라운드 작업) - 단계별 진행 상태 표시 버전"""
+    """
+    분석 수행 (백그라운드 작업) - 초기 개발 기준 단순화 버전
+    
+    핵심 플로우:
+    1. 크롤링 (필수 데이터만 수집)
+    2. 기본 분석 (이미지, 설명, 가격, 리뷰, SEO)
+    3. 추천 생성 (매출 강화 아이디어)
+    4. 결과 저장
+    """
+    import asyncio
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
     try:
-        import asyncio
+        logger.info(f"[{analysis_id}] Analysis started - URL: {url}, Type: {url_type}")
         
-        # 1단계: 크롤링 시작 (5%)
-        _update_progress(analysis_id, "crawling", 5, "상품 페이지를 수집하는 중...")
+        # ========== 1단계: 크롤링 (20%) ==========
+        _update_progress(analysis_id, "crawling", 10, "상품 페이지를 수집하는 중...")
         crawler = Qoo10Crawler()
         
-        # 데이터 수집
         if url_type == "product":
-            # 크롤링 중간 진행 상태 업데이트
-            _update_progress(analysis_id, "crawling", 15, "페이지 데이터를 추출하는 중...")
-            product_data = await crawler.crawl_product(url)
+            # 크롤링 수행
+            try:
+                _update_progress(analysis_id, "crawling", 20, "페이지 데이터를 추출하는 중...")
+                logger.info(f"[{analysis_id}] Starting product crawl...")
+                product_data = await crawler.crawl_product(url)
+                
+                # 크롤링 데이터 검증
+                if not product_data:
+                    raise Exception("크롤링된 데이터가 없습니다")
+                if not product_data.get("product_name"):
+                    raise Exception("상품명을 추출할 수 없습니다")
+                
+                logger.info(f"[{analysis_id}] Crawling completed - Product: {product_data.get('product_name', 'Unknown')}")
+            except Exception as e:
+                error_msg = f"크롤링 실패: {str(e)}"
+                logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
+                analysis_store[analysis_id]["status"] = "failed"
+                analysis_store[analysis_id]["error"] = error_msg
+                _update_progress(analysis_id, "failed", 0, error_msg)
+                return
             
-            # 2단계: 기본 분석 시작 (40%)
-            _update_progress(analysis_id, "analyzing", 40, "상품 데이터를 분석하는 중...")
-            analyzer = ProductAnalyzer()
-            analysis_result = await analyzer.analyze(product_data)
+            # ========== 2단계: 기본 분석 (50%) ==========
+            try:
+                _update_progress(analysis_id, "analyzing", 30, "상품 데이터를 분석하는 중...")
+                logger.info(f"[{analysis_id}] Starting product analysis...")
+                
+                analyzer = ProductAnalyzer()
+                analysis_result = await analyzer.analyze(product_data)
+                
+                # 분석 결과 검증
+                if not analysis_result:
+                    raise Exception("분석 결과가 생성되지 않았습니다")
+                if "overall_score" not in analysis_result:
+                    raise Exception("종합 점수가 계산되지 않았습니다")
+                
+                logger.info(f"[{analysis_id}] Analysis completed - Score: {analysis_result.get('overall_score', 0)}")
+            except Exception as e:
+                error_msg = f"분석 실패: {str(e)}"
+                logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
+                analysis_store[analysis_id]["status"] = "failed"
+                analysis_store[analysis_id]["error"] = error_msg
+                _update_progress(analysis_id, "failed", 0, error_msg)
+                return
             
-            # 3단계: 추천 및 체크리스트 생성 시작 (60%)
-            _update_progress(analysis_id, "generating_recommendations", 60, "개선 제안을 생성하는 중...")
-            
-            # 병렬 처리: 추천 시스템과 체크리스트 평가를 동시에 수행
-            recommender = SalesEnhancementRecommender()
-            checklist_evaluator = ChecklistEvaluator()
-            
-            # 추천과 체크리스트를 병렬로 처리
-            recommendations, checklist_result = await asyncio.gather(
-                recommender.generate_recommendations(
+            # ========== 3단계: 추천 생성 (80%) ==========
+            try:
+                _update_progress(analysis_id, "generating_recommendations", 60, "개선 제안을 생성하는 중...")
+                logger.info(f"[{analysis_id}] Generating recommendations...")
+                
+                recommender = SalesEnhancementRecommender()
+                recommendations = await recommender.generate_recommendations(
                     product_data,
                     analysis_result
-                ),
-                checklist_evaluator.evaluate_checklist(
-                    product_data=product_data,
-                    analysis_result=analysis_result
-                ),
-                return_exceptions=True  # 하나가 실패해도 계속 진행
-            )
+                )
+                
+                # 추천 검증
+                if not isinstance(recommendations, list):
+                    recommendations = []
+                
+                logger.info(f"[{analysis_id}] Recommendations generated - Count: {len(recommendations)}")
+            except Exception as e:
+                logger.warning(f"[{analysis_id}] Recommendations generation failed: {str(e)}")
+                recommendations = []  # 추천 실패해도 계속 진행
             
-            # 예외 처리
-            if isinstance(recommendations, Exception):
-                recommendations = []
-            if isinstance(checklist_result, Exception):
+            # ========== 4단계: 체크리스트 평가 (선택적, 빠르게) ==========
+            checklist_result = None
+            try:
+                _update_progress(analysis_id, "evaluating_checklist", 75, "체크리스트를 평가하는 중...")
+                checklist_evaluator = ChecklistEvaluator()
+                checklist_result = await asyncio.wait_for(
+                    checklist_evaluator.evaluate_checklist(
+                        product_data=product_data,
+                        analysis_result=analysis_result
+                    ),
+                    timeout=5.0  # 최대 5초로 제한
+                )
+                logger.info(f"[{analysis_id}] Checklist evaluation completed")
+            except (asyncio.TimeoutError, Exception) as e:
+                logger.warning(f"[{analysis_id}] Checklist evaluation skipped: {str(e)}")
                 checklist_result = None
             
-            # 기본 결과 먼저 저장 (80%)
-            _update_progress(analysis_id, "finalizing", 80, "결과를 정리하는 중...")
-            final_result = {
-                "product_analysis": analysis_result,
-                "recommendations": recommendations if not isinstance(recommendations, Exception) else [],
-                "checklist": checklist_result,
-                "competitor_analysis": None,  # 나중에 업데이트
-                "product_data": product_data
-            }
-            analysis_store[analysis_id]["result"] = final_result
-            analysis_store[analysis_id]["status"] = "completed"
-            
-            # 히스토리 저장과 알림은 비동기로 처리 (분석 완료를 지연시키지 않음)
-            asyncio.create_task(_save_history_and_notify_async(
-                analysis_id,
-                url,
-                url_type,
-                final_result,
-                analysis_result.get("overall_score", 0)
-            ))
-            
-            # 경쟁사 분석은 백그라운드에서 비동기로 처리 (선택적)
-            asyncio.create_task(_analyze_competitors_async(
-                analysis_id,
-                product_data,
-                final_result,
-                url,
-                url_type,
-                analysis_result.get("overall_score", 0)
-            ))
+            # ========== 5단계: 결과 저장 (100%) ==========
+            try:
+                _update_progress(analysis_id, "finalizing", 90, "결과를 정리하는 중...")
+                logger.info(f"[{analysis_id}] Finalizing results...")
+                
+                # 최종 결과 구성
+                final_result = {
+                    "product_analysis": analysis_result,
+                    "recommendations": recommendations,
+                    "checklist": checklist_result,
+                    "competitor_analysis": None,  # 선택적 기능은 나중에
+                    "product_data": product_data
+                }
+                
+                # 결과 저장
+                analysis_store[analysis_id]["result"] = final_result
+                analysis_store[analysis_id]["status"] = "completed"
+                _update_progress(analysis_id, "completed", 100, "분석이 완료되었습니다.")
+                
+                logger.info(f"[{analysis_id}] Analysis completed successfully - Score: {analysis_result.get('overall_score', 0)}")
+                
+                # 히스토리 저장은 비동기로 (실패해도 무시)
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(_save_history_and_notify_async(
+                        analysis_id,
+                        url,
+                        url_type,
+                        final_result,
+                        analysis_result.get("overall_score", 0)
+                    ))
+                except Exception as e:
+                    logger.warning(f"[{analysis_id}] Failed to schedule history save: {str(e)}")
+                
+            except Exception as e:
+                error_msg = f"결과 저장 실패: {str(e)}"
+                logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
+                analysis_store[analysis_id]["status"] = "failed"
+                analysis_store[analysis_id]["error"] = error_msg
+                _update_progress(analysis_id, "failed", 0, error_msg)
         
         elif url_type == "shop":
-            # 1단계: 크롤링 시작 (10%)
-            _update_progress(analysis_id, "crawling", 10, "Shop 페이지를 수집하는 중...")
-            shop_data = await crawler.crawl_shop(url)
+            # ========== 1단계: Shop 크롤링 (20%) ==========
+            try:
+                _update_progress(analysis_id, "crawling", 10, "Shop 페이지를 수집하는 중...")
+                logger.info(f"[{analysis_id}] Starting shop crawl...")
+                shop_data = await crawler.crawl_shop(url)
+                
+                if not shop_data or not shop_data.get("shop_name"):
+                    raise Exception("Shop 데이터를 추출할 수 없습니다")
+                
+                logger.info(f"[{analysis_id}] Shop crawl completed - Shop: {shop_data.get('shop_name', 'Unknown')}")
+            except Exception as e:
+                error_msg = f"Shop 크롤링 실패: {str(e)}"
+                logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
+                analysis_store[analysis_id]["status"] = "failed"
+                analysis_store[analysis_id]["error"] = error_msg
+                _update_progress(analysis_id, "failed", 0, error_msg)
+                return
             
-            # 2단계: 분석 시작 (40%)
-            _update_progress(analysis_id, "analyzing", 40, "Shop 데이터를 분석하는 중...")
-            shop_analyzer = ShopAnalyzer()
-            analysis_result = await shop_analyzer.analyze(shop_data)
+            # ========== 2단계: Shop 분석 (50%) ==========
+            try:
+                _update_progress(analysis_id, "analyzing", 40, "Shop 데이터를 분석하는 중...")
+                logger.info(f"[{analysis_id}] Starting shop analysis...")
+                shop_analyzer = ShopAnalyzer()
+                analysis_result = await shop_analyzer.analyze(shop_data)
+                logger.info(f"[{analysis_id}] Shop analysis completed")
+            except Exception as e:
+                error_msg = f"Shop 분석 실패: {str(e)}"
+                logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
+                analysis_store[analysis_id]["status"] = "failed"
+                analysis_store[analysis_id]["error"] = error_msg
+                _update_progress(analysis_id, "failed", 0, error_msg)
+                return
             
-            # 3단계: 추천 생성 (60%)
-            _update_progress(analysis_id, "generating_recommendations", 60, "개선 제안을 생성하는 중...")
-            recommender = SalesEnhancementRecommender()
-            recommendations = await recommender.generate_shop_recommendations(
-                shop_data,
-                analysis_result
-            )
+            # ========== 3단계: 추천 생성 (80%) ==========
+            try:
+                _update_progress(analysis_id, "generating_recommendations", 60, "개선 제안을 생성하는 중...")
+                logger.info(f"[{analysis_id}] Generating shop recommendations...")
+                recommender = SalesEnhancementRecommender()
+                recommendations = await recommender.generate_shop_recommendations(
+                    shop_data,
+                    analysis_result
+                )
+                if not isinstance(recommendations, list):
+                    recommendations = []
+                logger.info(f"[{analysis_id}] Shop recommendations generated - Count: {len(recommendations)}")
+            except Exception as e:
+                logger.warning(f"[{analysis_id}] Shop recommendations generation failed: {str(e)}")
+                recommendations = []
             
-            # 4단계: 체크리스트 평가 (80%)
-            _update_progress(analysis_id, "evaluating_checklist", 80, "체크리스트를 평가하는 중...")
-            checklist_evaluator = ChecklistEvaluator()
-            checklist_result = await checklist_evaluator.evaluate_checklist(
-                shop_data=shop_data,
-                analysis_result=analysis_result
-            )
+            # ========== 4단계: 체크리스트 평가 (선택적) ==========
+            checklist_result = None
+            try:
+                _update_progress(analysis_id, "evaluating_checklist", 75, "체크리스트를 평가하는 중...")
+                checklist_evaluator = ChecklistEvaluator()
+                checklist_result = await asyncio.wait_for(
+                    checklist_evaluator.evaluate_checklist(
+                        shop_data=shop_data,
+                        analysis_result=analysis_result
+                    ),
+                    timeout=5.0
+                )
+            except (asyncio.TimeoutError, Exception) as e:
+                logger.warning(f"[{analysis_id}] Checklist evaluation skipped: {str(e)}")
+                checklist_result = None
             
-            # 결과 저장 (100%)
-            _update_progress(analysis_id, "finalizing", 100, "결과를 저장하는 중...")
-            final_result = {
-                "shop_analysis": analysis_result,
-                "recommendations": recommendations,
-                "checklist": checklist_result,
-                "shop_data": shop_data
-            }
-            analysis_store[analysis_id]["result"] = final_result
-            analysis_store[analysis_id]["status"] = "completed"
-            
-            # 히스토리 저장과 알림은 비동기로 처리 (분석 완료를 지연시키지 않음)
-            import asyncio
-            asyncio.create_task(_save_history_and_notify_async(
-                analysis_id,
-                url,
-                url_type,
-                final_result,
-                analysis_result.get("overall_score", 0)
-            ))
+            # ========== 5단계: 결과 저장 (100%) ==========
+            try:
+                _update_progress(analysis_id, "finalizing", 90, "결과를 정리하는 중...")
+                final_result = {
+                    "shop_analysis": analysis_result,
+                    "recommendations": recommendations,
+                    "checklist": checklist_result,
+                    "shop_data": shop_data
+                }
+                analysis_store[analysis_id]["result"] = final_result
+                analysis_store[analysis_id]["status"] = "completed"
+                _update_progress(analysis_id, "completed", 100, "분석이 완료되었습니다.")
+                
+                logger.info(f"[{analysis_id}] Shop analysis completed successfully")
+                
+                # 히스토리 저장은 비동기로
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(_save_history_and_notify_async(
+                        analysis_id,
+                        url,
+                        url_type,
+                        final_result,
+                        analysis_result.get("overall_score", 0)
+                    ))
+                except Exception as e:
+                    logger.warning(f"[{analysis_id}] Failed to schedule history save: {str(e)}")
+            except Exception as e:
+                error_msg = f"결과 저장 실패: {str(e)}"
+                logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
+                analysis_store[analysis_id]["status"] = "failed"
+                analysis_store[analysis_id]["error"] = error_msg
+                _update_progress(analysis_id, "failed", 0, error_msg)
         
         else:
+            logger.error(f"Unknown URL type: {url_type}")
             analysis_store[analysis_id]["status"] = "failed"
-            analysis_store[analysis_id]["error"] = "Unknown URL type"
+            analysis_store[analysis_id]["error"] = f"Unknown URL type: {url_type}"
+            _update_progress(analysis_id, "failed", 0, f"알 수 없는 URL 타입: {url_type}")
     
     except Exception as e:
-        analysis_store[analysis_id]["status"] = "failed"
-        analysis_store[analysis_id]["error"] = str(e)
+        logger.error(f"Analysis failed: {analysis_id}, Error: {str(e)}", exc_info=True)
+        if analysis_id in analysis_store:
+            analysis_store[analysis_id]["status"] = "failed"
+            analysis_store[analysis_id]["error"] = str(e)
+            _update_progress(analysis_id, "failed", 0, f"분석 중 오류가 발생했습니다: {str(e)}")
 
 
 async def _analyze_competitors_async(
