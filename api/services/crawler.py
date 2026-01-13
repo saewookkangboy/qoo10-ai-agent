@@ -143,12 +143,31 @@ class Qoo10Crawler:
             await asyncio.sleep(self.retry_delay_base * (2 ** retry_count))
         
         try:
-            async with httpx.AsyncClient(
-                timeout=self.timeout,
-                proxies=proxy_config,
-                follow_redirects=True,
-                cookies=self.session_cookies
-            ) as client:
+            # httpx.AsyncClient 설정
+            # httpx 0.25.2에서는 proxies를 지원하지만, None일 때는 전달하지 않음
+            client_kwargs = {
+                "timeout": self.timeout,
+                "follow_redirects": True,
+                "cookies": self.session_cookies
+            }
+            
+            # 프록시가 있는 경우에만 추가 (None이 아닐 때만)
+            if proxy_config is not None and proxy_config:
+                # httpx 버전에 따라 proxies 지원 여부 확인
+                import inspect
+                sig = inspect.signature(httpx.AsyncClient.__init__)
+                if 'proxies' in sig.parameters:
+                    # httpx 0.25.2 이하: proxies 인자 지원
+                    client_kwargs["proxies"] = proxy_config
+                else:
+                    # httpx 0.26.0 이상: transport 사용
+                    from httpx import AsyncHTTPTransport
+                    proxy_url = proxy_config.get("http://") or proxy_config.get("https://")
+                    if proxy_url:
+                        transport = AsyncHTTPTransport(proxy=proxy_url)
+                        client_kwargs["transport"] = transport
+            
+            async with httpx.AsyncClient(**client_kwargs) as client:
                 response = await client.get(url, headers=headers)
                 response_time = time.time() - start_time
                 
