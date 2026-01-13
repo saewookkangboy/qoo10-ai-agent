@@ -22,6 +22,7 @@ from services.report_generator import ReportGenerator
 from services.history_manager import HistoryManager
 from services.notification_service import NotificationService, NotificationType
 from services.batch_analyzer import BatchAnalyzer
+from services.admin_service import AdminService
 from services.seo_optimizer import SEOOptimizer
 from services.ai_seo_optimizer import AISEOOptimizer
 from services.geo_optimizer import GEOOptimizer
@@ -52,6 +53,7 @@ analysis_store: Dict[str, Dict[str, Any]] = {}
 history_manager = HistoryManager()
 notification_service = NotificationService()
 batch_analyzer = BatchAnalyzer()
+admin_service = AdminService()
 
 
 class AnalyzeRequest(BaseModel):
@@ -862,6 +864,7 @@ async def generate_aio_report(request: AnalyzeRequest, format: str = "json"):
         )
 
 
+# TODO: In @api/main.py around lines 899 - 903, The route currently uses a path parameter for URLs which breaks on embedded slashes; change the endpoint to accept the target URL as a query parameter instead of a path segment: update the decorator on get_score_trend (remove "{url}" from the path), modify the function signature to take url: str as a query arg (keep days: int = 30), and keep the call to history_manager.get_score_trend(url, days=days); also update any callers/tests to pass the URL via the query string (e.g., ?url=...) so full URLs with slashes are handled correctly.
 # 히스토리 관리 API (Phase 3)
 @app.get("/api/v1/history")
 async def get_history(
@@ -970,6 +973,19 @@ async def create_batch_analysis(request: BatchAnalysisRequest):
     - 백그라운드에서 처리됩니다
     """
     urls = [str(url) for url in request.urls]
+    
+    # URL 검증
+    invalid_urls = []
+    for url in urls:
+        if not is_valid_qoo10_url(url):
+            invalid_urls.append(url)
+    
+    if invalid_urls:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid Qoo10 URLs detected: {', '.join(invalid_urls)}. Please provide valid Qoo10 product or shop URLs."
+        )
+    
     batch_id = await batch_analyzer.create_batch_analysis(
         urls=urls,
         name=request.name
@@ -993,8 +1009,97 @@ async def get_batch_analysis(batch_id: str):
 @app.get("/api/v1/batch/{batch_id}/items")
 async def get_batch_items(batch_id: str):
     """배치 분석 아이템 조회"""
+    # 배치 존재 여부 확인 (get_batch_analysis와 동일한 방식)
+    batch = batch_analyzer.get_batch_analysis(batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
     items = batch_analyzer.get_batch_items(batch_id)
     return {"items": items}
+
+
+# Admin API
+@app.get("/api/v1/admin/analysis-logs")
+async def get_analysis_logs(
+    limit: int = 100,
+    offset: int = 0,
+    status: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    """분석 로그 조회"""
+    return admin_service.get_analysis_logs(
+        limit=limit,
+        offset=offset,
+        status=status,
+        start_date=start_date,
+        end_date=end_date
+    )
+
+
+@app.get("/api/v1/admin/error-logs")
+async def get_error_logs(
+    limit: int = 100,
+    offset: int = 0,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    """에러 로그 조회"""
+    return admin_service.get_error_logs(
+        limit=limit,
+        offset=offset,
+        start_date=start_date,
+        end_date=end_date
+    )
+
+
+@app.get("/api/v1/admin/statistics/score")
+async def get_score_statistics(days: int = 30):
+    """점수 통계 조회"""
+    return admin_service.get_score_statistics(days=days)
+
+
+@app.get("/api/v1/admin/statistics/analysis")
+async def get_analysis_statistics(days: int = 30):
+    """분석 통계 조회"""
+    return admin_service.get_analysis_statistics(days=days)
+
+
+@app.get("/api/v1/admin/user-logs")
+async def get_user_analysis_logs(
+    url: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0
+):
+    """사용자 분석 로그 조회"""
+    return admin_service.get_user_analysis_logs(
+        url=url,
+        limit=limit,
+        offset=offset
+    )
+
+
+@app.get("/api/v1/admin/analysis-results")
+async def get_analysis_results_list(
+    limit: int = 50,
+    offset: int = 0,
+    min_score: Optional[int] = None,
+    max_score: Optional[int] = None,
+    url_type: Optional[str] = None
+):
+    """분석 결과 리스트 조회"""
+    return admin_service.get_analysis_results_list(
+        limit=limit,
+        offset=offset,
+        min_score=min_score,
+        max_score=max_score,
+        url_type=url_type
+    )
+
+
+@app.get("/api/v1/admin/ai-insight-report")
+async def get_ai_insight_report(days: int = 30):
+    """AI 분석 리포트 생성"""
+    return admin_service.generate_ai_insight_report(days=days)
 
 
 if __name__ == "__main__":

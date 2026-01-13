@@ -10,6 +10,7 @@ function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/analysis/:analysisId" element={<AnalysisPage />} />
+          <Route path="/admin" element={<AdminPage />} />
         </Routes>
       </div>
     </Router>

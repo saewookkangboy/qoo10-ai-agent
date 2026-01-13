@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { analyzeService } from '../services/api'
 import URLInput from '../components/URLInput'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -25,11 +25,25 @@ function HomePage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#E6F2FF] to-[#F5F5F5] px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
-      <div className="max-w-2xl w-full">
-        <div className="bg-white rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.16)] p-6 sm:p-8 lg:p-10">
-          {/* 헤더 */}
-          <div className="text-center mb-6 sm:mb-8">
+    <div className="min-h-screen bg-gradient-to-br from-[#E6F2FF] to-[#F5F5F5]">
+      {/* 헤더 */}
+      <div className="bg-white border-b border-[#E6E6E6] px-4 sm:px-6 py-3 sm:py-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <h1 className="text-lg sm:text-xl font-bold text-[#1A1A1A]">Qoo10 Sales Intelligence Agent</h1>
+          <Link
+            to="/admin"
+            className="text-sm sm:text-base text-[#0066CC] hover:text-[#004499] font-medium"
+          >
+            관리자
+          </Link>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-center px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+        <div className="max-w-2xl w-full">
+          <div className="bg-white rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.16)] p-6 sm:p-8 lg:p-10">
+            {/* 헤더 */}
+            <div className="text-center mb-6 sm:mb-8">
             <div className="mb-4 sm:mb-6">
               <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-[#0066CC] rounded-full mb-3 sm:mb-4">
                 <span className="text-2xl sm:text-3xl">📊</span>

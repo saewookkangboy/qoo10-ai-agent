@@ -71,4 +71,62 @@ export const analyzeService = {
   },
 }
 
+export const adminService = {
+  /**
+   * 점수 통계 조회
+   */
+  async getScoreStatistics(days: number = 30) {
+    const response = await api.get(`/api/v1/admin/statistics/score?days=${days}`)
+    return response.data
+  },
+
+  /**
+   * 분석 통계 조회
+   */
+  async getAnalysisStatistics(days: number = 30) {
+    const response = await api.get(`/api/v1/admin/statistics/analysis?days=${days}`)
+    return response.data
+  },
+
+  /**
+   * 분석 로그 조회
+   */
+  async getAnalysisLogs(params: { limit?: number; offset?: number; status?: string; start_date?: string; end_date?: string }) {
+    const response = await api.get('/api/v1/admin/analysis-logs', { params })
+    return response.data
+  },
+
+  /**
+   * 에러 로그 조회
+   */
+  async getErrorLogs(params: { limit?: number; offset?: number; start_date?: string; end_date?: string }) {
+    const response = await api.get('/api/v1/admin/error-logs', { params })
+    return response.data
+  },
+
+  /**
+   * 사용자 분석 로그 조회
+   */
+  async getUserAnalysisLogs(params: { url?: string; limit?: number; offset?: number }) {
+    const response = await api.get('/api/v1/admin/user-logs', { params })
+    return response.data
+  },
+
+  /**
+   * 분석 결과 리스트 조회
+   */
+  async getAnalysisResultsList(params: { limit?: number; offset?: number; min_score?: number; max_score?: number; url_type?: string }) {
+    const response = await api.get('/api/v1/admin/analysis-results', { params })
+    return response.data
+  },
+
+  /**
+   * AI 인사이트 리포트 조회
+   */
+  async getAIInsightReport(days: number = 30) {
+    const response = await api.get(`/api/v1/admin/ai-insight-report?days=${days}`)
+    return response.data
+  },
+}
+
 export default api
