@@ -23,6 +23,7 @@ function AdminPage() {
   }, [])
 
   const loadAllData = async () => {
+    setError(null) // Clear any previous errors before attempting to load
     try {
       setLoading(true)
       
@@ -63,7 +64,16 @@ function AdminPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F5F5F5]">
         <div className="text-center">
-          <p className="text-red-500 text-lg font-medium">{error}</p>
+          <p className="text-red-500 text-lg font-medium mb-4">{error}</p>
+          <button
+            onClick={() => {
+              setError(null)
+              loadAllData()
+            }}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            재시도
+          </button>
         </div>
       </div>
     )
