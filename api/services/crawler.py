@@ -236,25 +236,28 @@ class Qoo10Crawler:
     
     async def crawl_product(self, url: str) -> Dict[str, Any]:
         """
-        상품 페이지 크롤링
+        상품 페이지 크롤링 (다양한 URL 형식 지원)
         
         Args:
-            url: Qoo10 상품 URL
+            url: Qoo10 상품 URL (다양한 형식 지원: /g/XXXXX, /item/.../XXXXX, ?goodscode=XXXXX 등)
             
         Returns:
             상품 데이터 딕셔너리
         """
         try:
-            # HTTP 요청
-            response = await self._make_request(url)
+            # URL 정규화 (다양한 형식을 표준 형식으로 변환 시도)
+            normalized_url = self._normalize_product_url(url)
+            
+            # HTTP 요청 (정규화된 URL 사용)
+            response = await self._make_request(normalized_url)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.text, 'lxml')
             
             # 상품 기본 정보 추출 (AI 학습 기반 선택자 사용)
             product_data = {
-                "url": url,
-                "product_code": self._extract_product_code(url, soup),
+                "url": normalized_url,  # 정규화된 URL 사용
+                "product_code": self._extract_product_code(normalized_url, soup),
                 "product_name": self._extract_product_name(soup),
                 "category": self._extract_category(soup),
                 "brand": self._extract_brand(soup),
@@ -338,17 +341,79 @@ class Qoo10Crawler:
         # 모두 실패한 경우
         return extract_func(soup, None) if extract_func else None
     
-    def _extract_product_code(self, url: str, soup: BeautifulSoup) -> Optional[str]:
-        """상품 코드 추출"""
-        # URL에서 추출 시도
-        match = re.search(r'goodscode=(\d+)', url)
-        if match:
-            return match.group(1)
+    def _normalize_product_url(self, url: str) -> str:
+        """Qoo10 상품 URL 정규화 (다양한 형식을 표준 형식으로 변환)"""
+        # URL에서 상품 코드 추출
+        product_code = None
         
-        # 페이지에서 추출 시도
+        # 다양한 패턴에서 상품 코드 추출
+        patterns = [
+            (r'goodscode=(\d+)', 1),
+            (r'/g/(\d+)', 1),
+            (r'/item/[^/]+/(\d+)', 1),
+            (r'/item/[^/]+/(\d+)\?', 1),
+        ]
+        
+        for pattern, group in patterns:
+            match = re.search(pattern, url, re.IGNORECASE)
+            if match:
+                product_code = match.group(group)
+                break
+        
+        # 상품 코드가 있으면 표준 형식으로 변환
+        if product_code:
+            # 표준 형식: https://www.qoo10.jp/gmkt.inc/Goods/Goods.aspx?goodscode=XXXXX
+            return f"https://www.qoo10.jp/gmkt.inc/Goods/Goods.aspx?goodscode={product_code}"
+        
+        # 변환할 수 없으면 원본 반환
+        return url
+    
+    def _extract_product_code(self, url: str, soup: BeautifulSoup) -> Optional[str]:
+        """상품 코드 추출 (다양한 URL 형식 지원)"""
+        # 1. URL에서 추출 시도 - 다양한 패턴 지원
+        patterns = [
+            r'goodscode=(\d+)',  # 기본 형식: ?goodscode=123456
+            r'/g/(\d+)',  # 짧은 형식: /g/123456
+            r'/item/[^/]+/(\d+)',  # 긴 형식: /item/.../123456
+            r'/item/[^/]+/(\d+)\?',  # 쿼리 파라미터 포함
+            r'/goods/goods\.aspx\?goodscode=(\d+)',  # 전체 경로
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url, re.IGNORECASE)
+            if match:
+                return match.group(1)
+        
+        # 2. 페이지에서 추출 시도
         code_elem = soup.find('input', {'name': 'goodscode'}) or soup.find('meta', {'property': 'product:retailer_item_id'})
         if code_elem:
-            return code_elem.get('value') or code_elem.get('content')
+            code = code_elem.get('value') or code_elem.get('content')
+            if code:
+                return code
+        
+        # 3. JSON-LD 스키마에서 추출 시도
+        json_ld = soup.find('script', {'type': 'application/ld+json'})
+        if json_ld:
+            try:
+                import json
+                data = json.loads(json_ld.string)
+                if isinstance(data, dict):
+                    # product:retailer_item_id 또는 sku 찾기
+                    if 'sku' in data:
+                        return str(data['sku'])
+                    if 'productID' in data:
+                        return str(data['productID'])
+            except:
+                pass
+        
+        # 4. 메타 태그에서 추출 시도
+        meta_tags = soup.find_all('meta')
+        for meta in meta_tags:
+            prop = meta.get('property') or meta.get('name')
+            if prop and ('product' in prop.lower() or 'item' in prop.lower()):
+                content = meta.get('content')
+                if content and content.isdigit():
+                    return content
         
         return None
     
@@ -763,69 +828,203 @@ class Qoo10Crawler:
         return len(product_items)
     
     def _extract_shop_categories(self, soup: BeautifulSoup) -> Dict[str, int]:
-        """Shop 카테고리 분포 추출"""
+        """Shop 카테고리 분포 추출 (개선 버전)"""
         categories = {}
         
-        # 상품 카테고리 정보 추출 (간단한 버전)
-        category_links = soup.select('a[href*="/category/"], .category-link')
+        # 상품 카테고리 정보 추출
+        category_links = soup.select('a[href*="/category/"], a[href*="/cat/"], .category-link, [class*="category"]')
         for link in category_links:
             category_name = link.get_text(strip=True)
-            if category_name:
+            if category_name and len(category_name) > 0:
                 categories[category_name] = categories.get(category_name, 0) + 1
+        
+        # 상품 목록에서 카테고리 추출
+        products = self._extract_shop_products(soup)
+        for product in products:
+            if product.get("category"):
+                categories[product["category"]] = categories.get(product["category"], 0) + 1
+            if product.get("product_type"):
+                categories[product["product_type"]] = categories.get(product["product_type"], 0) + 1
         
         return categories
     
     def _extract_shop_products(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
-        """Shop 상품 목록 추출"""
+        """Shop 상품 목록 추출 (상품 종류 파악 포함)"""
         products = []
         
-        # 상품 아이템 찾기
-        product_items = soup.select('.product-item, .goods-item, [data-goods-code]')
+        # 상품 아이템 찾기 (다양한 선택자 시도)
+        product_items = soup.select(
+            '.product-item, .goods-item, [data-goods-code], '
+            '.item_list li, .goods_list li, .product-list-item, '
+            '[class*="product"], [class*="goods"], [class*="item"]'
+        )
         
-        for item in product_items[:20]:  # 최대 20개만
+        # 상품이 없는 경우 다른 패턴 시도
+        if not product_items:
+            # 리스트 형태의 상품 찾기
+            product_items = soup.find_all('div', class_=re.compile(r'item|product|goods', re.I))
+        
+        for item in product_items[:50]:  # 최대 50개까지 확장
             product = {
                 "product_name": "",
-                "price": {"sale_price": None},
+                "price": {"sale_price": None, "original_price": None},
                 "rating": 0.0,
-                "review_count": 0
+                "review_count": 0,
+                "product_type": None,  # 상품 종류 (크림, 클렌저, 마스크팩 등)
+                "category": None,  # 카테고리
+                "keywords": []  # 상품명에서 추출한 키워드
             }
             
-            # 상품명
-            name_elem = item.select_one('.product-name, .goods-name, h3, h4')
-            if name_elem:
-                product["product_name"] = name_elem.get_text(strip=True)
+            # 상품명 추출 (다양한 선택자 시도)
+            name_selectors = [
+                '.product-name', '.goods-name', 'h3', 'h4', 
+                '.item-name', '.title', 'a[title]', '[title]',
+                '.name', '.product-title'
+            ]
+            for selector in name_selectors:
+                name_elem = item.select_one(selector)
+                if name_elem:
+                    product["product_name"] = name_elem.get_text(strip=True) or name_elem.get('title', '')
+                    if product["product_name"]:
+                        break
             
-            # 가격
-            price_elem = item.select_one('.price, .goods-price')
-            if price_elem:
-                price_text = price_elem.get_text(strip=True)
-                price = self._parse_price(price_text)
-                if price:
-                    product["price"]["sale_price"] = price
+            # 상품명이 없으면 텍스트에서 추출
+            if not product["product_name"]:
+                text = item.get_text(strip=True)
+                # 첫 번째 의미있는 텍스트를 상품명으로 사용
+                lines = [line.strip() for line in text.split('\n') if line.strip()]
+                if lines:
+                    product["product_name"] = lines[0][:100]  # 최대 100자
             
-            # 평점
-            rating_elem = item.select_one('[itemprop="ratingValue"], .rating')
-            if rating_elem:
-                rating_text = rating_elem.get('content') or rating_elem.get_text(strip=True)
-                try:
-                    product["rating"] = float(re.findall(r'\d+\.?\d*', rating_text)[0])
-                except:
-                    pass
+            # 상품 종류 파악 (상품명 기반)
+            if product["product_name"]:
+                product["product_type"] = self._detect_product_type(product["product_name"])
+                product["keywords"] = self._extract_product_keywords(product["product_name"])
             
-            # 리뷰 수
-            review_elem = item.find(string=re.compile(r'レビュー|리뷰|review', re.I))
-            if review_elem:
-                numbers = re.findall(r'\d+', str(review_elem))
-                if numbers:
+            # 가격 추출
+            price_selectors = [
+                '.price', '.goods-price', '.sale-price', 
+                '[class*="price"]', '.cost', '.amount'
+            ]
+            for selector in price_selectors:
+                price_elem = item.select_one(selector)
+                if price_elem:
+                    price_text = price_elem.get_text(strip=True)
+                    price = self._parse_price(price_text)
+                    if price:
+                        product["price"]["sale_price"] = price
+                        break
+            
+            # 정가 추출
+            original_price_elem = item.select_one('.original-price, .list-price, [class*="original"]')
+            if original_price_elem:
+                original_text = original_price_elem.get_text(strip=True)
+                original_price = self._parse_price(original_text)
+                if original_price:
+                    product["price"]["original_price"] = original_price
+            
+            # 평점 추출
+            rating_selectors = [
+                '[itemprop="ratingValue"]', '.rating', '[class*="rating"]',
+                '[class*="star"]', '.score'
+            ]
+            for selector in rating_selectors:
+                rating_elem = item.select_one(selector)
+                if rating_elem:
+                    rating_text = rating_elem.get('content') or rating_elem.get_text(strip=True)
                     try:
-                        product["review_count"] = int(numbers[0])
+                        rating_match = re.findall(r'\d+\.?\d*', rating_text)
+                        if rating_match:
+                            product["rating"] = float(rating_match[0])
+                            break
                     except:
                         pass
+            
+            # 리뷰 수 추출
+            review_patterns = [
+                r'レビュー\s*\((\d+)\)',
+                r'리뷰\s*\((\d+)\)',
+                r'review\s*\((\d+)\)',
+                r'\((\d+)\)'
+            ]
+            item_text = item.get_text()
+            for pattern in review_patterns:
+                match = re.search(pattern, item_text, re.I)
+                if match:
+                    try:
+                        product["review_count"] = int(match.group(1))
+                        break
+                    except:
+                        pass
+            
+            # 카테고리 추출 (상품명이나 링크에서)
+            category_link = item.select_one('a[href*="/category/"], a[href*="/cat/"]')
+            if category_link:
+                href = category_link.get('href', '')
+                category_match = re.search(r'/(?:category|cat)/([^/]+)', href)
+                if category_match:
+                    product["category"] = category_match.group(1)
             
             if product["product_name"]:
                 products.append(product)
         
         return products
+    
+    def _detect_product_type(self, product_name: str) -> Optional[str]:
+        """상품명에서 상품 종류 감지"""
+        product_name_lower = product_name.lower()
+        
+        # 스킨케어 제품 타입 키워드
+        product_types = {
+            "크림": ["크림", "クリーム", "cream"],
+            "클렌저": ["클렌저", "クレンザー", "cleanser", "クレンジング"],
+            "마스크팩": ["마스크", "マスク", "mask", "パック"],
+            "세럼": ["세럼", "セラム", "serum"],
+            "로션": ["로션", "ローション", "lotion"],
+            "토너": ["토너", "トナー", "toner"],
+            "에센스": ["에센스", "エッセンス", "essence"],
+            "스크럽": ["스크럽", "スクラブ", "scrub"],
+            "보디케어": ["보디", "ボディ", "body"],
+            "샴푸": ["샴푸", "シャンプー", "shampoo"],
+            "트리트먼트": ["트리트먼트", "トリートメント", "treatment"],
+            "선크림": ["선크림", "日焼け止め", "sunscreen", "spf"],
+            "립밤": ["립밤", "リップ", "lip"],
+            "아이크림": ["아이크림", "アイクリーム", "eye cream"],
+            "미스트": ["미스트", "ミスト", "mist"],
+            "오일": ["오일", "オイル", "oil"],
+            "젤": ["젤", "ジェル", "gel"],
+            "폼": ["폼", "フォーム", "foam"],
+            "세트": ["세트", "セット", "set", "キット"],
+            "기타": []
+        }
+        
+        for product_type, keywords in product_types.items():
+            if product_type == "기타":
+                continue
+            for keyword in keywords:
+                if keyword in product_name_lower:
+                    return product_type
+        
+        return "기타"
+    
+    def _extract_product_keywords(self, product_name: str) -> List[str]:
+        """상품명에서 키워드 추출"""
+        keywords = []
+        
+        # 주요 키워드 패턴
+        keyword_patterns = [
+            r'[A-Z][a-z]+',  # 대문자로 시작하는 단어 (브랜드명 등)
+            r'[가-힣]+',  # 한글 단어
+            r'[ひらがなカタカナ]+',  # 일본어
+        ]
+        
+        # 상품명에서 의미있는 단어 추출
+        words = re.findall(r'\b\w+\b', product_name, re.UNICODE)
+        for word in words:
+            if len(word) >= 2:  # 최소 2자 이상
+                keywords.append(word)
+        
+        return keywords[:10]  # 최대 10개
     
     def _extract_shop_coupons(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
         """Shop 쿠폰 정보 추출"""

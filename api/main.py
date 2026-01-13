@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 import uuid
 from datetime import datetime
 import os
+import re
 from dotenv import load_dotenv
 
 from services.crawler import Qoo10Crawler
@@ -306,14 +307,70 @@ def is_valid_qoo10_url(url: str) -> bool:
     return any(domain in url for domain in valid_domains)
 
 
+def normalize_qoo10_url(url: str) -> str:
+    """Qoo10 URL 정규화 (다양한 형식을 표준 형식으로 변환)"""
+    # URL에서 상품 코드 추출
+    product_code = None
+    
+    # 다양한 패턴에서 상품 코드 추출
+    patterns = [
+        (r'goodscode=(\d+)', 1),
+        (r'/g/(\d+)', 1),
+        (r'/item/[^/]+/(\d+)', 1),
+        (r'/item/[^/]+/(\d+)\?', 1),
+    ]
+    
+    for pattern, group in patterns:
+        match = re.search(pattern, url, re.IGNORECASE)
+        if match:
+            product_code = match.group(group)
+            break
+    
+    # 상품 코드가 있으면 표준 형식으로 변환
+    if product_code:
+        # 표준 형식: https://www.qoo10.jp/gmkt.inc/Goods/Goods.aspx?goodscode=XXXXX
+        return f"https://www.qoo10.jp/gmkt.inc/Goods/Goods.aspx?goodscode={product_code}"
+    
+    # 변환할 수 없으면 원본 반환
+    return url
+
+
 def detect_url_type(url: str) -> str:
-    """URL 타입 자동 감지"""
-    if "/Goods/Goods.aspx" in url or "/goods/" in url.lower():
+    """URL 타입 자동 감지 (다양한 Qoo10 URL 패턴 지원)"""
+    url_lower = url.lower()
+    
+    # 상품 URL 패턴들
+    product_patterns = [
+        "/goods/goods.aspx",  # 기본 형식
+        "/goods/",  # 소문자 변형
+        "/g/",  # 짧은 형식 (예: /g/1093098159)
+        "/item/",  # 긴 형식 (예: /item/.../1093098159)
+        "goodscode=",  # 쿼리 파라미터
+        "gmkt.inc/goods",  # 구형 URL
+    ]
+    
+    # Shop URL 패턴들
+    shop_patterns = [
+        "/shop/",
+        "shopid=",
+        "shop_id=",
+    ]
+    
+    # 상품 URL 확인
+    for pattern in product_patterns:
+        if pattern in url_lower or pattern in url:
+            return "product"
+    
+    # Shop URL 확인
+    for pattern in shop_patterns:
+        if pattern in url_lower:
+            return "shop"
+    
+    # 숫자 ID가 있는 경우 상품으로 추정 (예: /g/1093098159)
+    if re.search(r'/g/\d+', url) or re.search(r'/item/.*/\d+', url):
         return "product"
-    elif "/shop/" in url.lower():
-        return "shop"
-    else:
-        return "unknown"
+    
+    return "unknown"
 
 
 async def perform_analysis(analysis_id: str, url: str, url_type: str):

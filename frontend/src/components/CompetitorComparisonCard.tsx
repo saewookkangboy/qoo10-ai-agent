@@ -5,7 +5,35 @@ interface CompetitorComparisonCardProps {
 }
 
 function CompetitorComparisonCard({ competitorAnalysis }: CompetitorComparisonCardProps) {
-  const { target_product, competitors, comparison, differentiation_points, recommendations } = competitorAnalysis
+  // 안전한 기본값 처리
+  if (!competitorAnalysis) {
+    return (
+      <div className="bg-white rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.08)] p-4 sm:p-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-[#1A1A1A] mb-4 sm:mb-6">
+          🔍 경쟁사 비교 분석
+        </h2>
+        <p className="text-[#4D4D4D]">경쟁사 분석 데이터가 없습니다.</p>
+      </div>
+    )
+  }
+
+  const { 
+    target_product, 
+    competitors = [], 
+    comparison, 
+    differentiation_points = [], 
+    recommendations = [] 
+  } = competitorAnalysis
+
+  // comparison이 없을 경우 기본값 설정
+  const safeComparison = comparison || {
+    price_position: 'average',
+    price_stats: { target: 0, average: 0, min: 0, max: 0 },
+    rating_position: 'average',
+    rating_stats: { target: 0, average: 0 },
+    review_position: 'average',
+    review_stats: { target: 0, average: 0 }
+  }
 
   const getPositionColor = (position: string) => {
     const colors: Record<string, string> = {
@@ -41,27 +69,27 @@ function CompetitorComparisonCard({ competitorAnalysis }: CompetitorComparisonCa
 
       {/* 비교 요약 */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className={`p-4 rounded-lg ${getPositionColor(comparison.price_position)}`}>
+        <div className={`p-4 rounded-lg ${getPositionColor(safeComparison.price_position)}`}>
           <div className="text-xs sm:text-sm text-[#4D4D4D] mb-1">가격 포지셔닝</div>
-          <div className="text-lg sm:text-xl font-bold">{getPositionLabel(comparison.price_position)}</div>
+          <div className="text-lg sm:text-xl font-bold">{getPositionLabel(safeComparison.price_position)}</div>
           <div className="text-xs sm:text-sm mt-1">
-            평균: {comparison.price_stats?.average != null ? comparison.price_stats.average.toLocaleString() : 'N/A'}엔
+            평균: {safeComparison.price_stats?.average != null ? safeComparison.price_stats.average.toLocaleString() : 'N/A'}엔
           </div>
         </div>
 
-        <div className={`p-4 rounded-lg ${getPositionColor(comparison.rating_position)}`}>
+        <div className={`p-4 rounded-lg ${getPositionColor(safeComparison.rating_position)}`}>
           <div className="text-xs sm:text-sm text-[#4D4D4D] mb-1">평점 포지셔닝</div>
-          <div className="text-lg sm:text-xl font-bold">{getPositionLabel(comparison.rating_position)}</div>
+          <div className="text-lg sm:text-xl font-bold">{getPositionLabel(safeComparison.rating_position)}</div>
           <div className="text-xs sm:text-sm mt-1">
-            평균: {comparison.rating_stats?.average != null ? comparison.rating_stats.average.toFixed(1) : 'N/A'}점
+            평균: {safeComparison.rating_stats?.average != null ? safeComparison.rating_stats.average.toFixed(1) : 'N/A'}점
           </div>
         </div>
 
-        <div className={`p-4 rounded-lg ${getPositionColor(comparison.review_position)}`}>
+        <div className={`p-4 rounded-lg ${getPositionColor(safeComparison.review_position)}`}>
           <div className="text-xs sm:text-sm text-[#4D4D4D] mb-1">리뷰 포지셔닝</div>
-          <div className="text-lg sm:text-xl font-bold">{getPositionLabel(comparison.review_position)}</div>
+          <div className="text-lg sm:text-xl font-bold">{getPositionLabel(safeComparison.review_position)}</div>
           <div className="text-xs sm:text-sm mt-1">
-            평균: {comparison.review_stats?.average != null ? comparison.review_stats.average.toLocaleString() : 'N/A'}개
+            평균: {safeComparison.review_stats?.average != null ? safeComparison.review_stats.average.toLocaleString() : 'N/A'}개
           </div>
         </div>
       </div>
@@ -104,34 +132,36 @@ function CompetitorComparisonCard({ competitorAnalysis }: CompetitorComparisonCa
               </thead>
               <tbody>
                 {/* 타겟 상품 (강조) */}
-                <tr className="bg-blue-50 border-b border-[#E6E6E6]">
-                  <td className="py-2 px-3 font-semibold text-[#0066CC]">내 상품</td>
-                  <td className="py-2 px-3 font-semibold text-[#1A1A1A]">
-                    {target_product.product_name}
-                  </td>
-                  <td className="py-2 px-3 text-right font-semibold text-[#1A1A1A]">
-                    {target_product.price?.toLocaleString() || 'N/A'}엔
-                  </td>
-                  <td className="py-2 px-3 text-right font-semibold text-[#1A1A1A]">
-                    {target_product.rating.toFixed(1)}
-                  </td>
-                  <td className="py-2 px-3 text-right font-semibold text-[#1A1A1A]">
-                    {target_product.review_count.toLocaleString()}
-                  </td>
-                </tr>
+                {target_product && (
+                  <tr className="bg-blue-50 border-b border-[#E6E6E6]">
+                    <td className="py-2 px-3 font-semibold text-[#0066CC]">내 상품</td>
+                    <td className="py-2 px-3 font-semibold text-[#1A1A1A]">
+                      {target_product.product_name || 'N/A'}
+                    </td>
+                    <td className="py-2 px-3 text-right font-semibold text-[#1A1A1A]">
+                      {target_product.price != null ? target_product.price.toLocaleString() : 'N/A'}엔
+                    </td>
+                    <td className="py-2 px-3 text-right font-semibold text-[#1A1A1A]">
+                      {target_product.rating != null ? target_product.rating.toFixed(1) : 'N/A'}
+                    </td>
+                    <td className="py-2 px-3 text-right font-semibold text-[#1A1A1A]">
+                      {target_product.review_count != null ? target_product.review_count.toLocaleString() : 'N/A'}
+                    </td>
+                  </tr>
+                )}
                 {/* 경쟁사 상위 5개 */}
-                {competitors.slice(0, 5).map((competitor) => (
-                  <tr key={competitor.rank} className="border-b border-[#E6E6E6] hover:bg-gray-50">
-                    <td className="py-2 px-3 text-[#4D4D4D]">#{competitor.rank}</td>
-                    <td className="py-2 px-3 text-[#1A1A1A]">{competitor.product_name}</td>
+                {competitors.slice(0, 5).map((competitor, idx) => (
+                  <tr key={competitor?.rank || idx} className="border-b border-[#E6E6E6] hover:bg-gray-50">
+                    <td className="py-2 px-3 text-[#4D4D4D]">#{competitor?.rank || idx + 1}</td>
+                    <td className="py-2 px-3 text-[#1A1A1A]">{competitor?.product_name || 'N/A'}</td>
                     <td className="py-2 px-3 text-right text-[#1A1A1A]">
-                      {competitor.price.toLocaleString()}엔
+                      {competitor?.price != null ? competitor.price.toLocaleString() : 'N/A'}엔
                     </td>
                     <td className="py-2 px-3 text-right text-[#1A1A1A]">
-                      {competitor.rating.toFixed(1)}
+                      {competitor?.rating != null ? competitor.rating.toFixed(1) : 'N/A'}
                     </td>
                     <td className="py-2 px-3 text-right text-[#4D4D4D]">
-                      {competitor.review_count.toLocaleString()}
+                      {competitor?.review_count != null ? competitor.review_count.toLocaleString() : 'N/A'}
                     </td>
                   </tr>
                 ))}

@@ -15,7 +15,7 @@ class ShopAnalyzer:
     
     async def analyze(self, shop_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Shop 데이터 종합 분석
+        Shop 데이터 종합 분석 (Shop 특수성 고려)
         
         Args:
             shop_data: 크롤러에서 수집한 Shop 데이터
@@ -23,17 +23,23 @@ class ShopAnalyzer:
         Returns:
             분석 결과 딕셔너리
         """
+        # Shop 특수성 분석 (우선 수행)
+        shop_specialty = self._analyze_shop_specialty(shop_data)
+        
         analysis_result = {
             "overall_score": 0,
             "shop_info": self._analyze_shop_info(shop_data),
             "product_analysis": self._analyze_products(shop_data),
             "category_analysis": self._analyze_categories(shop_data),
             "competitor_analysis": self._analyze_competitors(shop_data),
-            "level_analysis": self._analyze_shop_level(shop_data)
+            "level_analysis": self._analyze_shop_level(shop_data),
+            "shop_specialty": shop_specialty,  # Shop 특수성 분석 추가
+            "product_type_analysis": self._analyze_product_types(shop_data),  # 상품 종류 분석 추가
+            "customized_insights": self._generate_customized_insights(shop_data, shop_specialty)  # 독자적 인사이트
         }
         
-        # 종합 점수 계산
-        analysis_result["overall_score"] = self._calculate_overall_score(analysis_result)
+        # Shop 특수성을 반영한 종합 점수 계산
+        analysis_result["overall_score"] = self._calculate_overall_score(analysis_result, shop_specialty)
         
         return analysis_result
     
@@ -342,14 +348,311 @@ class ShopAnalyzer:
         else:
             return "maintain"
     
-    def _calculate_overall_score(self, analysis_result: Dict[str, Any]) -> int:
-        """종합 점수 계산"""
+    def _analyze_shop_specialty(self, shop_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Shop 특수성 분석
+        - 브랜드 샵 여부
+        - 제품 라인업 특성
+        - 타겟 고객층
+        - Shop의 독특한 특징
+        """
+        shop_name = shop_data.get("shop_name", "").lower()
+        shop_id = shop_data.get("shop_id", "").lower()
+        products = shop_data.get("products", [])
+        
+        specialty = {
+            "is_brand_shop": False,
+            "brand_name": None,
+            "product_lineup_type": "mixed",  # specialized, mixed, diverse
+            "target_customer": "general",
+            "unique_features": [],
+            "specialty_score": 0
+        }
+        
+        # 브랜드 샵 여부 판단
+        # "公式", "official", "공식" 등의 키워드 확인
+        official_keywords = ["公式", "official", "공식", "オフィシャル"]
+        if any(keyword in shop_name or keyword in shop_id for keyword in official_keywords):
+            specialty["is_brand_shop"] = True
+            # 브랜드명 추출
+            if "公式" in shop_name or "official" in shop_name:
+                brand_name = shop_name.replace("公式", "").replace("official", "").strip()
+                specialty["brand_name"] = brand_name if brand_name else shop_id
+        
+        # 제품 라인업 특성 분석
+        product_types = {}
+        for product in products:
+            product_type = product.get("product_type")
+            if product_type:
+                product_types[product_type] = product_types.get(product_type, 0) + 1
+        
+        if product_types:
+            total_products = len(products)
+            max_type_count = max(product_types.values())
+            max_type_ratio = max_type_count / total_products if total_products > 0 else 0
+            
+            if max_type_ratio >= 0.6:
+                specialty["product_lineup_type"] = "specialized"  # 특화된 제품 라인업
+                specialty["main_product_type"] = max(product_types.items(), key=lambda x: x[1])[0]
+            elif max_type_ratio >= 0.3:
+                specialty["product_lineup_type"] = "mixed"  # 혼합형
+            else:
+                specialty["product_lineup_type"] = "diverse"  # 다양형
+            
+            specialty["product_type_distribution"] = product_types
+        
+        # 타겟 고객층 분석
+        # 상품명과 키워드를 기반으로 타겟 고객층 추정
+        all_keywords = []
+        for product in products:
+            keywords = product.get("keywords", [])
+            all_keywords.extend(keywords)
+        
+        keyword_text = " ".join(all_keywords).lower()
+        
+        if any(kw in keyword_text for kw in ["敏感", "敏感肌", "sensitive", "乾燥", "dry"]):
+            specialty["target_customer"] = "sensitive_skin"
+        elif any(kw in keyword_text for kw in ["毛穴", "pore", "ニキビ", "acne"]):
+            specialty["target_customer"] = "problem_skin"
+        elif any(kw in keyword_text for kw in ["アンチエイジング", "anti-aging", "抗老化"]):
+            specialty["target_customer"] = "anti_aging"
+        elif any(kw in keyword_text for kw in ["保湿", "moisture", "hydrating"]):
+            specialty["target_customer"] = "dry_skin"
+        
+        # 독특한 특징 추출
+        unique_features = []
+        
+        # POWER 레벨이 높은 경우
+        if shop_data.get("shop_level", "").lower() == "power":
+            unique_features.append("POWER 셀러 레벨")
+        
+        # 팔로워가 많은 경우
+        if shop_data.get("follower_count", 0) >= 50000:
+            unique_features.append("대규모 팔로워 보유")
+        
+        # 쿠폰 제공 여부
+        coupons = shop_data.get("coupons", [])
+        if coupons:
+            unique_features.append(f"{len(coupons)}종의 쿠폰 제공")
+        
+        # 특화된 제품 라인업
+        if specialty["product_lineup_type"] == "specialized":
+            unique_features.append(f"{specialty.get('main_product_type', '특화')} 제품 특화")
+        
+        specialty["unique_features"] = unique_features
+        
+        # 특수성 점수 계산
+        score = 0
+        if specialty["is_brand_shop"]:
+            score += 30
+        if specialty["product_lineup_type"] == "specialized":
+            score += 25
+        elif specialty["product_lineup_type"] == "mixed":
+            score += 15
+        if len(unique_features) >= 3:
+            score += 25
+        elif len(unique_features) >= 2:
+            score += 15
+        elif len(unique_features) >= 1:
+            score += 10
+        
+        specialty["specialty_score"] = min(100, score)
+        
+        return specialty
+    
+    def _analyze_product_types(self, shop_data: Dict[str, Any]) -> Dict[str, Any]:
+        """상품 종류별 상세 분석"""
+        products = shop_data.get("products", [])
+        
+        analysis = {
+            "product_type_distribution": {},
+            "type_performance": {},
+            "recommended_types": [],
+            "underrepresented_types": [],
+            "score": 0
+        }
+        
+        if not products:
+            return analysis
+        
+        # 상품 종류별 통계
+        type_stats = {}
+        for product in products:
+            product_type = product.get("product_type", "기타")
+            
+            if product_type not in type_stats:
+                type_stats[product_type] = {
+                    "count": 0,
+                    "total_rating": 0.0,
+                    "rating_count": 0,
+                    "total_reviews": 0,
+                    "avg_price": 0.0,
+                    "price_count": 0
+                }
+            
+            stats = type_stats[product_type]
+            stats["count"] += 1
+            
+            # 평점 집계
+            rating = product.get("rating", 0)
+            if rating > 0:
+                stats["total_rating"] += rating
+                stats["rating_count"] += 1
+            
+            # 리뷰 수 집계
+            review_count = product.get("review_count", 0)
+            stats["total_reviews"] += review_count
+            
+            # 가격 집계
+            price = product.get("price", {}).get("sale_price")
+            if price:
+                stats["avg_price"] += price
+                stats["price_count"] += 1
+        
+        # 상품 종류별 성과 계산
+        for product_type, stats in type_stats.items():
+            avg_rating = stats["total_rating"] / stats["rating_count"] if stats["rating_count"] > 0 else 0
+            avg_price = stats["avg_price"] / stats["price_count"] if stats["price_count"] > 0 else 0
+            
+            # 성과 점수 계산
+            performance_score = 0
+            if avg_rating >= 4.5:
+                performance_score += 40
+            elif avg_rating >= 4.0:
+                performance_score += 30
+            elif avg_rating >= 3.5:
+                performance_score += 20
+            
+            if stats["total_reviews"] >= 100:
+                performance_score += 30
+            elif stats["total_reviews"] >= 50:
+                performance_score += 20
+            elif stats["total_reviews"] >= 20:
+                performance_score += 10
+            
+            if stats["count"] >= 5:
+                performance_score += 30
+            elif stats["count"] >= 3:
+                performance_score += 20
+            
+            analysis["product_type_distribution"][product_type] = stats["count"]
+            analysis["type_performance"][product_type] = {
+                "count": stats["count"],
+                "avg_rating": round(avg_rating, 2),
+                "total_reviews": stats["total_reviews"],
+                "avg_price": round(avg_price, 0) if avg_price > 0 else None,
+                "performance_score": min(100, performance_score)
+            }
+        
+        # 추천 상품 종류 (성과가 좋은 종류)
+        sorted_types = sorted(
+            analysis["type_performance"].items(),
+            key=lambda x: x[1]["performance_score"],
+            reverse=True
+        )
+        analysis["recommended_types"] = [t[0] for t in sorted_types[:3]]
+        
+        # 부족한 상품 종류 (다양성 확보 필요)
+        total_products = len(products)
+        for product_type, count in analysis["product_type_distribution"].items():
+            ratio = count / total_products if total_products > 0 else 0
+            if ratio < 0.1 and count < 2:  # 전체의 10% 미만이고 2개 미만
+                analysis["underrepresented_types"].append(product_type)
+        
+        # 종합 점수
+        if analysis["type_performance"]:
+            avg_performance = sum(
+                perf["performance_score"] 
+                for perf in analysis["type_performance"].values()
+            ) / len(analysis["type_performance"])
+            analysis["score"] = int(avg_performance)
+        
+        return analysis
+    
+    def _generate_customized_insights(self, shop_data: Dict[str, Any], shop_specialty: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Shop 특수성을 고려한 독자적인 인사이트 생성
+        """
+        insights = {
+            "shop_positioning": "",
+            "strengths": [],
+            "opportunities": [],
+            "recommendations": [],
+            "competitive_advantages": [],
+            "score": 0
+        }
+        
+        shop_name = shop_data.get("shop_name", "")
+        shop_level = shop_data.get("shop_level", "").lower()
+        follower_count = shop_data.get("follower_count", 0)
+        product_count = shop_data.get("product_count", 0)
+        products = shop_data.get("products", [])
+        
+        # Shop 포지셔닝
+        if shop_specialty.get("is_brand_shop"):
+            brand_name = shop_specialty.get("brand_name", shop_name)
+            insights["shop_positioning"] = f"{brand_name} 공식 브랜드 샵"
+        else:
+            insights["shop_positioning"] = "일반 판매자 샵"
+        
+        # 강점 분석
+        if shop_level == "power":
+            insights["strengths"].append("POWER 셀러 레벨로 높은 신뢰도 보유")
+        
+        if follower_count >= 50000:
+            insights["strengths"].append(f"대규모 팔로워({follower_count:,}명) 보유로 높은 브랜드 인지도")
+        elif follower_count >= 10000:
+            insights["strengths"].append(f"안정적인 팔로워 기반({follower_count:,}명)")
+        
+        if shop_specialty.get("product_lineup_type") == "specialized":
+            main_type = shop_specialty.get("main_product_type", "")
+            insights["strengths"].append(f"{main_type} 제품 특화로 전문성 확보")
+        
+        # 기회 분석
+        if product_count < 20:
+            insights["opportunities"].append(f"상품 라인업 확대 (현재 {product_count}개)로 매출 증대 가능")
+        
+        coupons = shop_data.get("coupons", [])
+        if not coupons or len(coupons) < 2:
+            insights["opportunities"].append("다양한 쿠폰 제공으로 고객 유치 강화 가능")
+        
+        # 추천 사항
+        if shop_specialty.get("product_lineup_type") == "specialized":
+            insights["recommendations"].append("특화된 제품 라인업을 활용한 타겟 마케팅 강화")
+        
+        if shop_specialty.get("target_customer") != "general":
+            target = shop_specialty.get("target_customer", "").replace("_", " ")
+            insights["recommendations"].append(f"{target} 타겟 고객층을 위한 맞춤형 마케팅 전략 수립")
+        
+        # 경쟁 우위
+        if shop_specialty.get("is_brand_shop"):
+            insights["competitive_advantages"].append("공식 브랜드 샵으로 제품 신뢰도 및 품질 보장")
+        
+        if shop_level == "power":
+            insights["competitive_advantages"].append("POWER 셀러 레벨로 빠른 정산 및 우수한 서비스 제공")
+        
+        # 인사이트 점수
+        score = 0
+        score += len(insights["strengths"]) * 20
+        score += len(insights["opportunities"]) * 15
+        score += len(insights["recommendations"]) * 10
+        score += len(insights["competitive_advantages"]) * 15
+        
+        insights["score"] = min(100, score)
+        
+        return insights
+    
+    def _calculate_overall_score(self, analysis_result: Dict[str, Any], shop_specialty: Dict[str, Any]) -> int:
+        """종합 점수 계산 (Shop 특수성 반영)"""
         weights = {
-            "shop_info": 0.30,
-            "product_analysis": 0.30,
-            "category_analysis": 0.15,
-            "competitor_analysis": 0.15,
-            "level_analysis": 0.10
+            "shop_info": 0.25,
+            "product_analysis": 0.25,
+            "category_analysis": 0.10,
+            "competitor_analysis": 0.10,
+            "level_analysis": 0.10,
+            "shop_specialty": 0.10,  # Shop 특수성 가중치 추가
+            "product_type_analysis": 0.05,  # 상품 종류 분석 가중치 추가
+            "customized_insights": 0.05  # 독자적 인사이트 가중치 추가
         }
         
         overall = 0
@@ -358,4 +661,10 @@ class ShopAnalyzer:
                 score = analysis_result[key].get("score", 0)
                 overall += score * weight
         
-        return int(overall)
+        # Shop 특수성 보너스
+        if shop_specialty.get("is_brand_shop"):
+            overall += 5  # 브랜드 샵 보너스
+        if shop_specialty.get("product_lineup_type") == "specialized":
+            overall += 5  # 특화 제품 라인업 보너스
+        
+        return min(100, int(overall))
