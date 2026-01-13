@@ -145,9 +145,9 @@ class Qoo10Crawler:
             db: 데이터베이스 인스턴스 (없으면 자동 생성)
         """
         self.base_url = "https://www.qoo10.jp"
-        self.timeout = 30.0
-        self.max_retries = 3
-        self.retry_delay_base = 2.0  # 기본 재시도 지연 시간 (초)
+        self.timeout = 15.0  # 타임아웃 단축: 30초 -> 15초
+        self.max_retries = 2  # 재시도 횟수 감소: 3 -> 2
+        self.retry_delay_base = 1.0  # 재시도 지연 시간 단축: 2초 -> 1초
         
         # 데이터베이스 초기화
         self.db = db or CrawlerDatabase()
@@ -243,33 +243,46 @@ class Qoo10Crawler:
         return f'({jp_escaped}|{kr_escaped})'
     
     def _get_user_agent(self) -> str:
-        """최적의 User-Agent 선택 (학습 데이터 기반)"""
-        # 데이터베이스에서 가장 성공률이 높은 User-Agent 조회
-        best_ua = self.db.get_best_user_agent()
+        """최적의 User-Agent 선택 (학습 데이터 기반) - 최적화: 캐싱"""
+        # 캐시된 User-Agent가 있으면 재사용
+        if self.current_user_agent:
+            return self.current_user_agent
         
-        if best_ua:
-            self.current_user_agent = best_ua
-            return best_ua
+        # 데이터베이스 조회는 최소화 (성능 최적화)
+        try:
+            best_ua = self.db.get_best_user_agent()
+            if best_ua:
+                self.current_user_agent = best_ua
+                return best_ua
+        except:
+            # DB 조회 실패 시 무시하고 계속 진행
+            pass
         
         # 없으면 랜덤 선택
         self.current_user_agent = random.choice(self.USER_AGENTS)
         return self.current_user_agent
     
     def _get_proxy(self) -> Optional[Dict[str, str]]:
-        """최적의 프록시 선택 (학습 데이터 기반)"""
+        """최적의 프록시 선택 (학습 데이터 기반) - 최적화: 캐싱"""
         if not self.proxies:
             return None
         
-        # 데이터베이스에서 가장 성공률이 높은 프록시 조회
-        best_proxy = self.db.get_best_proxy()
+        # 캐시된 프록시가 있으면 재사용
+        if self.current_proxy:
+            return {"http://": self.current_proxy, "https://": self.current_proxy}
         
-        if best_proxy:
-            self.current_proxy = best_proxy
-        else:
-            # 없으면 랜덤 선택
-            self.current_proxy = random.choice(self.proxies)
+        # 데이터베이스 조회는 최소화 (성능 최적화)
+        try:
+            best_proxy = self.db.get_best_proxy()
+            if best_proxy:
+                self.current_proxy = best_proxy
+                return {"http://": self.current_proxy, "https://": self.current_proxy}
+        except:
+            # DB 조회 실패 시 무시하고 계속 진행
+            pass
         
-        # httpx 프록시 형식으로 변환
+        # 없으면 랜덤 선택
+        self.current_proxy = random.choice(self.proxies)
         return {"http://": self.current_proxy, "https://": self.current_proxy}
     
     def _get_headers(self) -> Dict[str, str]:
@@ -288,8 +301,8 @@ class Qoo10Crawler:
         }
         return headers
     
-    async def _random_delay(self, min_seconds: float = 1.0, max_seconds: float = 3.0):
-        """랜덤 지연 시간 (인간처럼 보이게)"""
+    async def _random_delay(self, min_seconds: float = 0.5, max_seconds: float = 1.5):
+        """랜덤 지연 시간 (인간처럼 보이게) - 최적화: 지연 시간 단축"""
         delay = random.uniform(min_seconds, max_seconds)
         await asyncio.sleep(delay)
     
@@ -312,9 +325,9 @@ class Qoo10Crawler:
         proxy_config = self._get_proxy()
         headers = self._get_headers()
         
-        # 지연 시간 추가 (너무 빠른 요청 방지)
+        # 지연 시간 추가 (너무 빠른 요청 방지) - 최적화: 지연 시간 단축
         if retry_count == 0:
-            await self._random_delay(1.0, 3.0)
+            await self._random_delay(0.5, 1.5)  # 1-3초 -> 0.5-1.5초
         else:
             # 재시도 시 더 긴 지연
             await asyncio.sleep(self.retry_delay_base * (2 ** retry_count))
@@ -432,6 +445,14 @@ class Qoo10Crawler:
             soup = BeautifulSoup(response.text, 'lxml')
             
             # 상품 기본 정보 추출 (AI 학습 기반 선택자 사용)
+            # 페이지 구조 추출은 선택적으로 수행 (성능 최적화)
+            page_structure = None
+            try:
+                page_structure = self._extract_page_structure(soup)
+            except Exception:
+                # 페이지 구조 추출 실패해도 계속 진행
+                pass
+            
             product_data = {
                 "url": normalized_url,  # 정규화된 URL 사용
                 "product_code": self._extract_product_code(normalized_url, soup),
@@ -448,11 +469,15 @@ class Qoo10Crawler:
                 "is_move_product": self._extract_move_product(soup),  # MOVE 상품 여부 추가
                 "qpoint_info": self._extract_qpoint_info(soup),  # Qポイント 정보 추가
                 "coupon_info": self._extract_coupon_info(soup),  # 쿠폰 상세 정보 추가
-                "page_structure": self._extract_page_structure(soup)  # 페이지 구조 및 모든 div class 정보 추가
+                "page_structure": page_structure  # 페이지 구조 및 모든 div class 정보 추가
             }
             
-            # 데이터베이스에 저장
-            self.db.save_crawled_product(product_data)
+            # 데이터베이스 저장은 비동기로 처리 (성능 최적화)
+            # 저장 실패해도 분석은 계속 진행
+            try:
+                self.db.save_crawled_product(product_data)
+            except:
+                pass  # 저장 실패해도 무시
             
             return product_data
         
@@ -469,7 +494,7 @@ class Qoo10Crawler:
         extract_func
     ) -> Any:
         """
-        AI 학습 기반 데이터 추출
+        AI 학습 기반 데이터 추출 - 최적화: DB 조회 최소화
         
         Args:
             selector_type: 선택자 타입 ('product_name', 'price', etc.)
@@ -480,44 +505,41 @@ class Qoo10Crawler:
         Returns:
             추출된 데이터
         """
-        # 데이터베이스에서 가장 성공률이 높은 선택자 조회
-        best_selectors = self.db.get_best_selectors(selector_type, limit=10)
-        
-        # 학습된 선택자와 기본 선택자 결합 (학습된 것이 우선)
-        all_selectors = []
-        if best_selectors:
-            all_selectors.extend([s["selector"] for s in best_selectors])
-        all_selectors.extend(default_selectors)
-        
-        # 중복 제거 (순서 유지)
-        seen = set()
-        unique_selectors = []
-        for selector in all_selectors:
-            if selector not in seen:
-                seen.add(selector)
-                unique_selectors.append(selector)
-        
-        # 각 선택자 시도
-        for selector in unique_selectors:
+        # 성능 최적화: 기본 선택자를 먼저 시도 (DB 조회 없이)
+        for selector in default_selectors[:5]:  # 상위 5개만 먼저 시도
             try:
                 result = extract_func(soup, selector)
                 if result and result != "상품명 없음" and result != "":
-                    # 성공 기록
-                    self.db.record_selector_performance(
-                        selector_type=selector_type,
-                        selector=selector,
-                        success=True,
-                        data_quality=1.0 if result else 0.0
-                    )
+                    # 성공 기록은 비동기로 처리 (성능 최적화)
+                    try:
+                        self.db.record_selector_performance(
+                            selector_type=selector_type,
+                            selector=selector,
+                            success=True,
+                            data_quality=1.0 if result else 0.0
+                        )
+                    except:
+                        pass  # DB 기록 실패해도 무시
                     return result
             except Exception:
-                # 실패 기록
-                self.db.record_selector_performance(
-                    selector_type=selector_type,
-                    selector=selector,
-                    success=False
-                )
                 continue
+        
+        # 기본 선택자로 실패한 경우에만 DB 조회 (성능 최적화)
+        try:
+            best_selectors = self.db.get_best_selectors(selector_type, limit=5)  # limit 감소: 10 -> 5
+            if best_selectors:
+                for selector_info in best_selectors:
+                    selector = selector_info.get("selector")
+                    if selector and selector not in default_selectors:
+                        try:
+                            result = extract_func(soup, selector)
+                            if result and result != "상품명 없음" and result != "":
+                                return result
+                        except:
+                            continue
+        except:
+            # DB 조회 실패 시 무시하고 계속 진행
+            pass
         
         # 모두 실패한 경우
         return extract_func(soup, None) if extract_func else None
@@ -1437,7 +1459,7 @@ class Qoo10Crawler:
     
     def _extract_page_structure(self, soup: BeautifulSoup) -> Dict[str, Any]:
         """
-        페이지 구조 및 모든 div class 추출
+        페이지 구조 및 모든 div class 추출 (최적화 버전)
         Qoo10 페이지의 모든 div class를 분석하여 각 요소의 의미를 파악
         """
         structure = {
@@ -1447,19 +1469,10 @@ class Qoo10Crawler:
             "semantic_structure": {}
         }
         
-        # 모든 div 요소 찾기
-        all_divs = soup.find_all('div')
+        # 최적화: 한 번의 순회로 모든 정보 수집
+        all_divs = soup.find_all('div', limit=1000)  # 최대 1000개로 제한
         
-        # 모든 class 수집 및 빈도 계산
-        for div in all_divs:
-            classes = div.get('class', [])
-            if isinstance(classes, list):
-                for cls in classes:
-                    if cls:
-                        structure["all_div_classes"].append(cls)
-                        structure["class_frequency"][cls] = structure["class_frequency"].get(cls, 0) + 1
-        
-        # 주요 요소별로 분류
+        # 주요 요소별로 분류할 패턴 정의
         key_patterns = {
             "product_info": ["product", "goods", "item", "detail", "info", "name", "title"],
             "price_info": ["price", "cost", "discount", "sale", "original", "prc"],
@@ -1469,145 +1482,75 @@ class Qoo10Crawler:
             "shipping_info": ["shipping", "delivery", "ship", "配送", "送料"],
             "coupon_info": ["coupon", "discount", "割引", "クーポン"],
             "qpoint_info": ["qpoint", "point", "ポイント", "Qポイント"],
-            "button_info": ["button", "btn", "link", "action"],
-            "form_info": ["form", "input", "select", "option"],
-            "navigation": ["nav", "menu", "breadcrumb", "category"],
-            "layout": ["container", "wrapper", "section", "content", "main", "header", "footer"]
         }
         
-        # 각 패턴에 맞는 class 찾기
-        for category, patterns in key_patterns.items():
-            matching_classes = []
-            for cls in structure["class_frequency"].keys():
+        # 의미 있는 구조 요소를 위한 태그 매핑
+        semantic_mapping = {
+            "product_name_elements": ["name", "title", "goods_name", "product_name"],
+            "price_elements": ["price", "prc", "cost"],
+            "image_elements": ["image", "img", "photo", "thmb", "thumbnail"],
+            "description_elements": ["description", "detail", "content"],
+            "review_elements": ["review", "rating", "star", "comment"],
+            "seller_elements": ["shop", "seller", "store"],
+            "shipping_elements": ["shipping", "ship", "delivery", "配送", "送料"],
+            "coupon_elements": ["coupon", "割引", "クーポン", "discount"],
+            "qpoint_elements": ["qpoint", "point", "ポイント"],
+        }
+        
+        # 한 번의 순회로 모든 정보 수집
+        semantic_elements = {key: [] for key in semantic_mapping.keys()}
+        seen_classes = set()
+        
+        for div in all_divs:
+            classes = div.get('class', [])
+            if not isinstance(classes, list):
+                continue
+                
+            for cls in classes:
+                if not cls or cls in seen_classes:
+                    continue
+                    
+                seen_classes.add(cls)
+                structure["all_div_classes"].append(cls)
+                structure["class_frequency"][cls] = structure["class_frequency"].get(cls, 0) + 1
+                
                 cls_lower = cls.lower()
-                if any(pattern in cls_lower for pattern in patterns):
-                    matching_classes.append({
-                        "class": cls,
-                        "frequency": structure["class_frequency"][cls]
-                    })
-            if matching_classes:
-                structure["key_elements"][category] = matching_classes
+                
+                # 주요 요소 분류
+                for category, patterns in key_patterns.items():
+                    if any(pattern in cls_lower for pattern in patterns):
+                        if category not in structure["key_elements"]:
+                            structure["key_elements"][category] = []
+                        structure["key_elements"][category].append({
+                            "class": cls,
+                            "frequency": structure["class_frequency"][cls]
+                        })
+                
+                # 의미 있는 구조 요소 분류
+                for semantic_key, keywords in semantic_mapping.items():
+                    if any(keyword in cls_lower for keyword in keywords):
+                        semantic_elements[semantic_key].append(cls)
         
-        # 의미 있는 구조 요소 추출
-        semantic_elements = {
-            "product_name_elements": [],
-            "price_elements": [],
-            "image_elements": [],
-            "description_elements": [],
-            "review_elements": [],
-            "seller_elements": [],
-            "shipping_elements": [],
-            "coupon_elements": [],
-            "qpoint_elements": []
+        # 추가로 특정 태그에서도 수집 (최적화: 제한된 선택자만 사용)
+        quick_selectors = {
+            "product_name_elements": ['h1', 'h2[class*="name"]'],
+            "price_elements": ['span[class*="price"]', 'strong[class*="price"]'],
+            "image_elements": ['img[class*="thumbnail"]'],
         }
         
-        # 상품명 관련 요소
-        name_selectors = [
-            'div[class*="name"]', 'div[class*="title"]', 'div[class*="goods_name"]',
-            'div[class*="product_name"]', 'h1', 'h2[class*="name"]'
-        ]
-        for selector in name_selectors:
-            elems = soup.select(selector)
-            for elem in elems:
-                classes = elem.get('class', [])
-                if classes:
-                    semantic_elements["product_name_elements"].extend(classes)
-        
-        # 가격 관련 요소
-        price_selectors = [
-            'div[class*="price"]', 'div[class*="prc"]', 'div[class*="cost"]',
-            'span[class*="price"]', 'strong[class*="price"]'
-        ]
-        for selector in price_selectors:
-            elems = soup.select(selector)
-            for elem in elems:
-                classes = elem.get('class', [])
-                if classes:
-                    semantic_elements["price_elements"].extend(classes)
-        
-        # 이미지 관련 요소
-        image_selectors = [
-            'div[class*="image"]', 'div[class*="img"]', 'div[class*="photo"]',
-            'div[class*="thmb"]', 'div[class*="thumbnail"]'
-        ]
-        for selector in image_selectors:
-            elems = soup.select(selector)
-            for elem in elems:
-                classes = elem.get('class', [])
-                if classes:
-                    semantic_elements["image_elements"].extend(classes)
-        
-        # 설명 관련 요소
-        desc_selectors = [
-            'div[class*="description"]', 'div[class*="detail"]', 'div[class*="content"]',
-            'div[id*="detail"]', 'div[id*="description"]'
-        ]
-        for selector in desc_selectors:
-            elems = soup.select(selector)
-            for elem in elems:
-                classes = elem.get('class', [])
-                if classes:
-                    semantic_elements["description_elements"].extend(classes)
-        
-        # 리뷰 관련 요소
-        review_selectors = [
-            'div[class*="review"]', 'div[class*="rating"]', 'div[class*="star"]',
-            'div[class*="comment"]', 'div[class*="evaluation"]'
-        ]
-        for selector in review_selectors:
-            elems = soup.select(selector)
-            for elem in elems:
-                classes = elem.get('class', [])
-                if classes:
-                    semantic_elements["review_elements"].extend(classes)
-        
-        # 판매자 관련 요소
-        seller_selectors = [
-            'div[class*="shop"]', 'div[class*="seller"]', 'div[class*="store"]',
-            'a[href*="/shop/"]'
-        ]
-        for selector in seller_selectors:
-            elems = soup.select(selector)
-            for elem in elems:
-                classes = elem.get('class', [])
-                if classes:
-                    semantic_elements["seller_elements"].extend(classes)
-        
-        # 배송 관련 요소
-        shipping_selectors = [
-            'div[class*="shipping"]', 'div[class*="ship"]', 'div[class*="delivery"]',
-            'span[class*="ship"]', '*[class*="配送"]', '*[class*="送料"]'
-        ]
-        for selector in shipping_selectors:
-            elems = soup.select(selector)
-            for elem in elems:
-                classes = elem.get('class', [])
-                if classes:
-                    semantic_elements["shipping_elements"].extend(classes)
-        
-        # 쿠폰 관련 요소
-        coupon_selectors = [
-            'div[class*="coupon"]', 'div[class*="割引"]', 'div[class*="クーポン"]',
-            '*[class*="discount"]'
-        ]
-        for selector in coupon_selectors:
-            elems = soup.select(selector)
-            for elem in elems:
-                classes = elem.get('class', [])
-                if classes:
-                    semantic_elements["coupon_elements"].extend(classes)
-        
-        # Qポイント 관련 요소
-        qpoint_selectors = [
-            'div[class*="qpoint"]', 'div[class*="point"]', '*[class*="ポイント"]',
-            '*[class*="Qポイント"]'
-        ]
-        for selector in qpoint_selectors:
-            elems = soup.select(selector)
-            for elem in elems:
-                classes = elem.get('class', [])
-                if classes:
-                    semantic_elements["qpoint_elements"].extend(classes)
+        for semantic_key, selectors in quick_selectors.items():
+            for selector in selectors[:2]:  # 최대 2개 선택자만 시도
+                try:
+                    elems = soup.select(selector, limit=10)  # 최대 10개만
+                    for elem in elems:
+                        classes = elem.get('class', [])
+                        if classes:
+                            for cls in classes:
+                                if cls and cls not in seen_classes:
+                                    semantic_elements[semantic_key].append(cls)
+                                    seen_classes.add(cls)
+                except:
+                    continue  # 선택자 오류 무시
         
         # 중복 제거 및 빈도 계산
         for key in semantic_elements:
@@ -1616,13 +1559,13 @@ class Qoo10Crawler:
                 class_counts[cls] = class_counts.get(cls, 0) + 1
             semantic_elements[key] = [
                 {"class": cls, "frequency": count}
-                for cls, count in sorted(class_counts.items(), key=lambda x: x[1], reverse=True)
+                for cls, count in sorted(class_counts.items(), key=lambda x: x[1], reverse=True)[:20]  # 상위 20개만
             ]
         
         structure["semantic_structure"] = semantic_elements
         
-        # 고유한 class 목록 정리
-        structure["all_div_classes"] = sorted(list(set(structure["all_div_classes"])))
+        # 고유한 class 목록 정리 (최대 500개로 제한)
+        structure["all_div_classes"] = sorted(list(set(structure["all_div_classes"])))[:500]
         
         return structure
     

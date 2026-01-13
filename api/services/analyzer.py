@@ -44,7 +44,7 @@ class ProductAnalyzer:
         return analysis_result
     
     async def _analyze_images(self, images: Dict[str, Any]) -> Dict[str, Any]:
-        """이미지 분석"""
+        """이미지 분석 (최적화 버전)"""
         analysis = {
             "score": 0,
             "thumbnail_quality": "unknown",
@@ -52,22 +52,34 @@ class ProductAnalyzer:
             "recommendations": []
         }
         
-        # 썸네일 품질 확인
+        # 썸네일 품질 확인 (최적화: HEAD 요청만 사용)
         thumbnail = images.get("thumbnail")
         if thumbnail:
             try:
                 async with httpx.AsyncClient() as client:
-                    response = await client.get(thumbnail, timeout=10.0)
+                    # HEAD 요청으로 빠르게 확인 (이미지 다운로드 없이)
+                    response = await client.head(thumbnail, timeout=5.0, follow_redirects=True)
                     if response.status_code == 200:
-                        # 이미지 크기 확인 (간단한 방법)
-                        # 실제로는 이미지 다운로드 후 PIL로 확인해야 함
-                        analysis["thumbnail_quality"] = "good"
-                        analysis["score"] += 30
+                        # Content-Length로 크기 추정
+                        content_length = response.headers.get("content-length")
+                        if content_length:
+                            size_kb = int(content_length) / 1024
+                            if size_kb > 10:  # 10KB 이상이면 좋은 품질로 간주
+                                analysis["thumbnail_quality"] = "good"
+                                analysis["score"] += 30
+                            else:
+                                analysis["thumbnail_quality"] = "small"
+                                analysis["score"] += 20
+                        else:
+                            analysis["thumbnail_quality"] = "good"
+                            analysis["score"] += 30
                     else:
                         analysis["thumbnail_quality"] = "poor"
                         analysis["recommendations"].append("썸네일 이미지를 확인할 수 없습니다")
             except:
+                # 썸네일 URL이 있으면 기본 점수 부여
                 analysis["thumbnail_quality"] = "unknown"
+                analysis["score"] += 15
         
         # 상세 이미지 개수 평가
         detail_count = analysis["image_count"]

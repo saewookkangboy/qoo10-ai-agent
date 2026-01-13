@@ -31,13 +31,13 @@ export const analyzeService = {
   },
 
   /**
-   * 분석 결과 폴링 (주기적으로 조회)
+   * 분석 결과 폴링 (주기적으로 조회) - 최적화 버전
    */
   async pollAnalysisResult(
     analysisId: string,
     onUpdate: (result: AnalysisResult) => void,
-    interval: number = 2000,
-    maxAttempts: number = 30
+    interval: number = 1000,  // 폴링 간격 단축: 2초 -> 1초
+    maxAttempts: number = 60  // 최대 시도 횟수 증가: 30 -> 60 (총 60초)
   ): Promise<AnalysisResult> {
     let attempts = 0
     

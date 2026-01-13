@@ -38,13 +38,37 @@ function AnalysisPage() {
   }, [analysisId])
 
   if (loading) {
+    const progress = result?.progress
+    const stageMessages: Record<string, string> = {
+      "initializing": "분석을 초기화하는 중...",
+      "crawling": "상품 페이지를 수집하는 중...",
+      "analyzing": "상품 데이터를 분석하는 중...",
+      "generating_recommendations": "개선 제안을 생성하는 중...",
+      "evaluating_checklist": "체크리스트를 평가하는 중...",
+      "finalizing": "결과를 정리하는 중..."
+    }
+    
+    const message = progress?.message || stageMessages[progress?.stage || ""] || "분석 중입니다..."
+    const percentage = progress?.percentage || 0
+    
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F5F5F5] px-4">
         <div className="text-center max-w-md w-full">
           <LoadingSpinner />
           <p className="mt-6 text-base sm:text-lg text-[#1A1A1A] font-medium mb-2">
-            분석 중입니다...
+            {message}
           </p>
+          {percentage > 0 && (
+            <div className="mt-4 mb-2">
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div 
+                  className="bg-[#0066CC] h-2.5 rounded-full transition-all duration-300"
+                  style={{ width: `${percentage}%` }}
+                ></div>
+              </div>
+              <p className="mt-2 text-xs text-[#4D4D4D]">{percentage}%</p>
+            </div>
+          )}
           <p className="text-sm sm:text-base text-[#4D4D4D]">
             잠시만 기다려주세요
           </p>

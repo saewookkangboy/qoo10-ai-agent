@@ -13,6 +13,11 @@ export interface AnalyzeResponse {
 export interface AnalysisResult {
   analysis_id: string
   status: 'processing' | 'completed' | 'failed'
+  progress?: {
+    stage: string
+    percentage: number
+    message: string
+  }
   result?: {
     product_analysis?: ProductAnalysis
     shop_analysis?: any
