@@ -862,6 +862,141 @@ async def generate_aio_report(request: AnalyzeRequest, format: str = "json"):
         )
 
 
+# 히스토리 관리 API (Phase 3)
+@app.get("/api/v1/history")
+async def get_history(
+    url: Optional[str] = None,
+    url_type: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0
+):
+    """
+    분석 이력 조회
+    
+    - url: URL 필터 (선택사항)
+    - url_type: URL 타입 필터 (선택사항)
+    - limit: 조회 개수 제한
+    - offset: 오프셋
+    """
+    history = history_manager.get_analysis_history(
+        url=url,
+        url_type=url_type,
+        limit=limit,
+        offset=offset
+    )
+    return {"history": history}
+
+
+@app.get("/api/v1/history/{analysis_id}")
+async def get_history_by_id(analysis_id: str):
+    """분석 ID로 이력 조회"""
+    history_item = history_manager.get_analysis_by_id(analysis_id)
+    if not history_item:
+        raise HTTPException(status_code=404, detail="History not found")
+    return history_item
+
+
+@app.get("/api/v1/history/url/{url}/trend")
+async def get_score_trend(url: str, days: int = 30):
+    """점수 추이 조회"""
+    trend = history_manager.get_score_trend(url, days=days)
+    return {"trend": trend}
+
+
+# 알림 API (Phase 3)
+@app.get("/api/v1/notifications")
+async def get_notifications(
+    is_read: Optional[bool] = None,
+    limit: int = 50,
+    offset: int = 0
+):
+    """알림 조회"""
+    notifications = notification_service.get_notifications(
+        is_read=is_read,
+        limit=limit,
+        offset=offset
+    )
+    unread_count = notification_service.get_unread_count()
+    return {
+        "notifications": notifications,
+        "unread_count": unread_count
+    }
+
+
+@app.get("/api/v1/notifications/unread-count")
+async def get_unread_count():
+    """미읽음 알림 개수 조회"""
+    count = notification_service.get_unread_count()
+    return {"unread_count": count}
+
+
+@app.post("/api/v1/notifications/{notification_id}/read")
+async def mark_notification_as_read(notification_id: int):
+    """알림 읽음 처리"""
+    success = notification_service.mark_as_read(notification_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return {"success": True}
+
+
+@app.post("/api/v1/notifications/read-all")
+async def mark_all_notifications_as_read():
+    """모든 알림 읽음 처리"""
+    count = notification_service.mark_all_as_read()
+    return {"updated_count": count}
+
+
+@app.delete("/api/v1/notifications/{notification_id}")
+async def delete_notification(notification_id: int):
+    """알림 삭제"""
+    success = notification_service.delete_notification(notification_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return {"success": True}
+
+
+# 배치 분석 API (Phase 3)
+class BatchAnalysisRequest(BaseModel):
+    urls: List[HttpUrl] = Field(..., description="분석할 URL 리스트")
+    name: Optional[str] = Field(None, description="배치 분석 이름")
+
+
+@app.post("/api/v1/batch/analyze")
+async def create_batch_analysis(request: BatchAnalysisRequest):
+    """
+    배치 분석 생성
+    
+    - 여러 URL을 한 번에 분석합니다
+    - 백그라운드에서 처리됩니다
+    """
+    urls = [str(url) for url in request.urls]
+    batch_id = await batch_analyzer.create_batch_analysis(
+        urls=urls,
+        name=request.name
+    )
+    return {
+        "batch_id": batch_id,
+        "status": "pending",
+        "total_count": len(urls)
+    }
+
+
+@app.get("/api/v1/batch/{batch_id}")
+async def get_batch_analysis(batch_id: str):
+    """배치 분석 조회"""
+    batch = batch_analyzer.get_batch_analysis(batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch analysis not found")
+    return batch
+
+
+@app.get("/api/v1/batch/{batch_id}/items")
+async def get_batch_items(batch_id: str):
+    """배치 분석 아이템 조회"""
+    items = batch_analyzer.get_batch_items(batch_id)
+    return {"items": items}
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8080))

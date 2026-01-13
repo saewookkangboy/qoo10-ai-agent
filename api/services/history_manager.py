@@ -117,6 +117,7 @@ class HistoryManager:
                         analysis_result = EXCLUDED.analysis_result,
                         overall_score = EXCLUDED.overall_score,
                         updated_at = EXCLUDED.updated_at
+                    RETURNING id
                 """, (
                     analysis_id,
                     url,
@@ -125,6 +126,7 @@ class HistoryManager:
                     overall_score,
                     datetime.now().isoformat()
                 ))
+                record_id = cursor.fetchone()[0]
             else:
                 cursor.execute("""
                     INSERT OR REPLACE INTO analysis_history (
@@ -138,8 +140,8 @@ class HistoryManager:
                     overall_score,
                     datetime.now().isoformat()
                 ))
+                record_id = cursor.lastrowid
             
-            record_id = cursor.lastrowid if not self.db.use_postgres else cursor.fetchone()[0] if cursor.rowcount > 0 else None
             conn.commit()
             
             return record_id
