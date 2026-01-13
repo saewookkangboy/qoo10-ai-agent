@@ -247,15 +247,17 @@ class ChecklistEvaluator:
         self,
         product_data: Optional[Dict[str, Any]] = None,
         shop_data: Optional[Dict[str, Any]] = None,
-        analysis_result: Optional[Dict[str, Any]] = None
+        analysis_result: Optional[Dict[str, Any]] = None,
+        page_structure: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        체크리스트 평가 (정확도 향상 및 데이터 일관성 검증 포함)
+        체크리스트 평가 (정확도 향상 및 데이터 일관성 검증 포함, 페이지 구조 기반)
         
         Args:
             product_data: 상품 데이터 (선택사항)
             shop_data: Shop 데이터 (선택사항)
             analysis_result: 분석 결과 (선택사항)
+            page_structure: 페이지 구조 정보 (div class 정보 포함, 선택사항)
             
         Returns:
             체크리스트 평가 결과
@@ -265,6 +267,9 @@ class ChecklistEvaluator:
             product_data = self._validate_product_data(product_data)
         if shop_data:
             shop_data = self._validate_shop_data(shop_data)
+        
+        # 페이지 구조에서 체크리스트 항목과 관련된 div class 매핑
+        checklist_class_mapping = self._map_checklist_to_page_structure(page_structure) if page_structure else {}
         
         evaluation_result = {
             "overall_completion": 0,
@@ -306,21 +311,34 @@ class ChecklistEvaluator:
                     "confidence": "high"  # 신뢰도 추가
                 }
                 
-                # 자동 체크 가능한 항목 평가
+                # 자동 체크 가능한 항목 평가 (페이지 구조 정보 활용)
                 if item_def["auto_checkable"] and item_def["check_function"]:
                     check_result = await self._auto_check_item(
                         item_def["check_function"],
                         product_data,
                         shop_data,
-                        analysis_result
+                        analysis_result,
+                        page_structure
                     )
                     item_result["status"] = "completed" if check_result["passed"] else "pending"
                     item_result["auto_checked"] = True
                     item_result["recommendation"] = check_result.get("recommendation")
                     
-                    # 신뢰도 평가 (데이터 품질에 따라)
+                    # 페이지 구조 매핑 정보 추가
+                    if page_structure:
+                        item_mapping = checklist_class_mapping.get(item_def["id"], {})
+                        if item_mapping:
+                            item_result["page_structure_mapping"] = {
+                                "related_classes": item_mapping.get("classes", []),
+                                "element_present": item_mapping.get("present", False),
+                                "class_frequency": item_mapping.get("frequency", {})
+                            }
+                    
+                    # 신뢰도 평가 (데이터 품질 및 페이지 구조에 따라)
                     if not product_data and not shop_data:
                         item_result["confidence"] = "low"
+                    elif page_structure and not checklist_class_mapping.get(item_def["id"], {}).get("present", True):
+                        item_result["confidence"] = "medium"  # 페이지 구조에서 요소를 찾지 못함
                     elif self._has_minimal_data(product_data, shop_data, item_def["check_function"]):
                         item_result["confidence"] = "medium"
                     
@@ -449,9 +467,10 @@ class ChecklistEvaluator:
         check_function: str,
         product_data: Optional[Dict[str, Any]],
         shop_data: Optional[Dict[str, Any]],
-        analysis_result: Optional[Dict[str, Any]]
+        analysis_result: Optional[Dict[str, Any]],
+        page_structure: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """자동 체크 항목 평가 (정확도 향상 및 오류 처리 강화)"""
+        """자동 체크 항목 평가 (정확도 향상 및 오류 처리 강화, 페이지 구조 기반)"""
         
         # 데이터 검증
         if not product_data and not shop_data:
@@ -462,6 +481,12 @@ class ChecklistEvaluator:
             product_data = self._validate_product_data(product_data)
         if shop_data:
             shop_data = self._validate_shop_data(shop_data)
+        
+        # 페이지 구조 정보를 product_data에 추가 (체크 함수에서 활용 가능하도록)
+        if page_structure and product_data:
+            product_data["_page_structure"] = page_structure
+        if page_structure and shop_data:
+            shop_data["_page_structure"] = page_structure
         
         # 체크 함수 매핑
         check_functions = {
@@ -541,6 +566,141 @@ class ChecklistEvaluator:
                 images["detail_images"] = []
         
         return validated
+    
+    def _map_checklist_to_page_structure(self, page_structure: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        """
+        체크리스트 항목과 페이지 구조(div class) 매핑
+        
+        Args:
+            page_structure: 페이지 구조 정보
+            
+        Returns:
+            체크리스트 ID별 페이지 구조 매핑 정보
+        """
+        mapping = {}
+        
+        if not page_structure:
+            return mapping
+        
+        semantic_structure = page_structure.get("semantic_structure", {})
+        key_elements = page_structure.get("key_elements", {})
+        class_frequency = page_structure.get("class_frequency", {})
+        
+        # 체크리스트 항목별 관련 div class 매핑
+        checklist_class_map = {
+            # 판매 준비 카테고리
+            "item_001": {  # 상품 등록 완료
+                "classes": ["tt", "product-name", "goods_name", "product_name", "thmb", "thumbnail", "detail", "description"],
+                "semantic_keys": ["product_name_elements", "image_elements", "description_elements"]
+            },
+            "item_002": {  # 검색어 설정 완료
+                "classes": ["search", "keyword", "tag"],
+                "semantic_keys": []
+            },
+            "item_003": {  # 카테고리 및 브랜드 등록 완료
+                "classes": ["category", "breadcrumb", "brand", "brand_official"],
+                "semantic_keys": ["navigation"]
+            },
+            "item_004": {  # 가격 설정 완료
+                "classes": ["prc", "price", "cost", "del", "strong"],
+                "semantic_keys": ["price_elements"]
+            },
+            "item_005": {  # 배송 정보 설정 완료
+                "classes": ["ship", "ship_area", "shipping", "delivery", "配送", "送料"],
+                "semantic_keys": ["shipping_elements"]
+            },
+            "item_006b": {  # Qポイント 정보 설정
+                "classes": ["qpoint", "point", "ポイント", "Qポイント"],
+                "semantic_keys": ["qpoint_elements"]
+            },
+            "item_006c": {  # 반품 정책 명시
+                "classes": ["return", "返品", "返品無料"],
+                "semantic_keys": []
+            },
+            "item_006d": {  # MOVE 상품 등록
+                "classes": ["move", "MOVE"],
+                "semantic_keys": []
+            },
+            # 매출 증대 카테고리
+            "item_007": {  # 상품 페이지 최적화
+                "classes": ["tt", "prc", "thmb", "detail", "description", "review"],
+                "semantic_keys": ["product_name_elements", "price_elements", "image_elements", "description_elements", "review_elements"]
+            },
+            "item_008": {  # 검색 키워드 최적화
+                "classes": ["tt", "product-name", "keyword", "tag"],
+                "semantic_keys": ["product_name_elements"]
+            },
+            "item_009": {  # 가격 전략 수립
+                "classes": ["prc", "price", "del", "strong"],
+                "semantic_keys": ["price_elements"]
+            },
+            "item_011": {  # 프로모션 활용
+                "classes": ["coupon", "discount", "割引", "クーポン"],
+                "semantic_keys": ["coupon_elements"]
+            },
+            "item_011b": {  # 쿠폰 상세 정보 제공
+                "classes": ["coupon", "discount", "割引", "クーポン", "ショップお気に入り"],
+                "semantic_keys": ["coupon_elements"]
+            },
+            # Shop 운영 카테고리
+            "item_016b": {  # Shop 레벨 최적화
+                "classes": ["power", "POWER", "パワー", "grade"],
+                "semantic_keys": []
+            },
+            "item_016c": {  # Shop 팔로워 수 관리
+                "classes": ["follower", "フォロワー"],
+                "semantic_keys": []
+            },
+            "item_016d": {  # Shop 상품 다양성
+                "classes": ["item", "product", "goods"],
+                "semantic_keys": []
+            },
+            # 광고/프로모션 카테고리
+            "item_021": {  # 샵 쿠폰 설정
+                "classes": ["coupon", "クーポン", "割引"],
+                "semantic_keys": ["coupon_elements"]
+            },
+            "item_022": {  # 상품 할인 설정
+                "classes": ["prc", "price", "del", "discount"],
+                "semantic_keys": ["price_elements"]
+            }
+        }
+        
+        # 각 체크리스트 항목에 대해 페이지 구조 확인
+        for item_id, class_info in checklist_class_map.items():
+            related_classes = class_info.get("classes", [])
+            semantic_keys = class_info.get("semantic_keys", [])
+            
+            found_classes = []
+            element_present = False
+            frequency_info = {}
+            
+            # 직접 class 확인
+            for cls in related_classes:
+                if cls in class_frequency:
+                    found_classes.append(cls)
+                    frequency_info[cls] = class_frequency[cls]
+                    element_present = True
+            
+            # semantic structure 확인
+            for semantic_key in semantic_keys:
+                elements = semantic_structure.get(semantic_key, [])
+                if elements:
+                    element_present = True
+                    for elem in elements[:3]:  # 상위 3개만
+                        cls = elem.get("class")
+                        if cls:
+                            if cls not in found_classes:
+                                found_classes.append(cls)
+                            frequency_info[cls] = elem.get("frequency", 0)
+            
+            mapping[item_id] = {
+                "classes": found_classes,
+                "present": element_present,
+                "frequency": frequency_info
+            }
+        
+        return mapping
     
     def _validate_shop_data(self, shop_data: Dict[str, Any]) -> Dict[str, Any]:
         """Shop 데이터 유효성 검증 및 정제"""

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { ProductAnalysis, Recommendation, ChecklistResult, CompetitorAnalysis } from '../types'
 import ScoreCard from './ScoreCard'
 import RecommendationCard from './RecommendationCard'
@@ -22,6 +23,7 @@ interface AnalysisReportProps {
 function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
   const { product_analysis, shop_analysis, recommendations, checklist, competitor_analysis } = result
   const overallScore = product_analysis?.overall_score || shop_analysis?.overall_score || 0
+  const [activeTab, setActiveTab] = useState<'recommendations' | 'checklist'>('recommendations')
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return {
@@ -201,84 +203,122 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
           </div>
         )}
 
-        {/* 개선 제안 - 우선순위별 그룹핑 */}
+        {/* 탭 기반 결과 섹션 */}
         <div className="bg-white rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.08)] p-4 sm:p-6">
+          {/* 탭 헤더 */}
           <div className="flex items-center gap-2 mb-4 sm:mb-6">
             <h2 className="text-xl sm:text-2xl font-bold text-[#1A1A1A]">
-              💡 매출 강화 아이디어
+              분석 결과
             </h2>
-            <HelpTooltip 
-              content="Qoo10 큐텐 대학의 판매 노하우를 기반으로 한 개선 제안입니다.\n\n• High Priority: 즉시 개선이 필요한 항목\n• Medium Priority: 단기적으로 개선하면 효과를 볼 수 있는 항목\n• Low Priority: 장기적으로 고려하면 좋은 개선 사항\n\n각 제안을 단계적으로 실행하시면 매출 증대에 도움이 됩니다." 
-            />
           </div>
-          
-          {/* High Priority */}
-          {highPriorityRecs.length > 0 && (
-            <div className="mb-6 sm:mb-8">
-              <div className="flex items-center gap-2 mb-3 sm:mb-4">
-                <span className="text-lg sm:text-xl">🔴</span>
-                <h3 className="text-base sm:text-lg font-semibold text-[#1A1A1A]">High Priority</h3>
-                <span className="px-2 py-0.5 text-xs font-medium bg-[#CC0000] text-white rounded">
-                  {highPriorityRecs.length}
-                </span>
-              </div>
-              <div className="space-y-3 sm:space-y-4">
-                {highPriorityRecs.map((rec) => (
-                  <RecommendationCard key={rec.id} recommendation={rec} />
-                ))}
-              </div>
-            </div>
-          )}
 
-          {/* Medium Priority */}
-          {mediumPriorityRecs.length > 0 && (
-            <div className="mb-6 sm:mb-8">
-              <div className="flex items-center gap-2 mb-3 sm:mb-4">
-                <span className="text-lg sm:text-xl">🟡</span>
-                <h3 className="text-base sm:text-lg font-semibold text-[#1A1A1A]">Medium Priority</h3>
-                <span className="px-2 py-0.5 text-xs font-medium bg-[#FF9900] text-white rounded">
-                  {mediumPriorityRecs.length}
-                </span>
-              </div>
-              <div className="space-y-3 sm:space-y-4">
-                {mediumPriorityRecs.map((rec) => (
-                  <RecommendationCard key={rec.id} recommendation={rec} />
-                ))}
-              </div>
-            </div>
-          )}
+          {/* 탭 네비게이션 */}
+          <div className="flex border-b border-[#E6E6E6] mb-4 sm:mb-6">
+            <button
+              onClick={() => setActiveTab('recommendations')}
+              className={`px-4 sm:px-6 py-3 sm:py-4 text-sm sm:text-base font-semibold transition-colors ${
+                activeTab === 'recommendations'
+                  ? 'text-[#0066CC] border-b-2 border-[#0066CC]'
+                  : 'text-[#4D4D4D] hover:text-[#1A1A1A]'
+              }`}
+            >
+              💡 매출 강화 아이디어
+            </button>
+            {checklist && (
+              <button
+                onClick={() => setActiveTab('checklist')}
+                className={`px-4 sm:px-6 py-3 sm:py-4 text-sm sm:text-base font-semibold transition-colors ${
+                  activeTab === 'checklist'
+                    ? 'text-[#0066CC] border-b-2 border-[#0066CC]'
+                    : 'text-[#4D4D4D] hover:text-[#1A1A1A]'
+                }`}
+              >
+                📋 메뉴얼 기반 체크리스트
+              </button>
+            )}
+          </div>
 
-          {/* Low Priority */}
-          {lowPriorityRecs.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3 sm:mb-4">
-                <span className="text-lg sm:text-xl">🟢</span>
-                <h3 className="text-base sm:text-lg font-semibold text-[#1A1A1A]">Low Priority</h3>
-                <span className="px-2 py-0.5 text-xs font-medium bg-[#808080] text-white rounded">
-                  {lowPriorityRecs.length}
-                </span>
-              </div>
-              <div className="space-y-3 sm:space-y-4">
-                {lowPriorityRecs.map((rec) => (
-                  <RecommendationCard key={rec.id} recommendation={rec} />
-                ))}
-              </div>
-            </div>
-          )}
+          {/* 탭 컨텐츠 */}
+          <div>
+            {/* 매출 강화 아이디어 탭 */}
+            {activeTab === 'recommendations' && (
+              <div>
+                <div className="flex items-center gap-2 mb-4 sm:mb-6">
+                  <HelpTooltip 
+                    content="Qoo10 큐텐 대학의 판매 노하우를 기반으로 한 개선 제안입니다.\n\n• High Priority: 즉시 개선이 필요한 항목\n• Medium Priority: 단기적으로 개선하면 효과를 볼 수 있는 항목\n• Low Priority: 장기적으로 고려하면 좋은 개선 사항\n\n각 제안을 단계적으로 실행하시면 매출 증대에 도움이 됩니다." 
+                  />
+                </div>
+                
+                {/* High Priority */}
+                {highPriorityRecs.length > 0 && (
+                  <div className="mb-6 sm:mb-8">
+                    <div className="flex items-center gap-2 mb-3 sm:mb-4">
+                      <span className="text-lg sm:text-xl">🔴</span>
+                      <h3 className="text-base sm:text-lg font-semibold text-[#1A1A1A]">High Priority</h3>
+                      <span className="px-2 py-0.5 text-xs font-medium bg-[#CC0000] text-white rounded">
+                        {highPriorityRecs.length}
+                      </span>
+                    </div>
+                    <div className="space-y-3 sm:space-y-4">
+                      {highPriorityRecs.map((rec) => (
+                        <RecommendationCard key={rec.id} recommendation={rec} />
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-          {recommendations.length === 0 && (
-            <div className="text-center py-8 sm:py-12">
-              <p className="text-[#4D4D4D] text-sm sm:text-base">개선 제안이 없습니다.</p>
-            </div>
-          )}
+                {/* Medium Priority */}
+                {mediumPriorityRecs.length > 0 && (
+                  <div className="mb-6 sm:mb-8">
+                    <div className="flex items-center gap-2 mb-3 sm:mb-4">
+                      <span className="text-lg sm:text-xl">🟡</span>
+                      <h3 className="text-base sm:text-lg font-semibold text-[#1A1A1A]">Medium Priority</h3>
+                      <span className="px-2 py-0.5 text-xs font-medium bg-[#FF9900] text-white rounded">
+                        {mediumPriorityRecs.length}
+                      </span>
+                    </div>
+                    <div className="space-y-3 sm:space-y-4">
+                      {mediumPriorityRecs.map((rec) => (
+                        <RecommendationCard key={rec.id} recommendation={rec} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Low Priority */}
+                {lowPriorityRecs.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3 sm:mb-4">
+                      <span className="text-lg sm:text-xl">🟢</span>
+                      <h3 className="text-base sm:text-lg font-semibold text-[#1A1A1A]">Low Priority</h3>
+                      <span className="px-2 py-0.5 text-xs font-medium bg-[#808080] text-white rounded">
+                        {lowPriorityRecs.length}
+                      </span>
+                    </div>
+                    <div className="space-y-3 sm:space-y-4">
+                      {lowPriorityRecs.map((rec) => (
+                        <RecommendationCard key={rec.id} recommendation={rec} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {recommendations.length === 0 && (
+                  <div className="text-center py-8 sm:py-12">
+                    <p className="text-[#4D4D4D] text-sm sm:text-base">개선 제안이 없습니다.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 메뉴얼 기반 체크리스트 탭 */}
+            {activeTab === 'checklist' && checklist && (
+              <div className="mt-4">
+                <ChecklistCard checklist={checklist} />
+              </div>
+            )}
+          </div>
         </div>
-
-        {/* 체크리스트 카드 (Phase 2) */}
-        {checklist && (
-          <div className="mt-4 sm:mt-6">
-            <ChecklistCard checklist={checklist} />
-          </div>
-        )}
 
         {/* 경쟁사 비교 카드 (Phase 2) */}
         {competitor_analysis && (

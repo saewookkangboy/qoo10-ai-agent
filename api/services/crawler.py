@@ -22,6 +22,110 @@ load_dotenv()
 class Qoo10Crawler:
     """Qoo10 페이지 크롤러 (AI 강화 학습 및 방화벽 우회 기능 포함)"""
     
+    # 일본어-한국어 텍스트 매핑 딕셔너리
+    JP_KR_MAPPING = {
+        # 가격 관련
+        "商品価格": "상품가격",
+        "価格": "가격",
+        "定価": "정가",
+        "元の価格": "원래가격",
+        "元価格": "원가격",
+        "販売価格": "판매가격",
+        "セール価格": "세일가격",
+        "割引価格": "할인가격",
+        "円": "엔",
+        
+        # 배송 관련
+        "送料": "배송비",
+        "送料無料": "무료배송",
+        "配送料": "배송료",
+        "配送": "배송",
+        "配送無料": "무료배송",
+        "条件付無料": "조건부무료",
+        "以上購入": "이상구매",
+        "以上購入の際": "이상구매시",
+        "購入": "구매",
+        
+        # 리뷰 관련
+        "レビュー": "리뷰",
+        "評価": "평가",
+        "コメント": "코멘트",
+        "口コミ": "구전",
+        "星": "별",
+        "評価数": "평가수",
+        
+        # 쿠폰/할인 관련
+        "クーポン": "쿠폰",
+        "割引": "할인",
+        "クーポン割引": "쿠폰할인",
+        "ショップお気に入り割引": "샵즐겨찾기할인",
+        "お気に入り登録": "즐겨찾기등록",
+        "プラス": "플러스",
+        "最大": "최대",
+        "off": "오프",
+        "OFF": "오프",
+        
+        # Qポイント 관련
+        "Qポイント": "Q포인트",
+        "ポイント": "포인트",
+        "Qポイント獲得": "Q포인트획득",
+        "Qポイント獲得方法": "Q포인트획득방법",
+        "受取確認": "수령확인",
+        "レビュー作成": "리뷰작성",
+        "配送完了": "배송완료",
+        "自動": "자동",
+        
+        # 반품 관련
+        "返品": "반품",
+        "返品無料": "무료반품",
+        "無料返品": "무료반품",
+        "返品無料サービス": "무료반품서비스",
+        "返却": "반환",
+        "返品可能": "반품가능",
+        
+        # 상품 관련
+        "商品": "상품",
+        "商品名": "상품명",
+        "商品説明": "상품설명",
+        "商品詳細": "상품상세",
+        "商品情報": "상품정보",
+        "商品画像": "상품이미지",
+        "商品番号": "상품번호",
+        "商品コード": "상품코드",
+        
+        # Shop 관련
+        "ショップ": "샵",
+        "ショップ名": "샵명",
+        "ショップ情報": "샵정보",
+        "ショップページ": "샵페이지",
+        "フォロワー": "팔로워",
+        "フォロー": "팔로우",
+        "フォロー中": "팔로우중",
+        
+        # 카테고리/브랜드 관련
+        "カテゴリ": "카테고리",
+        "カテゴリー": "카테고리",
+        "ブランド": "브랜드",
+        "メーカー": "메이커",
+        
+        # 기타
+        "全ての商品": "전체상품",
+        "全て": "전체",
+        "検索": "검색",
+        "検索結果": "검색결과",
+        "人気": "인기",
+        "新着": "신규",
+        "ランキング": "랭킹",
+        "タイムセール": "타임세일",
+        "タイムセール中": "타임세일중",
+        "MOVE": "무브",
+        "POWER": "파워",
+        "パワー": "파워",
+        "グレード": "그레이드",
+        "byPower": "바이파워",
+        "by Power": "바이파워",
+    }
+    
     # 다양한 User-Agent 목록
     USER_AGENTS = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -51,6 +155,9 @@ class Qoo10Crawler:
         # 프록시 설정 (환경 변수에서 읽기)
         self.proxies = self._load_proxies()
         
+        # 일본어-한국어 패턴 생성
+        self._init_jp_kr_patterns()
+        
         # 현재 사용 중인 User-Agent 및 프록시
         self.current_user_agent = None
         self.current_proxy = None
@@ -64,6 +171,76 @@ class Qoo10Crawler:
         if proxy_list:
             return [p.strip() for p in proxy_list.split(",") if p.strip()]
         return []
+    
+    def _init_jp_kr_patterns(self):
+        """일본어-한국어 패턴 초기화"""
+        # 일본어와 한국어를 모두 포함하는 정규식 패턴 생성
+        self.jp_kr_patterns = {}
+        
+        # 가격 관련 패턴
+        self.jp_kr_patterns["price"] = r'(商品価格|상품가격|가격|価格)[：:]?\s*'
+        self.jp_kr_patterns["original_price"] = r'(定価|정가|元の価格|원래가격|元価格|원가격)[：:]?\s*'
+        self.jp_kr_patterns["sale_price"] = r'(販売価格|판매가격|セール価格|세일가격|割引価格|할인가격)[：:]?\s*'
+        
+        # 배송 관련 패턴
+        self.jp_kr_patterns["shipping"] = r'(送料|배송비|配送料|배송료|配送|배송)[：:]?\s*'
+        self.jp_kr_patterns["free_shipping"] = r'(送料無料|무료배송|配送無料|無料配送|条件付無料|조건부무료)'
+        self.jp_kr_patterns["shipping_threshold"] = r'(\d{1,3}(?:,\d{3})*)円\s*(以上購入|이상구매|以上購入の際|이상구매시)'
+        
+        # 리뷰 관련 패턴
+        self.jp_kr_patterns["review"] = r'(レビュー|리뷰|評価|평가|コメント|코멘트|口コミ|구전)'
+        self.jp_kr_patterns["review_count"] = r'(レビュー|리뷰|評価|평가|評価数|평가수).*?\((\d+)\)'
+        
+        # 쿠폰 관련 패턴
+        self.jp_kr_patterns["coupon"] = r'(クーポン|쿠폰|割引|할인|クーポン割引|쿠폰할인)'
+        self.jp_kr_patterns["coupon_discount"] = r'(プラス|플러스|最大|최대)\s*(\d+)(割引|할인|円|엔)'
+        self.jp_kr_patterns["shop_favorite_coupon"] = r'(ショップお気に入り割引|샵즐겨찾기할인|お気に入り登録|즐겨찾기등록)'
+        
+        # Qポイント 관련 패턴
+        self.jp_kr_patterns["qpoint"] = r'(Qポイント|Q포인트|ポイント|포인트)'
+        self.jp_kr_patterns["qpoint_method"] = r'(Qポイント獲得方法|Q포인트획득방법|Qポイント獲得|Q포인트획득)'
+        self.jp_kr_patterns["qpoint_receive"] = r'(受取確認|수령확인)[：:]?\s*最大(\d+)P'
+        self.jp_kr_patterns["qpoint_review"] = r'(レビュー作成|리뷰작성)[：:]?\s*最大(\d+)P'
+        self.jp_kr_patterns["qpoint_auto"] = r'(配送完了|배송완료).*?(自動|자동).*?(\d+)P'
+        
+        # 반품 관련 패턴
+        self.jp_kr_patterns["return"] = r'(返品|반품|返却|반환)'
+        self.jp_kr_patterns["free_return"] = r'(返品無料|무료반품|無料返品|返品無料サービス|무료반품서비스)'
+        
+        # Shop 관련 패턴
+        self.jp_kr_patterns["shop"] = r'(ショップ|샵|ショップ名|샵명)'
+        self.jp_kr_patterns["follower"] = r'(フォロワー|팔로워|フォロー|팔로우)'
+        self.jp_kr_patterns["power"] = r'(POWER|パワー|파워)'
+        
+        # 상품 관련 패턴
+        self.jp_kr_patterns["product"] = r'(商品|상품|商品名|상품명)'
+        self.jp_kr_patterns["product_count"] = r'(全ての商品|전체상품|商品数|상품수).*?\((\d+)\)'
+        
+        # 카테고리/브랜드 관련 패턴
+        self.jp_kr_patterns["category"] = r'(カテゴリ|카테고리|カテゴリー)'
+        self.jp_kr_patterns["brand"] = r'(ブランド|브랜드|メーカー|메이커)'
+    
+    def _translate_jp_to_kr(self, text: str) -> str:
+        """일본어 텍스트를 한국어로 번역 (매핑 기반)"""
+        if not text:
+            return text
+        
+        translated = text
+        for jp, kr in self.JP_KR_MAPPING.items():
+            translated = translated.replace(jp, kr)
+        
+        return translated
+    
+    def _create_jp_kr_regex(self, jp_text: str, kr_text: str = None) -> str:
+        """일본어와 한국어를 모두 포함하는 정규식 패턴 생성"""
+        if kr_text is None:
+            kr_text = self._translate_jp_to_kr(jp_text)
+        
+        # 특수 문자 이스케이프
+        jp_escaped = re.escape(jp_text)
+        kr_escaped = re.escape(kr_text)
+        
+        return f'({jp_escaped}|{kr_escaped})'
     
     def _get_user_agent(self) -> str:
         """최적의 User-Agent 선택 (학습 데이터 기반)"""
@@ -533,9 +710,11 @@ class Qoo10Crawler:
                                 category_match = re.search(r'/(?:category|cat)/([^/]+)', href)
                                 if category_match:
                                     return category_match.group(1)
-                            # 텍스트가 의미있는 경우
+                            # 텍스트가 의미있는 경우 (일본어 텍스트를 한국어로 번역)
                             if text and len(text) > 2 and text not in ['ホーム', 'Home', 'トップ', 'Top']:
-                                return text
+                                # 일본어 텍스트를 한국어로 번역
+                                translated_text = self._translate_jp_to_kr(text)
+                                return translated_text
             
             # 기본 방법: 메타 태그
             category_elem = soup_obj.find('meta', {'property': 'product:category'})
@@ -573,17 +752,21 @@ class Qoo10Crawler:
         )
     
     def _extract_brand(self, soup: BeautifulSoup) -> Optional[str]:
-        """브랜드 추출"""
+        """브랜드 추출 (일본어-한국어 모두 지원)"""
         brand_elem = soup.find('meta', {'property': 'product:brand'})
         if brand_elem:
             return brand_elem.get('content')
         
-        # 페이지에서 브랜드 정보 찾기
-        brand_text = soup.find(string=re.compile(r'ブランド|브랜드|Brand'))
+        # 페이지에서 브랜드 정보 찾기 (일본어-한국어 모두 지원)
+        brand_pattern = self._create_jp_kr_regex("ブランド", "브랜드")
+        brand_text = soup.find(string=re.compile(f'{brand_pattern}|Brand', re.I))
         if brand_text:
             parent = brand_text.find_parent()
             if parent:
-                return parent.get_text(strip=True).split(':')[-1].strip()
+                brand_value = parent.get_text(strip=True).split(':')[-1].strip()
+                # 일본어 텍스트를 한국어로 번역
+                brand_value = self._translate_jp_to_kr(brand_value)
+                return brand_value
         
         return None
     
@@ -612,15 +795,16 @@ class Qoo10Crawler:
             '[data-price]'  # data 속성
         ]
         
-        # "商品価格" 텍스트를 포함하는 요소 찾기 (더 정확한 패턴)
-        price_section = soup.find(string=re.compile(r'商品価格[：:]|가격[：:]|価格[：:]', re.I))
+        # "商品価格" 또는 "상품가격" 텍스트를 포함하는 요소 찾기 (일본어-한국어 모두 지원)
+        price_pattern = self._create_jp_kr_regex("商品価格", "상품가격")
+        price_section = soup.find(string=re.compile(f'{price_pattern}[：:]|가격[：:]|価格[：:]', re.I))
         if price_section:
             parent = price_section.find_parent()
             if parent:
                 # 부모 요소에서 가격 숫자 찾기
                 price_text = parent.get_text()
-                # "商品価格: 4,562円" 같은 패턴에서 추출
-                price_match = re.search(r'商品価格[：:]\s*(\d{1,3}(?:,\d{3})*)円', price_text)
+                # "商品価格: 4,562円" 또는 "상품가격: 4,562円" 같은 패턴에서 추출
+                price_match = re.search(f'{price_pattern}[：:]\s*(\d{{1,3}}(?:,\d{{3}})*)円', price_text)
                 if price_match:
                     price = self._parse_price(price_match.group(1))
                     if price:
@@ -680,35 +864,44 @@ class Qoo10Crawler:
                             price_data["original_price"] = original_price
                             break
         
-        # 쿠폰 할인 정보 추출 - 더 정확한 패턴 매칭
-        coupon_section = soup.find(string=re.compile(r'クーポン割引|쿠폰割引|割引', re.I))
+        # 쿠폰 할인 정보 추출 - 더 정확한 패턴 매칭 (일본어-한국어 모두 지원)
+        coupon_pattern = self._create_jp_kr_regex("クーポン割引", "쿠폰할인")
+        discount_pattern = self._create_jp_kr_regex("割引", "할인")
+        coupon_section = soup.find(string=re.compile(f'{coupon_pattern}|{discount_pattern}', re.I))
         if coupon_section:
             parent = coupon_section.find_parent()
             if parent:
                 coupon_text = parent.get_text()
-                # "プラス(\d+)割引" 또는 "最大(\d+)円" 같은 패턴 찾기
-                coupon_match = re.search(r'プラス(\d+)割引|最大(\d+)円|(\d+)円割引', coupon_text)
+                # "プラス(\d+)割引" 또는 "플러스(\d+)할인" 또는 "最大(\d+)円" 또는 "최대(\d+)엔" 같은 패턴 찾기
+                plus_pattern = self._create_jp_kr_regex("プラス", "플러스")
+                max_pattern = self._create_jp_kr_regex("最大", "최대")
+                coupon_match = re.search(f'{plus_pattern}(\d+){discount_pattern}|{max_pattern}(\d+)円|(\d+)円{discount_pattern}', coupon_text)
                 if coupon_match:
                     discount = coupon_match.group(1) or coupon_match.group(2) or coupon_match.group(3)
                     if discount and discount.isdigit():
                         price_data["coupon_discount"] = int(discount)
         
-        # 추가 시도: "クーポン割引_(0)_" 같은 패턴도 확인
+        # 추가 시도: "クーポン割引_(0)_" 또는 "쿠폰할인_(0)_" 같은 패턴도 확인
         if not price_data["coupon_discount"]:
             coupon_text_all = soup.get_text()
-            coupon_match = re.search(r'クーポン割引[_\s]*\((\d+)\)', coupon_text_all)
+            coupon_pattern = self._create_jp_kr_regex("クーポン割引", "쿠폰할인")
+            coupon_match = re.search(f'{coupon_pattern}[_\s]*\((\d+)\)', coupon_text_all)
             if coupon_match:
                 discount = coupon_match.group(1)
                 if discount.isdigit():
                     price_data["coupon_discount"] = int(discount)
         
         # Qポイント 정보 추출 (간단한 버전, 상세 정보는 _extract_qpoint_info에서 추출)
-        qpoint_section = soup.find(string=re.compile(r'Qポイント|Qポイント獲得'))
+        # 일본어-한국어 모두 지원
+        qpoint_pattern = self._create_jp_kr_regex("Qポイント", "Q포인트")
+        qpoint_get_pattern = self._create_jp_kr_regex("Qポイント獲得", "Q포인트획득")
+        qpoint_section = soup.find(string=re.compile(f'{qpoint_pattern}|{qpoint_get_pattern}'))
         if qpoint_section:
             parent = qpoint_section.find_parent()
             if parent:
                 qpoint_text = parent.get_text()
-                qpoint_match = re.search(r'最大(\d+)P', qpoint_text)
+                max_pattern = self._create_jp_kr_regex("最大", "최대")
+                qpoint_match = re.search(f'{max_pattern}(\d+)P', qpoint_text)
                 if qpoint_match:
                     price_data["qpoint_info"] = int(qpoint_match.group(1))
         
@@ -975,12 +1168,13 @@ class Qoo10Crawler:
                 except (ValueError, AttributeError):
                     pass
         
-        # 리뷰 수 추출 (다양한 패턴 시도, 정확도 향상)
+        # 리뷰 수 추출 (다양한 패턴 시도, 정확도 향상) - 일본어-한국어 모두 지원
         if reviews_data["review_count"] == 0:
+            review_pattern = self._create_jp_kr_regex("レビュー", "리뷰")
             review_count_patterns = [
                 ('meta', {'itemprop': 'reviewCount'}),
                 ('meta', {'property': 'product:reviewCount'}),
-                (None, {'string': re.compile(r'レビュー.*\((\d+)\)|리뷰.*\((\d+)\)|review.*\((\d+)\)', re.I)}),
+                (None, {'string': re.compile(f'{review_pattern}.*\\((\\d+)\\)|review.*\\((\\d+)\\)', re.I)}),
             ]
             
             for tag, attrs in review_count_patterns:
@@ -1079,15 +1273,18 @@ class Qoo10Crawler:
             r'Shipping[：:]\s*(\d+)円'
         ]
         
-        # 배송 관련 텍스트 찾기
-        shipping_elem = soup.find(string=re.compile(r'送料|배송비|Shipping|配送'))
+        # 배송 관련 텍스트 찾기 (일본어-한국어 모두 지원)
+        shipping_pattern = self._create_jp_kr_regex("送料", "배송비")
+        delivery_pattern = self._create_jp_kr_regex("配送", "배송")
+        shipping_elem = soup.find(string=re.compile(f'{shipping_pattern}|{delivery_pattern}|Shipping', re.I))
         if shipping_elem:
             parent = shipping_elem.find_parent()
             if parent:
                 shipping_text = parent.get_text(strip=True)
                 
-                # 무료배송 확인
-                if '無料' in shipping_text or 'FREE' in shipping_text.upper() or '무료' in shipping_text:
+                # 무료배송 확인 (일본어-한국어 모두)
+                free_shipping_pattern = self._create_jp_kr_regex("送料無料", "무료배송")
+                if re.search(free_shipping_pattern, shipping_text) or 'FREE' in shipping_text.upper() or '無料' in shipping_text or '무료' in shipping_text:
                     shipping_info["free_shipping"] = True
                     shipping_info["shipping_fee"] = 0
                 else:
@@ -1105,16 +1302,18 @@ class Qoo10Crawler:
                         if numbers:
                             shipping_info["shipping_fee"] = int(numbers[0])
         
-        # 반품 정책 정보 추출
-        return_elem = soup.find(string=re.compile(r'返品|반품|返却|Return'))
+        # 반품 정책 정보 추출 (일본어-한국어 모두 지원)
+        return_pattern = self._create_jp_kr_regex("返品", "반품")
+        return_elem = soup.find(string=re.compile(f'{return_pattern}|返却|Return', re.I))
         if return_elem:
             parent = return_elem.find_parent()
             if parent:
                 return_text = parent.get_text(strip=True)
-                # "返品無料" 또는 "返品無料サービス" 확인
-                if '返品無料' in return_text or '無料返品' in return_text:
+                # "返品無料" 또는 "무료반품" 또는 "返品無料サービス" 확인
+                free_return_pattern = self._create_jp_kr_regex("返品無料", "무료반품")
+                if re.search(free_return_pattern, return_text) or '無料返品' in return_text:
                     shipping_info["return_policy"] = "free_return"
-                elif '返品' in return_text:
+                elif re.search(return_pattern, return_text):
                     shipping_info["return_policy"] = "return_available"
         
         return shipping_info
@@ -1154,31 +1353,40 @@ class Qoo10Crawler:
             "auto_points": None
         }
         
-        # Qポイント 섹션 찾기
-        qpoint_section = soup.find(string=re.compile(r'Qポイント獲得方法|Qポイント|Qポイント獲得', re.I))
+        # Qポイント 섹션 찾기 (일본어-한국어 모두 지원)
+        qpoint_method_pattern = self._create_jp_kr_regex("Qポイント獲得方法", "Q포인트획득방법")
+        qpoint_get_pattern = self._create_jp_kr_regex("Qポイント獲得", "Q포인트획득")
+        qpoint_pattern = self._create_jp_kr_regex("Qポイント", "Q포인트")
+        qpoint_section = soup.find(string=re.compile(f'{qpoint_method_pattern}|{qpoint_get_pattern}|{qpoint_pattern}', re.I))
         if qpoint_section:
             parent = qpoint_section.find_parent()
             if parent:
                 # 부모 요소의 모든 텍스트 추출
                 qpoint_text = parent.get_text()
                 
-                # "受取確認: 最大1P" 패턴 찾기
-                receive_match = re.search(r'受取確認[：:]\s*最大(\d+)P', qpoint_text)
+                # "受取確認: 最大1P" 또는 "수령확인: 최대1P" 패턴 찾기
+                receive_pattern = self._create_jp_kr_regex("受取確認", "수령확인")
+                max_pattern = self._create_jp_kr_regex("最大", "최대")
+                receive_match = re.search(f'{receive_pattern}[：:]\s*{max_pattern}(\d+)P', qpoint_text)
                 if receive_match:
                     qpoint_info["receive_confirmation_points"] = int(receive_match.group(1))
                 
-                # "レビュー作成: 最大20P" 패턴 찾기
-                review_match = re.search(r'レビュー作成[：:]\s*最大(\d+)P', qpoint_text)
+                # "レビュー作成: 最大20P" 또는 "리뷰작성: 최대20P" 패턴 찾기
+                review_create_pattern = self._create_jp_kr_regex("レビュー作成", "리뷰작성")
+                review_match = re.search(f'{review_create_pattern}[：:]\s*{max_pattern}(\d+)P', qpoint_text)
                 if review_match:
                     qpoint_info["review_points"] = int(review_match.group(1))
                 
-                # "最大(\d+)P" 패턴 찾기 (전체 최대 포인트)
-                max_match = re.search(r'最大(\d+)P', qpoint_text)
+                # "最大(\d+)P" 또는 "최대(\d+)P" 패턴 찾기 (전체 최대 포인트)
+                max_pattern = self._create_jp_kr_regex("最大", "최대")
+                max_match = re.search(f'{max_pattern}(\d+)P', qpoint_text)
                 if max_match:
                     qpoint_info["max_points"] = int(max_match.group(1))
                 
-                # "配送完了.*自動.*(\d+)P" 패턴 찾기 (자동 포인트)
-                auto_match = re.search(r'配送完了.*自動.*(\d+)P', qpoint_text)
+                # "配送完了.*自動.*(\d+)P" 또는 "배송완료.*자동.*(\d+)P" 패턴 찾기 (자동 포인트)
+                delivery_complete_pattern = self._create_jp_kr_regex("配送完了", "배송완료")
+                auto_pattern = self._create_jp_kr_regex("自動", "자동")
+                auto_match = re.search(f'{delivery_complete_pattern}.*{auto_pattern}.*(\d+)P', qpoint_text)
                 if auto_match:
                     qpoint_info["auto_points"] = int(auto_match.group(1))
         
@@ -1194,8 +1402,12 @@ class Qoo10Crawler:
             "coupon_text": None
         }
         
-        # 쿠폰 섹션 찾기
-        coupon_section = soup.find(string=re.compile(r'クーポン割引|쿠폰|割引|ショップお気に入り割引', re.I))
+        # 쿠폰 섹션 찾기 (일본어-한국어 모두 지원)
+        coupon_discount_pattern = self._create_jp_kr_regex("クーポン割引", "쿠폰할인")
+        coupon_pattern = self._create_jp_kr_regex("クーポン", "쿠폰")
+        discount_pattern = self._create_jp_kr_regex("割引", "할인")
+        shop_favorite_pattern = self._create_jp_kr_regex("ショップお気に入り割引", "샵즐겨찾기할인")
+        coupon_section = soup.find(string=re.compile(f'{coupon_discount_pattern}|{coupon_pattern}|{discount_pattern}|{shop_favorite_pattern}', re.I))
         if coupon_section:
             parent = coupon_section.find_parent()
             if parent:
@@ -1203,16 +1415,20 @@ class Qoo10Crawler:
                 coupon_text = parent.get_text()
                 coupon_info["coupon_text"] = coupon_text
                 
-                # "プラス(\d+)割引" 또는 "最大(\d+)円" 패턴 찾기
-                discount_match = re.search(r'プラス(\d+)割引|最大(\d+)円', coupon_text)
+                # "プラス(\d+)割引" 또는 "플러스(\d+)할인" 또는 "最大(\d+)円" 또는 "최대(\d+)엔" 패턴 찾기
+                plus_pattern = self._create_jp_kr_regex("プラス", "플러스")
+                max_pattern = self._create_jp_kr_regex("最大", "최대")
+                discount_match = re.search(f'{plus_pattern}(\d+){discount_pattern}|{max_pattern}(\d+)円', coupon_text)
                 if discount_match:
                     discount = discount_match.group(1) or discount_match.group(2)
                     coupon_info["max_discount"] = int(discount) if discount.isdigit() else None
                 
-                # 쿠폰 타입 확인
-                if 'ショップお気に入り' in coupon_text or 'お気に入り登録' in coupon_text:
+                # 쿠폰 타입 확인 (일본어-한국어 모두 지원)
+                shop_favorite_pattern = self._create_jp_kr_regex("ショップお気に入り", "샵즐겨찾기")
+                favorite_register_pattern = self._create_jp_kr_regex("お気に入り登録", "즐겨찾기등록")
+                if re.search(shop_favorite_pattern, coupon_text) or re.search(favorite_register_pattern, coupon_text):
                     coupon_info["coupon_type"] = "shop_favorite"
-                elif 'パスワード' in coupon_text or 'password' in coupon_text.lower():
+                elif 'パスワード' in coupon_text or 'password' in coupon_text.lower() or '비밀번호' in coupon_text:
                     coupon_info["coupon_type"] = "password"
                 else:
                     coupon_info["coupon_type"] = "auto"
@@ -1501,13 +1717,15 @@ class Qoo10Crawler:
         return "Shop 이름 없음"
     
     def _extract_shop_level(self, soup: BeautifulSoup) -> Optional[str]:
-        """Shop 레벨 추출 - 실제 Qoo10 Shop 페이지 구조에 맞게 개선"""
+        """Shop 레벨 추출 - 실제 Qoo10 Shop 페이지 구조에 맞게 개선 (일본어-한국어 모두 지원)"""
         # POWER 95% 같은 패턴 찾기 (우선 확인)
+        power_pattern = self._create_jp_kr_regex("POWER", "파워")
+        power_jp_pattern = self._create_jp_kr_regex("パワー", "파워")
         power_patterns = [
-            r'POWER\s*(\d+)%',
-            r'パワー\s*(\d+)%',
-            r'POWER\s*(\d+)',
-            r'パワー\s*(\d+)'
+            f'{power_pattern}\\s*(\\d+)%',
+            f'{power_jp_pattern}\\s*(\\d+)%',
+            f'{power_pattern}\\s*(\\d+)',
+            f'{power_jp_pattern}\\s*(\\d+)'
         ]
         
         for pattern in power_patterns:
@@ -1522,11 +1740,15 @@ class Qoo10Crawler:
                     elif power_percent >= 70:
                         return "excellent"
         
-        # POWER, 우수 셀러, 일반 셀러 등 텍스트 찾기
-        level_text = soup.find(string=re.compile(r'POWER|パワー|우수|일반|excellent|normal|power', re.I))
+        # POWER, 우수 셀러, 일반 셀러 등 텍스트 찾기 (일본어-한국어 모두 지원)
+        excellent_pattern = self._create_jp_kr_regex("우수", "우수")
+        normal_pattern = self._create_jp_kr_regex("일반", "일반")
+        level_pattern = f'{power_pattern}|{power_jp_pattern}|{excellent_pattern}|{normal_pattern}|excellent|normal|power'
+        level_text = soup.find(string=re.compile(level_pattern, re.I))
         if level_text:
             text = str(level_text).lower()
-            if 'power' in text or 'パワー' in text:
+            power_kr = self._translate_jp_to_kr("パワー").lower()
+            if 'power' in text or 'パワー' in text or power_kr in text:
                 return "power"
             elif 'excellent' in text or '우수' in text:
                 return "excellent"
@@ -1534,7 +1756,8 @@ class Qoo10Crawler:
                 return "normal"
         
         # "byPower grade" 같은 패턴 찾기
-        power_grade = soup.find(string=re.compile(r'byPower\s*grade|Power\s*grade', re.I))
+        bypower_pattern = self._create_jp_kr_regex("byPower", "바이파워")
+        power_grade = soup.find(string=re.compile(f'{bypower_pattern}\\s*grade|Power\\s*grade', re.I))
         if power_grade:
             return "power"
         
@@ -1542,12 +1765,11 @@ class Qoo10Crawler:
     
     def _extract_follower_count(self, soup: BeautifulSoup) -> int:
         """팔로워 수 추출 - 실제 Qoo10 Shop 페이지 구조에 맞게 개선"""
-        # 팔로워 텍스트 찾기 (다양한 패턴 시도)
+        # 팔로워 텍스트 찾기 (다양한 패턴 시도) - 일본어-한국어 모두 지원
+        follower_pattern = self._create_jp_kr_regex("フォロワー", "팔로워")
         follower_patterns = [
-            r'フォロワー[_\s]*(\d{1,3}(?:,\d{3})*)',
-            r'フォロワー[_\s]*(\d+)',
-            r'팔로워[_\s]*(\d{1,3}(?:,\d{3})*)',
-            r'팔로워[_\s]*(\d+)',
+            f'{follower_pattern}[_\\s]*(\\d{{1,3}}(?:,\\d{{3}})*)',
+            f'{follower_pattern}[_\\s]*(\\d+)',
             r'follower[_\s]*(\d{1,3}(?:,\d{3})*)',
             r'follower[_\s]*(\d+)'
         ]
@@ -1565,8 +1787,9 @@ class Qoo10Crawler:
                     except:
                         pass
         
-        # 기본 방법: 팔로워 텍스트 찾기
-        follower_text = soup.find(string=re.compile(r'フォロワー|팔로워|follower', re.I))
+        # 기본 방법: 팔로워 텍스트 찾기 (일본어-한국어 모두 지원)
+        follower_pattern = self._create_jp_kr_regex("フォロワー", "팔로워")
+        follower_text = soup.find(string=re.compile(f'{follower_pattern}|follower', re.I))
         if follower_text:
             parent = follower_text.find_parent()
             if parent:
@@ -1583,13 +1806,15 @@ class Qoo10Crawler:
     
     def _extract_product_count(self, soup: BeautifulSoup) -> int:
         """상품 수 추출 - 실제 Qoo10 Shop 페이지 구조에 맞게 개선"""
-        # "全ての商品 (16)" 같은 패턴 찾기
+        # "全ての商品 (16)" 또는 "전체상품 (16)" 같은 패턴 찾기 (일본어-한국어 모두 지원)
+        all_product_pattern = self._create_jp_kr_regex("全ての商品", "전체상품")
+        product_pattern = self._create_jp_kr_regex("商品", "상품")
+        product_count_pattern = self._create_jp_kr_regex("商品数", "상품수")
         product_patterns = [
-            r'全ての商品\s*\((\d+)\)',
-            r'전체\s*상품\s*\((\d+)\)',
-            r'商品.*\((\d+)\)',
-            r'全ての商品[：:]\s*(\d+)',
-            r'商品数[：:]\s*(\d+)'
+            f'{all_product_pattern}\\s*\\((\\d+)\\)',
+            f'{product_pattern}.*\\((\\d+)\\)',
+            f'{all_product_pattern}[：:]\\s*(\\d+)',
+            f'{product_count_pattern}[：:]\\s*(\\d+)'
         ]
         
         for pattern in product_patterns:
@@ -1720,12 +1945,13 @@ class Qoo10Crawler:
                         thumbnail = 'https://www.qoo10.jp' + thumbnail
                     product["thumbnail"] = thumbnail
             
-            # 3. 브랜드 정보 추출 - <div class="brand_official">
+            # 3. 브랜드 정보 추출 - <div class="brand_official"> (일본어-한국어 번역 지원)
             brand_elem = item.select_one('.brand_official, .brand_official button, .brand_official .txt_brand')
             if brand_elem:
                 brand_text = brand_elem.get_text(strip=True)
                 if brand_text:
-                    product["brand"] = brand_text
+                    # 일본어 텍스트를 한국어로 번역
+                    product["brand"] = self._translate_jp_to_kr(brand_text)
             
             # 4. 가격 정보 추출 - <div class="prc"> <del>정가</del> <strong>판매가</strong>
             prc_elem = item.select_one('.prc, div[class*="prc"]')
@@ -1752,26 +1978,30 @@ class Qoo10Crawler:
                         discount = product["price"]["original_price"] - product["price"]["sale_price"]
                         product["price"]["discount_rate"] = int((discount / product["price"]["original_price"]) * 100)
             
-            # 5. 배송 정보 추출 - <span class="ship_area"> <span class="ship">
+            # 5. 배송 정보 추출 - <span class="ship_area"> <span class="ship"> (일본어-한국어 모두 지원)
             ship_elem = item.select_one('.ship_area .ship, .ship_area, span[class*="ship"]')
             if ship_elem:
                 ship_text = ship_elem.get_text()
-                # "Shipping rate 400엔" 또는 "400엔" 패턴 찾기
-                shipping_match = re.search(r'Shipping\s*rate[：:]\s*(\d{1,3}(?:,\d{3})*)円|送料[：:]\s*(\d{1,3}(?:,\d{3})*)円|(\d{1,3}(?:,\d{3})*)円', ship_text)
+                # "Shipping rate 400엔" 또는 "送料 400엔" 또는 "배송비 400엔" 패턴 찾기
+                shipping_pattern = self._create_jp_kr_regex("送料", "배송비")
+                shipping_match = re.search(f'Shipping\\s*rate[：:]\\s*(\\d{{1,3}}(?:,\\d{{3}})*)円|{shipping_pattern}[：:]\\s*(\\d{{1,3}}(?:,\\d{{3}})*)円|(\\d{{1,3}}(?:,\\d{{3}})*)円', ship_text)
                 if shipping_match:
                     shipping_fee = self._parse_price(shipping_match.group(1) or shipping_match.group(2) or shipping_match.group(3))
                     if shipping_fee:
                         product["shipping_info"]["shipping_fee"] = shipping_fee
                 
-                # 무료배송 조건 추출 (예: "1,500円以上購入の際 送料無料")
-                free_shipping_match = re.search(r'(\d{1,3}(?:,\d{3})*)円\s*以上.*送料無料|(\d{1,3}(?:,\d{3})*)円以上.*無料', ship_text)
+                # 무료배송 조건 추출 (예: "1,500円以上購入の際 送料無料" 또는 "1,500엔 이상구매시 무료배송")
+                free_shipping_pattern = self._create_jp_kr_regex("送料無料", "무료배송")
+                above_pattern = self._create_jp_kr_regex("以上購入", "이상구매")
+                free_shipping_match = re.search(f'(\\d{{1,3}}(?:,\\d{{3}})*)円\\s*{above_pattern}.*{free_shipping_pattern}|(\\d{{1,3}}(?:,\\d{{3}})*)円.*無料', ship_text)
                 if free_shipping_match:
                     threshold = self._parse_price(free_shipping_match.group(1) or free_shipping_match.group(2))
                     if threshold:
                         product["shipping_info"]["free_shipping_threshold"] = threshold
             
-            # 6. 리뷰 정보 추출 (있는 경우)
-            review_elem = item.find(string=re.compile(r'レビュー.*\((\d+)\)', re.I))
+            # 6. 리뷰 정보 추출 (있는 경우) - 일본어-한국어 모두 지원
+            review_pattern = self._create_jp_kr_regex("レビュー", "리뷰")
+            review_elem = item.find(string=re.compile(f'{review_pattern}.*\\((\d+)\\)', re.I))
             if review_elem:
                 review_match = re.search(r'\((\d+)\)', str(review_elem))
                 if review_match:
@@ -1879,12 +2109,14 @@ class Qoo10Crawler:
         # 전체 페이지 텍스트에서 쿠폰 패턴 찾기
         page_text = soup.get_text()
         
-        # 패턴 1: "5,000円以上のご購入で10%off" 같은 형식
+        # 패턴 1: "5,000円以上のご購入で10%off" 또는 "5,000엔 이상구매시 10%off" 같은 형식 (일본어-한국어 모두 지원)
+        above_pattern = self._create_jp_kr_regex("以上", "이상")
+        discount_pattern = self._create_jp_kr_regex("割引", "할인")
         coupon_patterns = [
-            r'(\d{1,3}(?:,\d{3})*)円以上.*?(\d+)%off',  # 금액 이상 구매 시 할인율
-            r'(\d{1,3}(?:,\d{3})*)円以上.*?(\d+)%割引',  # 금액 이상 구매 시 할인율 (일본어)
-            r'(\d+)%off.*?(\d{1,3}(?:,\d{3})*)円以上',  # 할인율 + 최소 금액
-            r'(\d+)%割引.*?(\d{1,3}(?:,\d{3})*)円以上',  # 할인율 + 최소 금액 (일본어)
+            f'(\\d{{1,3}}(?:,\\d{{3}})*)円{above_pattern}.*?(\\d+)%off',  # 금액 이상 구매 시 할인율
+            f'(\\d{{1,3}}(?:,\\d{{3}})*)円{above_pattern}.*?(\\d+)%{discount_pattern}',  # 금액 이상 구매 시 할인율 (일본어-한국어)
+            f'(\\d+)%off.*?(\\d{{1,3}}(?:,\\d{{3}})*)円{above_pattern}',  # 할인율 + 최소 금액
+            f'(\\d+)%{discount_pattern}.*?(\\d{{1,3}}(?:,\\d{{3}})*)円{above_pattern}',  # 할인율 + 최소 금액 (일본어-한국어)
         ]
         
         for pattern in coupon_patterns:
@@ -1931,14 +2163,15 @@ class Qoo10Crawler:
                 # 쿠폰 텍스트 추출
                 discount_text = elem.get_text(strip=True)
                 
-                # 할인율 추출 (다양한 패턴)
+                # 할인율 추출 (다양한 패턴) - 일본어-한국어 모두 지원
+                discount_pattern = self._create_jp_kr_regex("割引", "할인")
                 discount_patterns = [
                     r'(\d+)%off',
                     r'(\d+)%OFF',
-                    r'(\d+)%割引',
+                    f'(\\d+)%{discount_pattern}',
                     r'(\d+)%',
                     r'off\s*(\d+)%',
-                    r'割引\s*(\d+)%'
+                    f'{discount_pattern}\\s*(\\d+)%'
                 ]
                 
                 for pattern in discount_patterns:
@@ -1947,15 +2180,17 @@ class Qoo10Crawler:
                         coupon["discount_rate"] = int(discount_match.group(1))
                         break
                 
-                # 최소 금액 추출 (다양한 패턴)
-                amount_patterns = [
-                    r'(\d{1,3}(?:,\d{3})*)[,円]以上',
-                    r'(\d+)[,円]以上',
-                    r'(\d{1,3}(?:,\d{3})*)[,円]以上の',
-                    r'(\d+)[,円]以上の',
-                    r'(\d{1,3}(?:,\d{3})*)[,円]以上購入',
-                    r'(\d+)[,円]以上購入'
-                ]
+        # 최소 금액 추출 (다양한 패턴) - 일본어-한국어 모두 지원
+        above_pattern = self._create_jp_kr_regex("以上", "이상")
+        above_purchase_pattern = self._create_jp_kr_regex("以上購入", "이상구매")
+        amount_patterns = [
+            f'(\\d{{1,3}}(?:,\\d{{3}})*)[,円]{above_pattern}',
+            f'(\\d+)[,円]{above_pattern}',
+            f'(\\d{{1,3}}(?:,\\d{{3}})*)[,円]{above_pattern}の',
+            f'(\\d+)[,円]{above_pattern}の',
+            f'(\\d{{1,3}}(?:,\\d{{3}})*)[,円]{above_purchase_pattern}',
+            f'(\\d+)[,円]{above_purchase_pattern}'
+        ]
                 
                 for pattern in amount_patterns:
                     amount_match = re.search(pattern, discount_text)

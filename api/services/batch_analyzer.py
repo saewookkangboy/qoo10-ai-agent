@@ -202,18 +202,22 @@ class BatchAnalyzer:
                         analyzer = ProductAnalyzer()
                         analysis_result = await analyzer.analyze(data)
                         
-                        # 추천
+                        # 추천 (페이지 구조 정보 활용)
                         recommender = SalesEnhancementRecommender()
+                        page_structure = data.get("page_structure")
                         recommendations = await recommender.generate_recommendations(
                             data,
-                            analysis_result
+                            analysis_result,
+                            page_structure
                         )
                         
-                        # 체크리스트
+                        # 체크리스트 (페이지 구조 정보 활용)
                         checklist_evaluator = ChecklistEvaluator()
                         checklist_result = await checklist_evaluator.evaluate_checklist(
                             product_data=data,
-                            analysis_result=analysis_result
+                            shop_data=None,
+                            analysis_result=analysis_result,
+                            page_structure=page_structure
                         )
                         
                         # 경쟁사 분석
@@ -235,18 +239,21 @@ class BatchAnalyzer:
                         shop_analyzer = ShopAnalyzer()
                         analysis_result = await shop_analyzer.analyze(data)
                         
-                        # 추천
+                        # 추천 (페이지 구조 정보 활용 - Shop 페이지는 page_structure가 없을 수 있음)
                         recommender = SalesEnhancementRecommender()
                         recommendations = await recommender.generate_shop_recommendations(
                             data,
                             analysis_result
                         )
                         
-                        # 체크리스트
+                        # 체크리스트 (페이지 구조 정보 활용)
                         checklist_evaluator = ChecklistEvaluator()
+                        # Shop 페이지는 page_structure가 없을 수 있으므로 None 전달
                         checklist_result = await checklist_evaluator.evaluate_checklist(
+                            product_data=None,
                             shop_data=data,
-                            analysis_result=analysis_result
+                            analysis_result=analysis_result,
+                            page_structure=None  # Shop 페이지는 page_structure 추출 미구현
                         )
                         
                         result = {
