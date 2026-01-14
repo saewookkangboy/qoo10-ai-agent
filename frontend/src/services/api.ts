@@ -23,7 +23,7 @@ export const analyzeService = {
       const response = await api.post<AnalyzeResponse>('/api/v1/analyze', request, {
         timeout: 10000,  // 분석 시작은 10초 타임아웃 (빠른 응답 필요)
       })
-      return response.data
+    return response.data
     } catch (error: any) {
       if (error.code === 'ECONNABORTED') {
         throw new Error('요청 시간이 초과되었습니다. 다시 시도해주세요.')

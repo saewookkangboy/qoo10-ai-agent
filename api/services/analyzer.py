@@ -20,7 +20,7 @@ class ProductAnalyzer:
     
     async def analyze(self, product_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        상품 데이터 종합 분석 (초기 개발 기준 단순화 버전)
+        상품 데이터 종합 분석
         
         Args:
             product_data: 크롤러에서 수집한 상품 데이터
@@ -28,7 +28,6 @@ class ProductAnalyzer:
         Returns:
             분석 결과 딕셔너리
         """
-        # 필수 분석 항목만 수행
         analysis_result = {
             "overall_score": 0,
             "image_analysis": await self._analyze_images(product_data.get("images", {})),
@@ -36,15 +35,8 @@ class ProductAnalyzer:
             "price_analysis": self._analyze_price(product_data.get("price", {})),
             "review_analysis": self._analyze_reviews(product_data.get("reviews", {})),
             "seo_analysis": self._analyze_seo(product_data),
+            "page_structure_analysis": self._analyze_page_structure(product_data.get("page_structure", {}))
         }
-        
-        # 페이지 구조 분석은 선택적 (있을 때만)
-        page_structure = product_data.get("page_structure")
-        if page_structure:
-            try:
-                analysis_result["page_structure_analysis"] = self._analyze_page_structure(page_structure)
-            except:
-                pass  # 실패해도 무시
         
         # 종합 점수 계산
         analysis_result["overall_score"] = self._calculate_overall_score(analysis_result)
@@ -79,8 +71,8 @@ class ProductAnalyzer:
                                 analysis["thumbnail_quality"] = "small"
                                 analysis["score"] += 20
                         else:
-                            analysis["thumbnail_quality"] = "good"
-                            analysis["score"] += 30
+                        analysis["thumbnail_quality"] = "good"
+                        analysis["score"] += 30
                     else:
                         analysis["thumbnail_quality"] = "poor"
                         analysis["recommendations"].append("썸네일 이미지를 확인할 수 없습니다")
@@ -438,38 +430,20 @@ class ProductAnalyzer:
         return analysis
     
     def _calculate_overall_score(self, analysis_result: Dict[str, Any]) -> int:
-        """종합 점수 계산 (초기 개발 기준 단순화 버전)"""
-        # 필수 분석 항목만 포함
+        """종합 점수 계산"""
         weights = {
-            "image_analysis": 0.25,
-            "description_analysis": 0.25,
-            "price_analysis": 0.20,
+            "image_analysis": 0.20,
+            "description_analysis": 0.20,
+            "price_analysis": 0.15,
             "review_analysis": 0.15,
             "seo_analysis": 0.15,
+            "page_structure_analysis": 0.15
         }
         
-        # 페이지 구조 분석이 있으면 포함
-        if "page_structure_analysis" in analysis_result:
-            # 가중치 재조정
-            weights = {
-                "image_analysis": 0.20,
-                "description_analysis": 0.20,
-                "price_analysis": 0.15,
-                "review_analysis": 0.15,
-                "seo_analysis": 0.15,
-                "page_structure_analysis": 0.15
-            }
-        
         overall = 0
-        total_weight = 0
         for key, weight in weights.items():
             if key in analysis_result:
                 score = analysis_result[key].get("score", 0)
                 overall += score * weight
-                total_weight += weight
-        
-        # 가중치 정규화
-        if total_weight > 0:
-            overall = overall / total_weight
         
         return int(overall)
