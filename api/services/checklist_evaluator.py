@@ -531,19 +531,35 @@ class ChecklistEvaluator:
         return {"passed": False, "recommendation": "체크 함수를 찾을 수 없습니다"}
     
     def _validate_product_data(self, product_data: Dict[str, Any]) -> Dict[str, Any]:
-        """상품 데이터 유효성 검증 및 정제"""
+        """상품 데이터 유효성 검증 및 정제 - 개선된 크롤러 데이터 반영"""
         validated = product_data.copy()
         
-        # 상품명 검증
+        # 상품명 검증 (개선된 크롤러의 제외 패턴 반영)
         product_name = validated.get("product_name", "")
+        exclude_patterns = [
+            "全割引適用後の価格案内", "価格案内", "割引", "クーポン", "Qポイント"
+        ]
         if product_name in ["상품명 없음", "商品名なし", ""]:
             validated["product_name"] = ""
+        else:
+            # 제외 패턴 확인
+            for pattern in exclude_patterns:
+                if pattern in product_name:
+                    validated["product_name"] = ""
+                    break
         
-        # 가격 데이터 검증
+        # 가격 데이터 검증 (개선된 크롤러의 유효성 검증 범위 반영)
         price = validated.get("price", {})
         if isinstance(price, dict):
             sale_price = price.get("sale_price")
             original_price = price.get("original_price")
+            
+            # 개선된 크롤러와 동일한 유효성 검증 범위 (100~1,000,000엔)
+            if sale_price and (sale_price < 100 or sale_price > 1000000):
+                validated["price"]["sale_price"] = None
+            
+            if original_price and (original_price < 100 or original_price > 1000000):
+                validated["price"]["original_price"] = None
             
             # 판매가가 정가보다 높으면 잘못된 데이터
             if sale_price and original_price and sale_price > original_price:
@@ -564,6 +580,15 @@ class ChecklistEvaluator:
                 images["detail_images"] = []
             elif not isinstance(images["detail_images"], list):
                 images["detail_images"] = []
+        
+        # 리뷰 데이터 검증 (fallback 로직 반영)
+        reviews = validated.get("reviews", {})
+        if isinstance(reviews, dict):
+            review_count = reviews.get("review_count", 0)
+            review_texts = reviews.get("reviews", [])
+            # fallback: review_count가 0이지만 reviews 배열에 리뷰가 있으면 배열 길이로 설정
+            if review_count == 0 and isinstance(review_texts, list) and len(review_texts) > 0:
+                validated["reviews"]["review_count"] = len(review_texts)
         
         return validated
     
@@ -724,7 +749,7 @@ class ChecklistEvaluator:
         shop_data: Optional[Dict[str, Any]],
         analysis_result: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """상품 등록 완료 체크 - 실제 추출된 데이터 구조에 맞게 개선 및 정확도 향상"""
+        """상품 등록 완료 체크 - 개선된 크롤러 데이터 반영"""
         if not product_data:
             return {"passed": False, "recommendation": "상품 데이터가 없습니다"}
         
@@ -734,8 +759,19 @@ class ChecklistEvaluator:
         thumbnail = images.get("thumbnail") if isinstance(images, dict) else None
         detail_images = images.get("detail_images", []) if isinstance(images, dict) else []
         
-        # 상품명 확인 (빈 문자열이나 "상품명 없음"이 아닌지 확인)
-        has_name = bool(product_name) and product_name not in ["상품명 없음", "商品名なし", ""] and len(product_name.strip()) > 3
+        # 상품명 확인 (개선된 크롤러의 제외 패턴 반영)
+        # 크롤러에서 제외한 패턴: 가격 안내, 쿠폰 할인, Qポイント 관련 텍스트
+        exclude_patterns = [
+            "全割引適用後の価格案内", "価格案内", "割引", "クーポン", "Qポイント",
+            "상품명 없음", "商品名なし", ""
+        ]
+        has_name = bool(product_name) and len(product_name.strip()) > 3
+        if has_name:
+            # 제외 패턴 확인
+            for pattern in exclude_patterns:
+                if pattern in product_name:
+                    has_name = False
+                    break
         
         # 상품 설명 확인 (최소 길이 확인, HTML 태그 제거 후 길이 확인)
         description_text = description.strip() if description else ""
@@ -843,7 +879,7 @@ class ChecklistEvaluator:
         shop_data: Optional[Dict[str, Any]],
         analysis_result: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """가격 설정 체크 - 실제 추출된 데이터 구조에 맞게 개선 및 정확도 향상"""
+        """가격 설정 체크 - 개선된 크롤러 데이터 반영 (유효성 검증 범위 일치)"""
         if not product_data:
             return {"passed": False, "recommendation": "상품 데이터가 없습니다"}
         
@@ -856,26 +892,34 @@ class ChecklistEvaluator:
         discount_rate = price.get("discount_rate", 0)
         
         # 판매가가 설정되어 있는지 확인 (유효한 범위 내)
+        # 개선된 크롤러와 동일한 유효성 검증 범위 사용 (100~1,000,000엔)
         if not sale_price or sale_price <= 0:
             return {
                 "passed": False,
                 "recommendation": "판매가를 설정하세요"
             }
         
-        # 합리적인 가격 범위 확인 (100엔 ~ 10,000,000엔)
-        if sale_price < 100 or sale_price > 10000000:
+        # 개선된 크롤러와 동일한 유효성 검증 범위 (100엔 ~ 1,000,000엔)
+        if sale_price < 100 or sale_price > 1000000:
             return {
                 "passed": False,
-                "recommendation": f"판매가가 합리적인 범위를 벗어났습니다 ({sale_price}円). 가격을 확인하세요"
+                "recommendation": f"판매가가 합리적인 범위를 벗어났습니다 ({sale_price}円). 가격을 확인하세요 (100~1,000,000엔 범위)"
             }
         
         # 정가와 할인율이 설정되어 있는지 확인 (선택사항이지만 권장)
         if original_price and original_price > 0:
+            # 개선된 크롤러와 동일한 유효성 검증 범위
+            if original_price < 100 or original_price > 1000000:
+                return {
+                    "passed": True,
+                    "recommendation": f"판매가 설정 완료 ({sale_price:,}円). 정가가 유효한 범위를 벗어났습니다 (100~1,000,000엔 범위)"
+                }
+            
             # 정가가 판매가보다 높아야 함
             if original_price <= sale_price:
                 return {
-                    "passed": True,
-                    "recommendation": f"판매가 설정 완료 ({sale_price}円). 정가 설정을 확인하세요 (정가가 판매가보다 높아야 합니다)"
+                    "passed": False,
+                    "recommendation": "정가가 판매가보다 낮거나 같습니다. 정가를 판매가보다 높게 설정하세요"
                 }
             
             # 할인율 계산 검증
@@ -884,12 +928,12 @@ class ChecklistEvaluator:
                 # 할인율이 계산된 값과 크게 다르면 경고
                 return {
                     "passed": True,
-                    "recommendation": f"가격 설정 완료 (판매가: {sale_price}円, 정가: {original_price}円). 할인율을 확인하세요 (계산된 할인율: {calculated_discount}%)"
+                    "recommendation": f"가격 설정 완료 (판매가: {sale_price:,}円, 정가: {original_price:,}円). 할인율을 확인하세요 (계산된 할인율: {calculated_discount}%)"
                 }
             
             return {
                 "passed": True,
-                "recommendation": f"가격 설정 완료 (판매가: {sale_price:,}円, 정가: {original_price:,}円, 할인율: {discount_rate}%)"
+                "recommendation": f"가격 설정 완료 (판매가: {sale_price:,}円, 정가: {original_price:,}円, 할인율: {calculated_discount}%)"
             }
         elif sale_price:
             return {
@@ -1152,17 +1196,44 @@ class ChecklistEvaluator:
         shop_data: Optional[Dict[str, Any]],
         analysis_result: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Qポイント 정보 체크"""
+        """Qポイント 정보 체크 - 개선된 크롤러 데이터 반영"""
         if not product_data:
             return {"passed": False, "recommendation": "상품 데이터가 없습니다"}
         
         qpoint_info = product_data.get("qpoint_info", {})
         if isinstance(qpoint_info, dict):
+            # 개선된 크롤러에서 추출하는 다양한 Qポイント 정보 확인
             max_points = qpoint_info.get("max_points")
+            receive_confirmation_points = qpoint_info.get("receive_confirmation_points")
+            review_points = qpoint_info.get("review_points")
+            auto_points = qpoint_info.get("auto_points")
+            
+            # 하나라도 있으면 통과
             if max_points and max_points > 0:
+                point_details = [f"최대 {max_points}P"]
+                if receive_confirmation_points:
+                    point_details.append(f"수령확인 {receive_confirmation_points}P")
+                if review_points:
+                    point_details.append(f"리뷰작성 {review_points}P")
+                if auto_points:
+                    point_details.append(f"자동 {auto_points}P")
+                
                 return {
                     "passed": True,
-                    "recommendation": f"Qポイント 정보 설정 완료 (최대 {max_points}P)"
+                    "recommendation": f"Qポイント 정보 설정 완료 ({', '.join(point_details)})"
+                }
+            elif receive_confirmation_points or review_points or auto_points:
+                point_details = []
+                if receive_confirmation_points:
+                    point_details.append(f"수령확인 {receive_confirmation_points}P")
+                if review_points:
+                    point_details.append(f"리뷰작성 {review_points}P")
+                if auto_points:
+                    point_details.append(f"자동 {auto_points}P")
+                
+                return {
+                    "passed": True,
+                    "recommendation": f"Qポイント 정보 설정 완료 ({', '.join(point_details)})"
                 }
         elif isinstance(qpoint_info, int) and qpoint_info > 0:
             return {
@@ -1181,22 +1252,29 @@ class ChecklistEvaluator:
         shop_data: Optional[Dict[str, Any]],
         analysis_result: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """반품 정책 체크"""
+        """반품 정책 체크 - 개선된 크롤러 데이터 반영"""
         if not product_data:
             return {"passed": False, "recommendation": "상품 데이터가 없습니다"}
         
         shipping_info = product_data.get("shipping_info", {})
         return_policy = shipping_info.get("return_policy")
         
+        # 개선된 크롤러에서 추출하는 반품 정책 값 확인
         if return_policy == "free_return":
             return {
                 "passed": True,
                 "recommendation": "返品無料 서비스가 설정되어 있어 고객 신뢰도 향상"
             }
-        elif return_policy == "return_available":
+        elif return_policy == "return_available" or return_policy == "return":
             return {
                 "passed": True,
                 "recommendation": "반품 정책이 명시되어 있습니다. 返品無料 서비스 설정을 고려하세요"
+            }
+        elif return_policy:
+            # 기타 반품 정책이 있는 경우
+            return {
+                "passed": True,
+                "recommendation": f"반품 정책이 명시되어 있습니다 ({return_policy}). 返品無料 서비스 설정을 고려하세요"
             }
         else:
             return {
