@@ -6,6 +6,7 @@ httpx==0.25.2
 beautifulsoup4==4.12.2
 lxml==4.9.3
 selenium==4.15.2
+playwright>=1.41.0
 pillow>=10.2.0
 python-dotenv==1.0.0
 aiofiles==23.2.1

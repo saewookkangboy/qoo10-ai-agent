@@ -23,11 +23,12 @@ export default function ScoreGaugeChart({
     if (!chartRef.current) return
 
     const isDark = actualTheme === 'dark'
-    const textColor = isDark ? '#F3F4F6' : '#1F2937'
-    const bgColor = isDark ? '#111827' : '#FFFFFF'
 
     const spec = {
       type: 'gauge',
+      background: 'transparent',
+      width: size,
+      height: size / 2,
       data: [
         {
           id: 'gauge',
@@ -71,14 +72,11 @@ export default function ScoreGaugeChart({
       },
       pointer: {
         visible: false
-      },
-      background: 'transparent'
+      }
     }
 
     const chartInstance = new VChart(spec, {
       dom: chartRef.current,
-      width: size,
-      height: size / 2,
       theme: isDark ? 'dark' : 'light'
     })
 

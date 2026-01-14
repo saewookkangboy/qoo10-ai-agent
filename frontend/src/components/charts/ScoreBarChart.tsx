@@ -23,11 +23,13 @@ export default function ScoreBarChart({ data, height = 300 }: ScoreBarChartProps
 
     const isDark = actualTheme === 'dark'
     const textColor = isDark ? '#F3F4F6' : '#1F2937'
-    const bgColor = isDark ? '#111827' : '#FFFFFF'
     const gridColor = isDark ? '#374151' : '#E5E7EB'
 
     const spec = {
       type: 'bar',
+      background: 'transparent',
+      width: chartRef.current.offsetWidth,
+      height: height,
       data: [
         {
           id: 'scores',
@@ -93,19 +95,20 @@ export default function ScoreBarChart({ data, height = 300 }: ScoreBarChartProps
       ],
       label: {
         visible: true,
+        position: 'top',
+        offset: 5,
         style: {
           fill: textColor,
-          fontSize: 12,
-          fontWeight: 'bold'
+          fontSize: 14,
+          fontWeight: 'bold',
+          fontFamily: 'system-ui, -apple-system, sans-serif'
         },
-        formatMethod: (datum: any) => `${datum.score}`
+        formatMethod: (datum: any) => `${datum.score}점`
       }
     }
 
     const chartInstance = new VChart(spec, {
       dom: chartRef.current,
-      width: chartRef.current.offsetWidth,
-      height: height,
       theme: isDark ? 'dark' : 'light'
     })
 

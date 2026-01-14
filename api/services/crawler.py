@@ -18,6 +18,13 @@ from services.database import CrawlerDatabase
 
 load_dotenv()
 
+# Playwright 임포트 (선택적)
+try:
+    from playwright.async_api import async_playwright, Browser, Page, TimeoutError as PlaywrightTimeoutError
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+
 
 class Qoo10Crawler:
     """Qoo10 페이지 크롤러 (AI 강화 학습 및 방화벽 우회 기능 포함)"""
@@ -164,6 +171,10 @@ class Qoo10Crawler:
         
         # 세션 관리
         self.session_cookies = {}
+        
+        # Playwright 브라우저 인스턴스 (필요시 초기화)
+        self._playwright_browser = None
+        self._playwright_context = None
     
     def _load_proxies(self) -> List[str]:
         """환경 변수에서 프록시 목록 로드"""
@@ -424,18 +435,312 @@ class Qoo10Crawler:
             
             raise
     
-    async def crawl_product(self, url: str) -> Dict[str, Any]:
+    async def _init_playwright(self) -> Optional[Browser]:
+        """Playwright 브라우저 초기화"""
+        if not PLAYWRIGHT_AVAILABLE:
+            return None
+        
+        try:
+            playwright = await async_playwright().start()
+            browser = await playwright.chromium.launch(
+                headless=True,
+                args=['--no-sandbox', '--disable-setuid-sandbox']
+            )
+            self._playwright_browser = browser
+            return browser
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to initialize Playwright: {str(e)}")
+            return None
+    
+    async def _close_playwright(self):
+        """Playwright 브라우저 종료"""
+        if self._playwright_browser:
+            try:
+                await self._playwright_browser.close()
+                self._playwright_browser = None
+            except:
+                pass
+    
+    async def crawl_product_with_playwright(self, url: str) -> Dict[str, Any]:
         """
-        상품 페이지 크롤링 (다양한 URL 형식 지원)
+        Playwright를 사용한 상품 페이지 크롤링 (JavaScript 실행 환경)
         
         Args:
-            url: Qoo10 상품 URL (다양한 형식 지원: /g/XXXXX, /item/.../XXXXX, ?goodscode=XXXXX 등)
+            url: Qoo10 상품 URL
             
         Returns:
             상품 데이터 딕셔너리
         """
         import logging
         logger = logging.getLogger(__name__)
+        
+        if not PLAYWRIGHT_AVAILABLE:
+            raise Exception("Playwright is not available. Please install it: pip install playwright && playwright install")
+        
+        browser = None
+        page = None
+        playwright = None
+        
+        try:
+            # URL 정규화
+            normalized_url = self._normalize_product_url(url)
+            logger.info(f"Playwright crawling product - URL: {normalized_url}")
+            
+            # Playwright 브라우저 초기화
+            playwright = await async_playwright().start()
+            browser = await playwright.chromium.launch(
+                headless=True,
+                args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled']
+            )
+            
+            # 새 컨텍스트 생성
+            context = await browser.new_context(
+                viewport={'width': 1920, 'height': 1080},
+                user_agent=self._get_user_agent(),
+                locale='ja-JP',
+                timezone_id='Asia/Tokyo'
+            )
+            
+            page = await context.new_page()
+            
+            # 페이지 로드
+            logger.debug(f"Loading page: {normalized_url}")
+            await page.goto(normalized_url, wait_until='networkidle', timeout=30000)
+            
+            # 추가 대기 (동적 콘텐츠 로딩)
+            await asyncio.sleep(2)
+            
+            # 스크롤하여 지연 로딩된 콘텐츠 로드
+            await page.evaluate("""
+                async () => {
+                    await new Promise((resolve) => {
+                        let totalHeight = 0;
+                        const distance = 100;
+                        const timer = setInterval(() => {
+                            const scrollHeight = document.body.scrollHeight;
+                            window.scrollBy(0, distance);
+                            totalHeight += distance;
+                            
+                            if(totalHeight >= scrollHeight || totalHeight > 5000){
+                                clearInterval(timer);
+                                resolve();
+                            }
+                        }, 100);
+                    });
+                }
+            """)
+            
+            # 추가 대기
+            await asyncio.sleep(1)
+            
+            # HTML 가져오기
+            html_content = await page.content()
+            soup = BeautifulSoup(html_content, 'lxml')
+            
+            # 상품 데이터 추출 (기존 메서드 재사용)
+            product_code = self._extract_product_code(normalized_url, soup)
+            product_name = self._extract_product_name(soup)
+            
+            product_data = {
+                "url": normalized_url,
+                "product_code": product_code,
+                "product_name": product_name,
+                "crawled_with": "playwright"  # 크롤링 방법 표시
+            }
+            
+            # 각 필드 추출
+            try:
+                product_data["category"] = self._extract_category(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract category: {str(e)}")
+                product_data["category"] = None
+            
+            try:
+                product_data["brand"] = self._extract_brand(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract brand: {str(e)}")
+                product_data["brand"] = None
+            
+            try:
+                product_data["price"] = self._extract_price(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract price: {str(e)}")
+                product_data["price"] = {}
+            
+            try:
+                product_data["images"] = self._extract_images(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract images: {str(e)}")
+                product_data["images"] = {}
+            
+            try:
+                product_data["description"] = self._extract_description(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract description: {str(e)}")
+                product_data["description"] = ""
+            
+            try:
+                product_data["search_keywords"] = self._extract_search_keywords(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract search keywords: {str(e)}")
+                product_data["search_keywords"] = []
+            
+            try:
+                product_data["reviews"] = self._extract_reviews(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract reviews: {str(e)}")
+                product_data["reviews"] = {}
+            
+            try:
+                product_data["seller_info"] = self._extract_seller_info(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract seller info: {str(e)}")
+                product_data["seller_info"] = {}
+            
+            try:
+                product_data["shipping_info"] = self._extract_shipping_info(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract shipping info: {str(e)}")
+                product_data["shipping_info"] = {}
+            
+            try:
+                product_data["is_move_product"] = self._extract_move_product(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract MOVE product flag: {str(e)}")
+                product_data["is_move_product"] = False
+            
+            try:
+                product_data["qpoint_info"] = self._extract_qpoint_info(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract Qpoint info: {str(e)}")
+                product_data["qpoint_info"] = {}
+            
+            try:
+                product_data["coupon_info"] = self._extract_coupon_info(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract coupon info: {str(e)}")
+                product_data["coupon_info"] = {}
+            
+            try:
+                product_data["page_structure"] = self._extract_page_structure(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract page structure: {str(e)}")
+                product_data["page_structure"] = {}
+            
+            # 추가: JavaScript로 동적 로드된 데이터 직접 추출 시도
+            try:
+                # 페이지에서 직접 데이터 추출
+                js_data = await page.evaluate("""
+                    () => {
+                        const data = {};
+                        
+                        // 상품명
+                        const title = document.querySelector('h1') || document.querySelector('title');
+                        if (title) data.product_name = title.textContent.trim();
+                        
+                        // 가격 정보
+                        const priceElements = document.querySelectorAll('[class*="price"], [class*="prc"]');
+                        const prices = [];
+                        priceElements.forEach(el => {
+                            const text = el.textContent.trim();
+                            const match = text.match(/(\d{1,3}(?:,\d{3})*)円/);
+                            if (match) prices.push(match[1].replace(/,/g, ''));
+                        });
+                        data.prices = prices;
+                        
+                        // 리뷰 수
+                        const reviewMatch = document.body.textContent.match(/レビュー\s*(\d+)/);
+                        if (reviewMatch) data.review_count = parseInt(reviewMatch[1]);
+                        
+                        // 평점
+                        const ratingMatch = document.body.textContent.match(/(\d+\.?\d*)\s*\((\d+)\)/);
+                        if (ratingMatch) {
+                            data.rating = parseFloat(ratingMatch[1]);
+                            data.review_count = parseInt(ratingMatch[2]);
+                        }
+                        
+                        return data;
+                    }
+                """)
+                
+                # JavaScript에서 추출한 데이터 병합
+                if js_data.get('product_name') and not product_data.get('product_name'):
+                    product_data['product_name'] = js_data['product_name']
+                
+                if js_data.get('prices'):
+                    if not product_data.get('price', {}).get('sale_price'):
+                        # 가장 작은 가격을 판매가로 추정
+                        prices = [int(p) for p in js_data['prices'] if p.isdigit()]
+                        if prices:
+                            product_data.setdefault('price', {})['sale_price'] = min(prices)
+                
+                if js_data.get('review_count') and not product_data.get('reviews', {}).get('review_count'):
+                    product_data.setdefault('reviews', {})['review_count'] = js_data['review_count']
+                
+                if js_data.get('rating') and not product_data.get('reviews', {}).get('rating'):
+                    product_data.setdefault('reviews', {})['rating'] = js_data['rating']
+                    
+            except Exception as e:
+                logger.warning(f"Failed to extract JS data: {str(e)}")
+            
+            logger.info(f"Playwright crawling completed - Product: {product_name or 'Unknown'}, Code: {product_code or 'N/A'}")
+            
+            # 데이터베이스 저장
+            try:
+                self.db.save_crawled_product(product_data)
+            except Exception as e:
+                logger.warning(f"Failed to save to database: {str(e)}")
+            
+            return product_data
+        
+        except PlaywrightTimeoutError as e:
+            error_msg = f"Playwright timeout error: {str(e)}"
+            logger.error(error_msg)
+            raise Exception(error_msg)
+        except Exception as e:
+            error_msg = f"Error in Playwright crawling: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            raise Exception(error_msg)
+        finally:
+            # 리소스 정리
+            if page:
+                try:
+                    await page.close()
+                except:
+                    pass
+            if browser:
+                try:
+                    await browser.close()
+                except:
+                    pass
+            if playwright:
+                try:
+                    await playwright.stop()
+                except:
+                    pass
+    
+    async def crawl_product(self, url: str, use_playwright: bool = False) -> Dict[str, Any]:
+        """
+        상품 페이지 크롤링 (다양한 URL 형식 지원)
+        
+        Args:
+            url: Qoo10 상품 URL (다양한 형식 지원: /g/XXXXX, /item/.../XXXXX, ?goodscode=XXXXX 등)
+            use_playwright: True이면 Playwright 사용, False이면 기본 HTTP 크롤링 (기본값: False)
+            
+        Returns:
+            상품 데이터 딕셔너리
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Playwright 사용 요청 시
+        if use_playwright:
+            if PLAYWRIGHT_AVAILABLE:
+                return await self.crawl_product_with_playwright(url)
+            else:
+                logger.warning("Playwright not available, falling back to HTTP crawling")
         
         try:
             # URL 정규화 (다양한 형식을 표준 형식으로 변환 시도)
@@ -478,6 +783,7 @@ class Qoo10Crawler:
                 "url": normalized_url,  # 정규화된 URL 사용
                 "product_code": product_code,
                 "product_name": product_name,
+                "crawled_with": "httpx"  # 크롤링 방법 표시
             }
             
             # 각 필드를 안전하게 추출
@@ -1063,10 +1369,12 @@ class Qoo10Crawler:
         
         return price_data
     
-    def _parse_price(self, price_text: str) -> Optional[int]:
+    def _parse_price(self, price_text: Optional[str]) -> Optional[int]:
         """가격 텍스트를 숫자로 변환"""
+        if not price_text:
+            return None
         # 숫자와 쉼표만 추출
-        numbers = re.sub(r'[^\d,]', '', price_text.replace(',', ''))
+        numbers = re.sub(r'[^\d,]', '', str(price_text).replace(',', ''))
         try:
             return int(numbers) if numbers else None
         except:
@@ -1673,9 +1981,9 @@ class Qoo10Crawler:
         
         return structure
     
-    async def crawl_shop(self, url: str) -> Dict[str, Any]:
+    async def crawl_shop_with_playwright(self, url: str) -> Dict[str, Any]:
         """
-        Shop 페이지 크롤링
+        Playwright를 사용한 Shop 페이지 크롤링 (JavaScript 실행 환경)
         
         Args:
             url: Qoo10 Shop URL
@@ -1683,6 +1991,197 @@ class Qoo10Crawler:
         Returns:
             Shop 데이터 딕셔너리
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        if not PLAYWRIGHT_AVAILABLE:
+            raise Exception("Playwright is not available. Please install it: pip install playwright && playwright install")
+        
+        browser = None
+        page = None
+        playwright = None
+        
+        try:
+            logger.info(f"Playwright crawling shop - URL: {url}")
+            
+            # Playwright 브라우저 초기화
+            playwright = await async_playwright().start()
+            browser = await playwright.chromium.launch(
+                headless=True,
+                args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled']
+            )
+            
+            # 새 컨텍스트 생성
+            context = await browser.new_context(
+                viewport={'width': 1920, 'height': 1080},
+                user_agent=self._get_user_agent(),
+                locale='ja-JP',
+                timezone_id='Asia/Tokyo'
+            )
+            
+            page = await context.new_page()
+            
+            # 페이지 로드
+            logger.debug(f"Loading shop page: {url}")
+            await page.goto(url, wait_until='networkidle', timeout=30000)
+            
+            # 추가 대기 (동적 콘텐츠 로딩)
+            await asyncio.sleep(2)
+            
+            # 스크롤하여 지연 로딩된 콘텐츠 로드
+            await page.evaluate("""
+                async () => {
+                    await new Promise((resolve) => {
+                        let totalHeight = 0;
+                        const distance = 100;
+                        const timer = setInterval(() => {
+                            const scrollHeight = document.body.scrollHeight;
+                            window.scrollBy(0, distance);
+                            totalHeight += distance;
+                            
+                            if(totalHeight >= scrollHeight || totalHeight > 10000){
+                                clearInterval(timer);
+                                resolve();
+                            }
+                        }, 100);
+                    });
+                }
+            """)
+            
+            # 추가 대기
+            await asyncio.sleep(1)
+            
+            # HTML 가져오기
+            html_content = await page.content()
+            soup = BeautifulSoup(html_content, 'lxml')
+            
+            # Shop 데이터 추출 (기존 메서드 재사용)
+            shop_data = {
+                "url": url,
+                "shop_id": self._extract_shop_id(url),
+                "shop_name": self._extract_shop_name(soup),
+                "shop_level": self._extract_shop_level(soup),
+                "follower_count": self._extract_follower_count(soup),
+                "product_count": self._extract_product_count(soup),
+                "categories": self._extract_shop_categories(soup),
+                "products": self._extract_shop_products(soup),
+                "coupons": self._extract_shop_coupons(soup),
+                "crawled_with": "playwright"  # 크롤링 방법 표시
+            }
+            
+            # JavaScript로 동적 로드된 데이터 직접 추출 시도
+            try:
+                js_data = await page.evaluate("""
+                    () => {
+                        const data = {};
+                        
+                        // Shop 이름
+                        const shopName = document.querySelector('h1') || document.querySelector('.shop-name');
+                        if (shopName) data.shop_name = shopName.textContent.trim();
+                        
+                        // 팔로워 수
+                        const followerMatch = document.body.textContent.match(/フォロワー[_\s]*(\d{1,3}(?:,\d{3})*)/);
+                        if (followerMatch) {
+                            data.follower_count = parseInt(followerMatch[1].replace(/,/g, ''));
+                        }
+                        
+                        // 상품 수
+                        const productMatch = document.body.textContent.match(/全ての商品[_\s]*\((\d+)\)/);
+                        if (productMatch) {
+                            data.product_count = parseInt(productMatch[1]);
+                        }
+                        
+                        // POWER 레벨
+                        const powerMatch = document.body.textContent.match(/POWER[_\s]*(\d+)%/);
+                        if (powerMatch) {
+                            data.power_level = parseInt(powerMatch[1]);
+                        }
+                        
+                        // 상품 목록 (간단한 정보)
+                        const productItems = document.querySelectorAll('.item, .product-item, div[class*="item"]');
+                        data.product_items_count = productItems.length;
+                        
+                        return data;
+                    }
+                """)
+                
+                # JavaScript에서 추출한 데이터 병합
+                if js_data.get('shop_name') and not shop_data.get('shop_name'):
+                    shop_data['shop_name'] = js_data['shop_name']
+                
+                if js_data.get('follower_count') and not shop_data.get('follower_count'):
+                    shop_data['follower_count'] = js_data['follower_count']
+                
+                if js_data.get('product_count') and not shop_data.get('product_count'):
+                    shop_data['product_count'] = js_data['product_count']
+                
+                if js_data.get('power_level'):
+                    if js_data['power_level'] >= 90:
+                        shop_data['shop_level'] = 'power'
+                    elif js_data['power_level'] >= 70:
+                        shop_data['shop_level'] = 'excellent'
+                
+            except Exception as e:
+                logger.warning(f"Failed to extract JS data: {str(e)}")
+            
+            logger.info(f"Playwright shop crawling completed - Shop: {shop_data.get('shop_name', 'Unknown')}, ID: {shop_data.get('shop_id', 'N/A')}")
+            
+            # 데이터베이스 저장
+            if hasattr(self.db, 'save_crawled_shop'):
+                try:
+                    self.db.save_crawled_shop(shop_data)
+                except Exception as e:
+                    logger.warning(f"Failed to save to database: {str(e)}")
+            
+            return shop_data
+        
+        except PlaywrightTimeoutError as e:
+            error_msg = f"Playwright timeout error: {str(e)}"
+            logger.error(error_msg)
+            raise Exception(error_msg)
+        except Exception as e:
+            error_msg = f"Error in Playwright shop crawling: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            raise Exception(error_msg)
+        finally:
+            # 리소스 정리
+            if page:
+                try:
+                    await page.close()
+                except:
+                    pass
+            if browser:
+                try:
+                    await browser.close()
+                except:
+                    pass
+            if playwright:
+                try:
+                    await playwright.stop()
+                except:
+                    pass
+    
+    async def crawl_shop(self, url: str, use_playwright: bool = False) -> Dict[str, Any]:
+        """
+        Shop 페이지 크롤링
+        
+        Args:
+            url: Qoo10 Shop URL
+            use_playwright: True이면 Playwright 사용, False이면 기본 HTTP 크롤링 (기본값: False)
+            
+        Returns:
+            Shop 데이터 딕셔너리
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Playwright 사용 요청 시
+        if use_playwright:
+            if PLAYWRIGHT_AVAILABLE:
+                return await self.crawl_shop_with_playwright(url)
+            else:
+                logger.warning("Playwright not available, falling back to HTTP crawling")
+        
         try:
             # HTTP 요청
             response = await self._make_request(url)
@@ -1700,7 +2199,8 @@ class Qoo10Crawler:
                 "product_count": self._extract_product_count(soup),
                 "categories": self._extract_shop_categories(soup),
                 "products": self._extract_shop_products(soup),
-                "coupons": self._extract_shop_coupons(soup)
+                "coupons": self._extract_shop_coupons(soup),
+                "crawled_with": "httpx"  # 크롤링 방법 표시
             }
             
             # 데이터베이스에 저장 (메서드가 있는 경우만)
@@ -2033,9 +2533,17 @@ class Qoo10Crawler:
                 shipping_pattern = self._create_jp_kr_regex("送料", "배송비")
                 shipping_match = re.search(f'Shipping\\s*rate[：:]\\s*(\\d{{1,3}}(?:,\\d{{3}})*)円|{shipping_pattern}[：:]\\s*(\\d{{1,3}}(?:,\\d{{3}})*)円|(\\d{{1,3}}(?:,\\d{{3}})*)円', ship_text)
                 if shipping_match:
-                    shipping_fee = self._parse_price(shipping_match.group(1) or shipping_match.group(2) or shipping_match.group(3))
-                    if shipping_fee:
-                        product["shipping_info"]["shipping_fee"] = shipping_fee
+                    # 그룹 중 None이 아닌 첫 번째 값 사용
+                    shipping_fee_text = None
+                    for i in range(1, 4):
+                        group_value = shipping_match.group(i)
+                        if group_value:
+                            shipping_fee_text = group_value
+                            break
+                    if shipping_fee_text:
+                        shipping_fee = self._parse_price(shipping_fee_text)
+                        if shipping_fee:
+                            product["shipping_info"]["shipping_fee"] = shipping_fee
                 
                 # 무료배송 조건 추출 (예: "1,500円以上購入の際 送料無料" 또는 "1,500엔 이상구매시 무료배송")
                 free_shipping_pattern = self._create_jp_kr_regex("送料無料", "무료배송")
@@ -2213,7 +2721,7 @@ class Qoo10Crawler:
                 # 쿠폰 텍스트 추출 - 안전하게 처리
                 discount_text = ""
                 try:
-                    discount_text = elem.get_text(strip=True) if elem else ""
+                    discount_text = elem.get_text(strip=True)
                     if not discount_text:
                         continue
                 except (AttributeError, TypeError):

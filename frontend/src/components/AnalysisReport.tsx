@@ -7,7 +7,6 @@ import CompetitorComparisonCard from './CompetitorComparisonCard'
 import DownloadButton from './DownloadButton'
 import HelpTooltip from './HelpTooltip'
 import ThemeToggle from './ThemeToggle'
-import ScoreBarChart from './charts/ScoreBarChart'
 
 interface AnalysisReportProps {
   result: {
@@ -90,11 +89,16 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
             </div>
             
             {/* 긴급 개선 항목 */}
-            {highPriorityRecs.length > 0 && (
+            {highPriorityRecs.length > 0 ? (
               <div className="px-4 sm:px-6 py-4 sm:py-6 bg-red-50 dark:bg-red-900/20 border border-red-500 dark:border-red-400 rounded-xl flex flex-col justify-center hover:shadow-md transition-all duration-200">
                 <div className="text-xs sm:text-sm font-medium text-red-600 dark:text-red-400 mb-2">긴급 개선</div>
                 <div className="text-2xl sm:text-3xl font-bold text-red-600 dark:text-red-400 mb-1">{highPriorityRecs.length}</div>
                 <div className="text-xs text-gray-600 dark:text-gray-400">개 항목</div>
+              </div>
+            ) : (
+              <div className="px-4 sm:px-6 py-4 sm:py-6 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl flex flex-col justify-center hover:shadow-md transition-all duration-200">
+                <div className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">긴급 개선</div>
+                <div className="text-sm sm:text-base text-gray-500 dark:text-gray-400">긴급 항목 없음</div>
               </div>
             )}
           </div>
@@ -102,7 +106,6 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
 
         {/* 핵심 지표 카드 그리드 - 반응형 */}
         {product_analysis && (
-          <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-4 sm:mb-6">
             <ScoreCard
               title="이미지"
@@ -125,23 +128,6 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
               analysis={product_analysis.review_analysis}
             />
           </div>
-            
-            {/* 점수 비교 바 차트 */}
-            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 sm:p-6 mb-4 sm:mb-6 transition-colors">
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-                📊 점수 비교
-              </h2>
-              <ScoreBarChart
-                data={[
-                  { category: '이미지', score: product_analysis.image_analysis.score, color: '#0066CC' },
-                  { category: '설명', score: product_analysis.description_analysis.score, color: '#00AA44' },
-                  { category: '가격', score: product_analysis.price_analysis.score, color: '#FF9900' },
-                  { category: '리뷰', score: product_analysis.review_analysis.score, color: '#CC0000' },
-                ]}
-                height={250}
-              />
-            </div>
-          </>
         )}
 
         {/* 탭 기반 결과 섹션 */}
@@ -268,8 +254,8 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
           </div>
         )}
 
-        {/* 리포트 다운로드 버튼 (Phase 2) - 숨김 처리 */}
-        {false && analysisId && (
+        {/* 리포트 다운로드 버튼 (Phase 2) */}
+        {analysisId && (
         <div className="mt-4 sm:mt-6 bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 sm:p-6 transition-colors">
           <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
             📥 리포트 다운로드
@@ -278,9 +264,9 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
             분석 결과를 PDF, Excel, 또는 Markdown 형식으로 다운로드할 수 있습니다.
           </p>
           <div className="flex flex-wrap gap-3">
-            <DownloadButton format="pdf" label="PDF 다운로드" color="bg-red-600 hover:bg-red-700" analysisId={analysisId!} />
-            <DownloadButton format="excel" label="Excel 다운로드" color="bg-green-600 hover:bg-green-700" analysisId={analysisId!} />
-            <DownloadButton format="markdown" label="Markdown 다운로드" color="bg-blue-600 hover:bg-blue-700" analysisId={analysisId!} />
+            <DownloadButton format="pdf" label="PDF 다운로드" color="bg-red-600 hover:bg-red-700" analysisId={analysisId} />
+            <DownloadButton format="excel" label="Excel 다운로드" color="bg-green-600 hover:bg-green-700" analysisId={analysisId} />
+            <DownloadButton format="markdown" label="Markdown 다운로드" color="bg-blue-600 hover:bg-blue-700" analysisId={analysisId} />
           </div>
         </div>
         )}
