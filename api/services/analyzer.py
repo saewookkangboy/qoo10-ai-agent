@@ -155,15 +155,36 @@ class ProductAnalyzer:
         return analysis
     
     def _analyze_price(self, price_data: Dict[str, Any]) -> Dict[str, Any]:
-        """가격 분석"""
+        """가격 분석 (개선된 크롤러 데이터 반영)"""
+        # 유효성 검증된 가격만 사용 (100~1,000,000엔 범위)
+        sale_price = price_data.get("sale_price")
+        original_price = price_data.get("original_price")
+        
+        # 유효성 검증
+        if sale_price and not (100 <= sale_price <= 1000000):
+            sale_price = None
+        if original_price and not (100 <= original_price <= 1000000):
+            original_price = None
+        
+        # 할인율 계산 (유효한 가격이 있을 때만)
+        discount_rate = price_data.get("discount_rate", 0)
+        if sale_price and original_price and original_price > sale_price:
+            calculated_discount = int((original_price - sale_price) / original_price * 100)
+            discount_rate = calculated_discount
+        
         analysis = {
-            "score": 70,  # 기본 점수
-            "sale_price": price_data.get("sale_price"),
-            "original_price": price_data.get("original_price"),
-            "discount_rate": price_data.get("discount_rate", 0),
+            "score": 70 if sale_price else 0,  # 가격이 없으면 기본 점수 0
+            "sale_price": sale_price,
+            "original_price": original_price,
+            "discount_rate": discount_rate,
             "positioning": "unknown",
             "recommendations": []
         }
+        
+        # 가격이 없으면 추출 실패로 간주
+        if not sale_price:
+            analysis["recommendations"].append("가격 정보를 확인할 수 없습니다. 크롤링 로직을 확인하세요")
+            return analysis
         
         # 할인율 평가
         discount = analysis["discount_rate"]
@@ -176,7 +197,6 @@ class ProductAnalyzer:
             analysis["score"] += 10
         
         # 가격 심리학 (9,800엔 vs 10,000엔)
-        sale_price = analysis["sale_price"]
         if sale_price:
             last_digits = sale_price % 1000
             if last_digits < 100:  # 예: 9,800엔
@@ -187,15 +207,20 @@ class ProductAnalyzer:
         return analysis
     
     def _analyze_reviews(self, reviews_data: Dict[str, Any]) -> Dict[str, Any]:
-        """리뷰 분석"""
+        """리뷰 분석 (개선된 크롤러 데이터 반영)"""
         rating = reviews_data.get("rating", 0.0)
         review_count = reviews_data.get("review_count", 0)
         review_texts = reviews_data.get("reviews", [])
+        
+        # fallback: review_count가 0이지만 reviews 배열에 리뷰가 있으면 배열 길이 사용
+        if review_count == 0 and len(review_texts) > 0:
+            review_count = len(review_texts)
         
         analysis = {
             "score": 0,
             "rating": rating,
             "review_count": review_count,
+            "reviews": review_texts,  # 리포트에서 사용할 수 있도록 포함
             "negative_ratio": 0.0,
             "recommendations": []
         }
@@ -208,9 +233,11 @@ class ProductAnalyzer:
         elif rating >= 3.5:
             analysis["score"] += 20
             analysis["recommendations"].append("평점을 4.0 이상으로 향상시키세요")
-        else:
+        elif rating > 0:
             analysis["score"] += 10
             analysis["recommendations"].append("상품 품질 및 서비스를 개선하여 평점을 높이세요")
+        else:
+            analysis["recommendations"].append("평점 정보를 확인할 수 없습니다")
         
         # 리뷰 수 평가
         if review_count >= 50:
@@ -220,9 +247,11 @@ class ProductAnalyzer:
         elif review_count >= 10:
             analysis["score"] += 20
             analysis["recommendations"].append("리뷰를 더 많이 받기 위해 샘플마켓 참가를 고려하세요")
-        else:
+        elif review_count > 0:
             analysis["score"] += 10
             analysis["recommendations"].append("리뷰가 부족합니다. 최소 10개 이상의 리뷰를 확보하세요")
+        else:
+            analysis["recommendations"].append("리뷰 정보를 확인할 수 없습니다. 크롤링 로직을 확인하세요")
         
         # 부정 리뷰 패턴 감지
         negative_keywords = ["悪い", "最悪", "ダメ", "問題", "不満", "返品", "配送", "遅い"]

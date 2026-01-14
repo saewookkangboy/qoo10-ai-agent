@@ -123,8 +123,15 @@ class ReportGenerator:
                 ws[f'A{row}'].fill = header_fill
                 row += 1
                 
+                # 상품명 (개선된 추출 로직 반영)
+                product_name = product_data.get('product_name', 'N/A')
+                if product_name and product_name != '상품명 없음' and product_name != 'N/A':
+                    product_name_display = product_name
+                else:
+                    product_name_display = 'N/A (추출 실패)'
+                
                 ws[f'A{row}'] = "상품명"
-                ws[f'B{row}'] = product_data.get('product_name', 'N/A')
+                ws[f'B{row}'] = product_name_display
                 row += 1
                 ws[f'A{row}'] = "상품 코드"
                 ws[f'B{row}'] = product_data.get('product_code', 'N/A')
@@ -134,7 +141,55 @@ class ReportGenerator:
                 row += 1
                 ws[f'A{row}'] = "브랜드"
                 ws[f'B{row}'] = product_data.get('brand', 'N/A')
-                row += 2
+                row += 1
+                
+                # 가격 정보 (유효성 검증된 값만 표시)
+                price_data = product_data.get('price', {})
+                sale_price = price_data.get('sale_price')
+                original_price = price_data.get('original_price')
+                
+                ws[f'A{row}'] = "판매가"
+                if sale_price and 100 <= sale_price <= 1000000:
+                    ws[f'B{row}'] = f"{sale_price:,}円"
+                else:
+                    ws[f'B{row}'] = "N/A"
+                row += 1
+                
+                if original_price and 100 <= original_price <= 1000000:
+                    ws[f'A{row}'] = "정가"
+                    ws[f'B{row}'] = f"{original_price:,}円"
+                    row += 1
+                    if sale_price and original_price > sale_price:
+                        discount_rate = int((original_price - sale_price) / original_price * 100)
+                        ws[f'A{row}'] = "할인율"
+                        ws[f'B{row}'] = f"{discount_rate}%"
+                        row += 1
+                
+                # Qポイント 정보
+                qpoint_info = product_data.get('qpoint_info', {})
+                if qpoint_info and any(qpoint_info.values()):
+                    qpoint_lines = []
+                    if qpoint_info.get('max_points'):
+                        qpoint_lines.append(f"최대 {qpoint_info['max_points']}P")
+                    if qpoint_info.get('receive_confirmation_points'):
+                        qpoint_lines.append(f"수령확인 {qpoint_info['receive_confirmation_points']}P")
+                    if qpoint_info.get('review_points'):
+                        qpoint_lines.append(f"리뷰작성 {qpoint_info['review_points']}P")
+                    if qpoint_lines:
+                        ws[f'A{row}'] = "Qポイント"
+                        ws[f'B{row}'] = ', '.join(qpoint_lines)
+                        row += 1
+                
+                # 반품 정보
+                shipping_info = product_data.get('shipping_info', {})
+                return_policy = shipping_info.get('return_policy')
+                if return_policy:
+                    return_text = "무료반품 가능" if return_policy == "free_return" else "반품 가능"
+                    ws[f'A{row}'] = "반품 정책"
+                    ws[f'B{row}'] = return_text
+                    row += 1
+                
+                row += 1
             
             # Shop 정보
             if shop_data:
@@ -257,12 +312,64 @@ class ReportGenerator:
         # 상품 정보
         if product_data:
             doc.add_heading('상품 정보', level=1)
-            self._add_info_table(doc, [
-                ("상품명", product_data.get('product_name', 'N/A')),
+            
+            # 상품명 (개선된 추출 로직 반영)
+            product_name = product_data.get('product_name', 'N/A')
+            if product_name and product_name != '상품명 없음' and product_name != 'N/A':
+                product_name_display = product_name
+            else:
+                product_name_display = 'N/A (추출 실패)'
+            
+            info_items = [
+                ("상품명", product_name_display),
                 ("상품 코드", product_data.get('product_code', 'N/A')),
                 ("카테고리", product_data.get('category', 'N/A')),
                 ("브랜드", product_data.get('brand', 'N/A')),
-            ])
+            ]
+            
+            # 가격 정보 (유효성 검증된 값만 표시)
+            price_data = product_data.get('price', {})
+            sale_price = price_data.get('sale_price')
+            original_price = price_data.get('original_price')
+            
+            if sale_price and 100 <= sale_price <= 1000000:
+                info_items.append(("판매가", f"{sale_price:,}円"))
+            else:
+                info_items.append(("판매가", "N/A"))
+            
+            if original_price and 100 <= original_price <= 1000000:
+                info_items.append(("정가", f"{original_price:,}円"))
+                if sale_price and original_price > sale_price:
+                    discount_rate = int((original_price - sale_price) / original_price * 100)
+                    info_items.append(("할인율", f"{discount_rate}%"))
+            
+            # Qポイント 정보
+            qpoint_info = product_data.get('qpoint_info', {})
+            if qpoint_info and any(qpoint_info.values()):
+                qpoint_lines = []
+                if qpoint_info.get('max_points'):
+                    qpoint_lines.append(f"최대 {qpoint_info['max_points']}P")
+                if qpoint_info.get('receive_confirmation_points'):
+                    qpoint_lines.append(f"수령확인 {qpoint_info['receive_confirmation_points']}P")
+                if qpoint_info.get('review_points'):
+                    qpoint_lines.append(f"리뷰작성 {qpoint_info['review_points']}P")
+                if qpoint_lines:
+                    info_items.append(("Qポイント", ', '.join(qpoint_lines)))
+                else:
+                    info_items.append(("Qポイント", "N/A"))
+            else:
+                info_items.append(("Qポイント", "N/A"))
+            
+            # 반품 정보
+            shipping_info = product_data.get('shipping_info', {})
+            return_policy = shipping_info.get('return_policy')
+            if return_policy:
+                return_text = "무료반품 가능" if return_policy == "free_return" else "반품 가능"
+                info_items.append(("반품 정책", return_text))
+            else:
+                info_items.append(("반품 정책", "N/A"))
+            
+            self._add_info_table(doc, info_items)
             doc.add_paragraph()
         
         # Shop 정보
@@ -431,7 +538,7 @@ class ReportGenerator:
         doc.add_paragraph()
     
     def _add_price_analysis_section(self, doc: Document, analysis: Dict[str, Any]):
-        """가격 분석 섹션 추가"""
+        """가격 분석 섹션 추가 (개선된 크롤러 데이터 반영)"""
         doc.add_heading('가격 분석', level=2)
         
         score = analysis.get('score', 0)
@@ -440,14 +547,22 @@ class ReportGenerator:
         score_para.add_run(f'{score}/100').bold = True
         score_para.add_run(f' ({self._get_grade(score)})')
         
-        sale_price = analysis.get('sale_price', 0) or 0
-        original_price = analysis.get('original_price', 0) or 0
+        # 유효성 검증된 가격만 표시 (100~1,000,000엔 범위)
+        sale_price = analysis.get('sale_price')
+        original_price = analysis.get('original_price')
         discount_rate = analysis.get('discount_rate', 0) or 0
         
-        doc.add_paragraph(f'판매가: {sale_price:,}円')
-        if original_price > 0:
+        if sale_price and 100 <= sale_price <= 1000000:
+            doc.add_paragraph(f'판매가: {sale_price:,}円')
+        else:
+            doc.add_paragraph('판매가: N/A (유효하지 않은 값)')
+        
+        if original_price and 100 <= original_price <= 1000000:
             doc.add_paragraph(f'정가: {original_price:,}円')
-        if discount_rate > 0:
+            if sale_price and original_price > sale_price:
+                calculated_discount = int((original_price - sale_price) / original_price * 100)
+                doc.add_paragraph(f'할인율: {calculated_discount}%')
+        elif discount_rate > 0:
             doc.add_paragraph(f'할인율: {discount_rate}%')
         
         positioning = analysis.get('positioning', '')
@@ -462,7 +577,7 @@ class ReportGenerator:
         doc.add_paragraph()
     
     def _add_review_analysis_section(self, doc: Document, analysis: Dict[str, Any]):
-        """리뷰 분석 섹션 추가"""
+        """리뷰 분석 섹션 추가 (개선된 크롤러 데이터 반영)"""
         doc.add_heading('리뷰 분석', level=2)
         
         score = analysis.get('score', 0)
@@ -473,10 +588,22 @@ class ReportGenerator:
         
         rating = analysis.get('rating', 0) or 0.0
         review_count = analysis.get('review_count', 0) or 0
+        # fallback: reviews 배열 길이 사용
+        reviews_list = analysis.get('reviews', [])
+        if review_count == 0 and len(reviews_list) > 0:
+            review_count = len(reviews_list)
+        
         negative_ratio = analysis.get('negative_ratio', 0.0) or 0.0
         
         doc.add_paragraph(f'평점: {rating:.1f}/5.0')
-        doc.add_paragraph(f'리뷰 수: {review_count:,}개')
+        if review_count > 0:
+            doc.add_paragraph(f'리뷰 수: {review_count:,}개')
+        else:
+            doc.add_paragraph('리뷰 수: 0개 (또는 추출 실패)')
+        
+        if len(reviews_list) > 0:
+            doc.add_paragraph(f'추출된 리뷰 텍스트: {len(reviews_list)}개')
+        
         if negative_ratio > 0:
             doc.add_paragraph(f'부정 리뷰 비율: {negative_ratio:.1%}')
         
@@ -615,10 +742,79 @@ class ReportGenerator:
             lines.append("")
             lines.append("| 항목 | 내용 |")
             lines.append("|------|------|")
-            lines.append(f"| 상품명 | {product_data.get('product_name', 'N/A')} |")
+            
+            # 상품명 (개선된 추출 로직 반영)
+            product_name = product_data.get('product_name', 'N/A')
+            if product_name and product_name != '상품명 없음' and product_name != 'N/A':
+                lines.append(f"| 상품명 | {product_name} |")
+            else:
+                lines.append(f"| 상품명 | N/A (추출 실패) |")
+            
             lines.append(f"| 상품 코드 | {product_data.get('product_code', 'N/A')} |")
             lines.append(f"| 카테고리 | {product_data.get('category', 'N/A')} |")
             lines.append(f"| 브랜드 | {product_data.get('brand', 'N/A')} |")
+            
+            # 가격 정보 (유효성 검증된 값만 표시)
+            price_data = product_data.get('price', {})
+            sale_price = price_data.get('sale_price')
+            original_price = price_data.get('original_price')
+            
+            if sale_price and 100 <= sale_price <= 1000000:  # 유효성 검증
+                lines.append(f"| 판매가 | {sale_price:,}円 |")
+            else:
+                lines.append(f"| 판매가 | N/A |")
+            
+            if original_price and 100 <= original_price <= 1000000:  # 유효성 검증
+                lines.append(f"| 정가 | {original_price:,}円 |")
+                if sale_price and original_price > sale_price:
+                    discount_rate = int((original_price - sale_price) / original_price * 100)
+                    lines.append(f"| 할인율 | {discount_rate}% |")
+            
+            # Qポイント 정보 (개선된 추출 로직 반영)
+            qpoint_info = product_data.get('qpoint_info', {})
+            if qpoint_info and any(qpoint_info.values()):
+                qpoint_lines = []
+                if qpoint_info.get('max_points'):
+                    qpoint_lines.append(f"최대 {qpoint_info['max_points']}P")
+                if qpoint_info.get('receive_confirmation_points'):
+                    qpoint_lines.append(f"수령확인 {qpoint_info['receive_confirmation_points']}P")
+                if qpoint_info.get('review_points'):
+                    qpoint_lines.append(f"리뷰작성 {qpoint_info['review_points']}P")
+                if qpoint_info.get('auto_points'):
+                    qpoint_lines.append(f"자동 {qpoint_info['auto_points']}P")
+                
+                if qpoint_lines:
+                    lines.append(f"| Qポイント | {', '.join(qpoint_lines)} |")
+                else:
+                    lines.append(f"| Qポイント | N/A |")
+            else:
+                lines.append(f"| Qポイント | N/A |")
+            
+            # 반품 정보 (개선된 추출 로직 반영)
+            shipping_info = product_data.get('shipping_info', {})
+            return_policy = shipping_info.get('return_policy')
+            if return_policy:
+                return_text = "무료반품 가능" if return_policy == "free_return" else "반품 가능"
+                lines.append(f"| 반품 정책 | {return_text} |")
+            else:
+                lines.append(f"| 반품 정책 | N/A |")
+            
+            # 배송 정보
+            if shipping_info.get('free_shipping'):
+                lines.append(f"| 배송 | 무료배송 |")
+            elif shipping_info.get('shipping_fee'):
+                lines.append(f"| 배송비 | {shipping_info['shipping_fee']:,}円 |")
+            
+            # 쿠폰 정보
+            coupon_info = product_data.get('coupon_info', {})
+            if coupon_info.get('has_coupon'):
+                coupon_type = coupon_info.get('coupon_type', 'auto')
+                max_discount = coupon_info.get('max_discount')
+                if max_discount:
+                    lines.append(f"| 쿠폰 | {coupon_type} (최대 {max_discount}円 할인) |")
+                else:
+                    lines.append(f"| 쿠폰 | {coupon_type} |")
+            
             lines.append("\n")
         
         # Shop 정보
@@ -772,20 +968,28 @@ class ReportGenerator:
         lines.append("")
     
     def _add_markdown_price_analysis(self, lines: List[str], analysis: Dict[str, Any]):
-        """Markdown 가격 분석 추가"""
+        """Markdown 가격 분석 추가 (개선된 크롤러 데이터 반영)"""
         score = analysis.get('score', 0)
         grade = self._get_grade(score)
         lines.append(f"#### 가격 분석: **{score}/100** ({grade})")
         lines.append("")
         
-        sale_price = analysis.get('sale_price', 0) or 0
-        original_price = analysis.get('original_price', 0) or 0
+        # 유효성 검증된 가격만 표시 (100~1,000,000엔 범위)
+        sale_price = analysis.get('sale_price')
+        original_price = analysis.get('original_price')
         discount_rate = analysis.get('discount_rate', 0) or 0
         
-        lines.append(f"- 판매가: {sale_price:,}円")
-        if original_price > 0:
+        if sale_price and 100 <= sale_price <= 1000000:
+            lines.append(f"- 판매가: {sale_price:,}円")
+        else:
+            lines.append(f"- 판매가: N/A (유효하지 않은 값)")
+        
+        if original_price and 100 <= original_price <= 1000000:
             lines.append(f"- 정가: {original_price:,}円")
-        if discount_rate > 0:
+            if sale_price and original_price > sale_price:
+                calculated_discount = int((original_price - sale_price) / original_price * 100)
+                lines.append(f"- 할인율: {calculated_discount}%")
+        elif discount_rate > 0:
             lines.append(f"- 할인율: {discount_rate}%")
         
         positioning = analysis.get('positioning', '')
@@ -799,7 +1003,7 @@ class ReportGenerator:
         lines.append("")
     
     def _add_markdown_review_analysis(self, lines: List[str], analysis: Dict[str, Any]):
-        """Markdown 리뷰 분석 추가"""
+        """Markdown 리뷰 분석 추가 (개선된 크롤러 데이터 반영)"""
         score = analysis.get('score', 0)
         grade = self._get_grade(score)
         lines.append(f"#### 리뷰 분석: **{score}/100** ({grade})")
@@ -807,10 +1011,22 @@ class ReportGenerator:
         
         rating = analysis.get('rating', 0) or 0.0
         review_count = analysis.get('review_count', 0) or 0
+        # fallback: reviews 배열 길이 사용
+        reviews_list = analysis.get('reviews', [])
+        if review_count == 0 and len(reviews_list) > 0:
+            review_count = len(reviews_list)
+        
         negative_ratio = analysis.get('negative_ratio', 0.0) or 0.0
         
         lines.append(f"- 평점: {rating:.1f}/5.0")
-        lines.append(f"- 리뷰 수: {review_count:,}개")
+        if review_count > 0:
+            lines.append(f"- 리뷰 수: {review_count:,}개")
+        else:
+            lines.append(f"- 리뷰 수: 0개 (또는 추출 실패)")
+        
+        if len(reviews_list) > 0:
+            lines.append(f"- 추출된 리뷰 텍스트: {len(reviews_list)}개")
+        
         if negative_ratio > 0:
             lines.append(f"- 부정 리뷰 비율: {negative_ratio:.1%}")
         

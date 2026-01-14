@@ -663,44 +663,113 @@ class Qoo10Crawler:
                     () => {
                         const data = {};
                         
-                        // 상품명
-                        const title = document.querySelector('h1') || document.querySelector('title');
-                        if (title) data.product_name = title.textContent.trim();
+                        // 상품명 (가격 안내 텍스트 제외)
+                        const excludePatterns = ['全割引適用後の価格案内', '価格案内', '割引.*適用', 'クーポン.*割引'];
+                        const h1Elements = document.querySelectorAll('h1');
+                        for (let h1 of h1Elements) {
+                            const text = h1.textContent.trim();
+                            let excluded = false;
+                            for (let pattern of excludePatterns) {
+                                if (new RegExp(pattern).test(text)) {
+                                    excluded = true;
+                                    break;
+                                }
+                            }
+                            if (!excluded && text.length > 10 && text !== 'Qoo10' && text !== 'ホーム') {
+                                data.product_name = text;
+                                break;
+                            }
+                        }
                         
-                        // 가격 정보
+                        // title 태그에서 상품명 추출 (fallback)
+                        if (!data.product_name) {
+                            const title = document.querySelector('title');
+                            if (title) {
+                                let titleText = title.textContent.trim();
+                                if (titleText.includes('|')) {
+                                    titleText = titleText.split('|')[0].trim();
+                                }
+                                titleText = titleText.replace(/Qoo10/g, '').trim();
+                                if (titleText.length > 3) {
+                                    data.product_name = titleText;
+                                }
+                            }
+                        }
+                        
+                        // 가격 정보 (유효성 검증 포함)
                         const priceElements = document.querySelectorAll('[class*="price"], [class*="prc"]');
                         const prices = [];
                         priceElements.forEach(el => {
                             const text = el.textContent.trim();
-                            const match = text.match(/(\d{1,3}(?:,\d{3})*)円/);
-                            if (match) prices.push(match[1].replace(/,/g, ''));
+                            const match = text.match(/(\\d{1,3}(?:,\\d{3})*)円/);
+                            if (match) {
+                                const price = parseInt(match[1].replace(/,/g, ''));
+                                // 합리적인 가격 범위 (100~1,000,000엔)
+                                if (price >= 100 && price <= 1000000) {
+                                    prices.push(price);
+                                }
+                            }
                         });
                         data.prices = prices;
                         
-                        // 리뷰 수
-                        const reviewMatch = document.body.textContent.match(/レビュー\s*(\d+)/);
-                        if (reviewMatch) data.review_count = parseInt(reviewMatch[1]);
+                        // 리뷰 수 (다양한 패턴 시도)
+                        const reviewPatterns = [
+                            /レビュー\\s*\\((\\d+)\\)/,
+                            /評価\\s*\\((\\d+)\\)/,
+                            /(\\d+)\\s*レビュー/,
+                            /(\\d+)\\s*評価/
+                        ];
+                        for (let pattern of reviewPatterns) {
+                            const match = document.body.textContent.match(pattern);
+                            if (match) {
+                                data.review_count = parseInt(match[1]);
+                                break;
+                            }
+                        }
                         
                         // 평점
-                        const ratingMatch = document.body.textContent.match(/(\d+\.?\d*)\s*\((\d+)\)/);
+                        const ratingMatch = document.body.textContent.match(/(\\d+\\.?\\d*)\\s*\\((\\d+)\\)/);
                         if (ratingMatch) {
                             data.rating = parseFloat(ratingMatch[1]);
-                            data.review_count = parseInt(ratingMatch[2]);
+                            if (!data.review_count) {
+                                data.review_count = parseInt(ratingMatch[2]);
+                            }
                         }
+                        
+                        // Qポイント 정보 추출
+                        const qpointText = document.body.textContent;
+                        const receiveMatch = qpointText.match(/受取確認[：:\\s]*最大?\\s*(\\d+)P/i);
+                        if (receiveMatch) data.receive_confirmation_points = parseInt(receiveMatch[1]);
+                        
+                        const reviewPointMatch = qpointText.match(/レビュー作成[：:\\s]*最大?\\s*(\\d+)P/i);
+                        if (reviewPointMatch) data.review_points = parseInt(reviewPointMatch[1]);
+                        
+                        const maxPointMatch = qpointText.match(/最大\\s*(\\d+)P/i);
+                        if (maxPointMatch) data.max_points = parseInt(maxPointMatch[1]);
                         
                         return data;
                     }
                 """)
                 
                 # JavaScript에서 추출한 데이터 병합
-                if js_data.get('product_name') and not product_data.get('product_name'):
-                    product_data['product_name'] = js_data['product_name']
+                if js_data.get('product_name') and (not product_data.get('product_name') or product_data.get('product_name') == '상품명 없음'):
+                    # 가격 안내 텍스트가 아닌지 확인
+                    exclude_patterns = ['全割引適用後の価格案内', '価格案内']
+                    product_name = js_data['product_name']
+                    excluded = False
+                    for pattern in exclude_patterns:
+                        if pattern in product_name:
+                            excluded = True
+                            break
+                    if not excluded:
+                        product_data['product_name'] = product_name
                 
                 if js_data.get('prices'):
                     if not product_data.get('price', {}).get('sale_price'):
-                        # 가장 작은 가격을 판매가로 추정
-                        prices = [int(p) for p in js_data['prices'] if p.isdigit()]
+                        # 유효한 가격만 사용 (이미 JavaScript에서 필터링됨)
+                        prices = js_data['prices']
                         if prices:
+                            # 여러 가격 중 최소값을 판매가로 추정
                             product_data.setdefault('price', {})['sale_price'] = min(prices)
                 
                 if js_data.get('review_count') and not product_data.get('reviews', {}).get('review_count'):
@@ -708,6 +777,14 @@ class Qoo10Crawler:
                 
                 if js_data.get('rating') and not product_data.get('reviews', {}).get('rating'):
                     product_data.setdefault('reviews', {})['rating'] = js_data['rating']
+                
+                # Qポイント 정보 병합
+                if js_data.get('receive_confirmation_points'):
+                    product_data.setdefault('qpoint_info', {})['receive_confirmation_points'] = js_data['receive_confirmation_points']
+                if js_data.get('review_points'):
+                    product_data.setdefault('qpoint_info', {})['review_points'] = js_data['review_points']
+                if js_data.get('max_points'):
+                    product_data.setdefault('qpoint_info', {})['max_points'] = js_data['max_points']
                     
             except Exception as e:
                 logger.warning(f"Failed to extract JS data: {str(e)}")
@@ -1062,15 +1139,33 @@ class Qoo10Crawler:
         _log_debug("debug-session", "run1", "A", "crawler.py:_extract_product_name", "상품명 추출 시작", {})
         # #endregion
         
+        # 제외할 텍스트 패턴 (가격 안내, 일반적인 텍스트 등)
+        exclude_patterns = [
+            r'全割引適用後の価格案内',  # 가격 안내 텍스트
+            r'価格案内',  # 가격 안내
+            r'割引.*適用',  # 할인 적용 관련
+            r'クーポン.*割引',  # 쿠폰 할인
+            r'Qポイント',  # Qポイント 관련
+            r'返品.*案内',  # 반품 안내
+            r'配送.*案内',  # 배송 안내
+            r'Qoo10',  # 사이트명
+            r'ホーム',  # 홈
+            r'Home',
+            r'トップ',  # 탑
+            r'Top',
+            r'商品名',  # 상품명 (레이블)
+            r'商品詳細',  # 상품 상세
+        ]
+        
         default_selectors = [
             'h1.product-name',
             'h1[itemprop="name"]',
             '.product_name',
-            'h1',
             '#goods_name',
             '.goods_name',
             '[data-product-name]',  # data 속성에서 추출
             '.goods_title',  # Qoo10 특정 클래스
+            'h1',  # h1 태그 (하지만 제외 패턴 확인)
             'title'  # fallback으로 title 태그도 확인
         ]
         
@@ -1084,44 +1179,69 @@ class Qoo10Crawler:
                         # "|" 또는 "｜"로 분리하여 첫 번째 부분 추출
                         if '|' in title_text:
                             name = title_text.split('|')[0].strip()
-                            # "Qoo10" 제거
-                            name = name.replace('Qoo10', '').replace('[Qoo10]', '').strip()
-                            if name and len(name) > 3:
-                                return name
                         elif '｜' in title_text:
                             name = title_text.split('｜')[0].strip()
-                            name = name.replace('Qoo10', '').replace('[Qoo10]', '').strip()
-                            if name and len(name) > 3:
-                                return name
-                        # "Qoo10"이 포함된 경우 제거
-                        name = title_text.replace('Qoo10', '').replace('[Qoo10]', '').strip()
+                        else:
+                            name = title_text
+                        
+                        # "Qoo10" 제거
+                        name = name.replace('Qoo10', '').replace('[Qoo10]', '').strip()
+                        
+                        # 제외 패턴 확인
                         if name and len(name) > 3:
-                            return name
+                            excluded = False
+                            for pattern in exclude_patterns:
+                                if re.search(pattern, name):
+                                    excluded = True
+                                    break
+                            if not excluded and name and len(name) > 3:
+                                return name
                 elif selector == '[data-product-name]':
                     # data 속성에서 추출
                     elem = soup_obj.select_one(selector)
                     if elem:
                         name = elem.get('data-product-name') or elem.get_text(strip=True)
                         if name and len(name) > 3:
-                            return name
+                            # 제외 패턴 확인
+                            excluded = False
+                            for pattern in exclude_patterns:
+                                if re.search(pattern, name):
+                                    excluded = True
+                                    break
+                            if not excluded and name and len(name) > 3:
+                                return name
                 else:
                     elem = soup_obj.select_one(selector)
                     if elem:
                         text = elem.get_text(strip=True)
                         # 의미있는 텍스트인지 확인 (너무 짧거나 일반적인 텍스트 제외)
                         if text and text != "" and len(text) > 3:
-                            # "Qoo10", "ホーム" 같은 일반적인 텍스트 제외
-                            if text not in ['Qoo10', 'ホーム', 'Home', 'トップ', 'Top', '商品名']:
-                                return text
+                            # 제외 패턴 확인
+                            excluded = False
+                            for pattern in exclude_patterns:
+                                if re.search(pattern, text):
+                                    excluded = True
+                                    break
+                            
+                            if not excluded and text not in ['Qoo10', 'ホーム', 'Home', 'トップ', 'Top', '商品名']:
+                                # 상품명은 보통 10자 이상 (하지만 3자 이상도 허용)
+                                if len(text) >= 3:
+                                    return text
             
-            # 추가 시도: 페이지 내에서 가장 큰 h1 태그 찾기
+            # 추가 시도: 페이지 내에서 가장 큰 h1 태그 찾기 (제외 패턴 확인)
             h1_tags = soup_obj.find_all('h1')
             for h1 in h1_tags:
                 text = h1.get_text(strip=True)
                 # 상품명은 보통 10자 이상이고, 일반적인 텍스트가 아님
                 if text and len(text) > 10:
-                    # 일반적인 텍스트 제외
-                    if text not in ['Qoo10', 'ホーム', 'Home', 'トップ', 'Top', '商品名', '商品詳細']:
+                    # 제외 패턴 확인
+                    excluded = False
+                    for pattern in exclude_patterns:
+                        if re.search(pattern, text):
+                            excluded = True
+                            break
+                    
+                    if not excluded and text not in ['Qoo10', 'ホーム', 'Home', 'トップ', 'Top', '商品名', '商品詳細']:
                         return text
             
             return "상품명 없음"
@@ -1388,25 +1508,42 @@ class Qoo10Crawler:
                 # 정가가 판매가보다 낮으면 잘못된 데이터
                 price_data["original_price"] = None
         
+        # 가격 유효성 검증 및 필터링 (비정상적인 값 제거)
+        if price_data["sale_price"]:
+            # 합리적인 가격 범위 확인 (100엔 ~ 1,000,000엔)
+            if not (100 <= price_data["sale_price"] <= 1000000):
+                # 비정상적인 값이면 null로 설정
+                price_data["sale_price"] = None
+        
+        if price_data["original_price"]:
+            # 합리적인 가격 범위 확인 (100엔 ~ 1,000,000엔)
+            if not (100 <= price_data["original_price"] <= 1000000):
+                # 비정상적인 값이면 null로 설정
+                price_data["original_price"] = None
+            # 정가가 판매가보다 낮으면 잘못된 데이터
+            if price_data["sale_price"] and price_data["original_price"] < price_data["sale_price"]:
+                price_data["original_price"] = None
+        
         # 데이터 검증: 판매가가 없으면 오류
         if not price_data["sale_price"]:
             # 최후의 시도: 페이지 전체에서 가격 패턴 찾기
             all_text = soup.get_text()
             price_patterns = [
-                r'(\d{1,3}(?:,\d{3})*)円',  # 일반적인 가격 패턴
+                r'商品価格[：:]\s*(\d{1,3}(?:,\d{3})*)円',  # 상품가격 패턴 (우선순위 높음)
                 r'価格[：:]\s*(\d{1,3}(?:,\d{3})*)円',
+                r'(\d{1,3}(?:,\d{3})*)円',  # 일반적인 가격 패턴
                 r'¥\s*(\d{1,3}(?:,\d{3})*)'
             ]
             for pattern in price_patterns:
                 matches = re.findall(pattern, all_text)
                 if matches:
-                    # 가장 큰 숫자를 판매가로 추정 (일반적으로 상품 가격은 큰 숫자)
                     prices = [self._parse_price(m) for m in matches if self._parse_price(m)]
                     if prices:
-                        # 합리적인 가격 범위 (100엔 ~ 1,000,000엔)
+                        # 합리적인 가격 범위 (100엔 ~ 1,000,000엔) - 여러 가격 중 최소값 선택
                         valid_prices = [p for p in prices if 100 <= p <= 1000000]
                         if valid_prices:
-                            price_data["sale_price"] = max(valid_prices)
+                            # 여러 가격이 있으면 최소값을 판매가로 추정 (일반적으로 표시되는 가격)
+                            price_data["sale_price"] = min(valid_prices)
                             break
         
         # #region agent log
@@ -1738,6 +1875,10 @@ class Qoo10Crawler:
             if len(reviews_data["reviews"]) >= 10:
                 break
         
+        # review_count가 0이지만 reviews 배열에 리뷰가 있으면 fallback
+        if reviews_data["review_count"] == 0 and len(reviews_data["reviews"]) > 0:
+            reviews_data["review_count"] = len(reviews_data["reviews"])
+        
         # #region agent log
         _log_debug("debug-session", "run1", "C", "crawler.py:_extract_reviews", "리뷰 정보 추출 완료", {
             "rating": reviews_data.get("rating"),
@@ -1821,19 +1962,53 @@ class Qoo10Crawler:
                         if numbers:
                             shipping_info["shipping_fee"] = int(numbers[0])
         
-        # 반품 정책 정보 추출 (일본어-한국어 모두 지원)
+        # 반품 정책 정보 추출 (일본어-한국어 모두 지원) - 강화된 추출
         return_pattern = self._create_jp_kr_regex("返品", "반품")
         return_elem = soup.find(string=re.compile(f'{return_pattern}|返却|Return', re.I))
+        
+        # 반품 정보가 있는 섹션 찾기 (더 넓은 범위)
+        return_section = None
         if return_elem:
-            parent = return_elem.find_parent()
-            if parent:
-                return_text = parent.get_text(strip=True)
-                # "返品無料" 또는 "무료반품" 또는 "返品無料サービス" 확인
-                free_return_pattern = self._create_jp_kr_regex("返品無料", "무료반품")
-                if re.search(free_return_pattern, return_text) or '無料返品' in return_text:
-                    shipping_info["return_policy"] = "free_return"
-                elif re.search(return_pattern, return_text):
-                    shipping_info["return_policy"] = "return_available"
+            return_section = return_elem.find_parent()
+            # 부모의 부모까지 확인
+            if return_section:
+                parent = return_section.find_parent()
+                if parent:
+                    return_section = parent
+        
+        # 반품 관련 선택자로도 시도
+        if not return_section:
+            return_selectors = [
+                'div[class*="返品"]',
+                'div[class*="반품"]',
+                'div[class*="return"]',
+                '[id*="返品"]',
+                '[id*="반품"]',
+                '[id*="return"]'
+            ]
+            for selector in return_selectors:
+                return_section = soup.select_one(selector)
+                if return_section:
+                    break
+        
+        if return_section:
+            return_text = return_section.get_text()
+            
+            # "返品無料" 또는 "무료반품" 또는 "返品無料サービス" 확인
+            free_return_pattern = self._create_jp_kr_regex("返品無料", "무료반품")
+            if re.search(free_return_pattern, return_text) or '無料返品' in return_text or '返品無料サービス' in return_text:
+                shipping_info["return_policy"] = "free_return"
+            elif re.search(return_pattern, return_text):
+                shipping_info["return_policy"] = "return_available"
+        
+        # 추가 시도: 페이지 전체 텍스트에서 반품 정보 찾기
+        if not shipping_info["return_policy"]:
+            all_text = soup.get_text()
+            free_return_pattern = self._create_jp_kr_regex("返品無料", "무료반품")
+            if re.search(free_return_pattern, all_text) or '無料返品' in all_text or '返品無料サービス' in all_text:
+                shipping_info["return_policy"] = "free_return"
+            elif re.search(return_pattern, all_text):
+                shipping_info["return_policy"] = "return_available"
         
         # #region agent log
         _log_debug("debug-session", "run1", "F", "crawler.py:_extract_shipping_info", "배송 정보 추출 완료", {
@@ -1886,42 +2061,104 @@ class Qoo10Crawler:
             "auto_points": None
         }
         
-        # Qポイント 섹션 찾기 (일본어-한국어 모두 지원)
-        qpoint_method_pattern = self._create_jp_kr_regex("Qポイント獲得方法", "Q포인트획득방법")
-        qpoint_get_pattern = self._create_jp_kr_regex("Qポイント獲得", "Q포인트획득")
-        qpoint_pattern = self._create_jp_kr_regex("Qポイント", "Q포인트")
-        qpoint_section = soup.find(string=re.compile(f'{qpoint_method_pattern}|{qpoint_get_pattern}|{qpoint_pattern}', re.I))
+        # Qポイント 섹션 찾기 (다양한 선택자 시도)
+        qpoint_selectors = [
+            'div[class*="qpoint"]',
+            'div[class*="ポイント"]',
+            'table[class*="qpoint"]',
+            'table[class*="ポイント"]',
+            '.qpoint-info',
+            '#qpoint-info',
+            '[id*="qpoint"]',
+            '[id*="ポイント"]'
+        ]
+        
+        qpoint_section = None
+        for selector in qpoint_selectors:
+            qpoint_section = soup.select_one(selector)
+            if qpoint_section:
+                break
+        
+        # 텍스트 기반 검색 (일본어-한국어 모두 지원)
+        if not qpoint_section:
+            qpoint_method_pattern = self._create_jp_kr_regex("Qポイント獲得方法", "Q포인트획득방법")
+            qpoint_get_pattern = self._create_jp_kr_regex("Qポイント獲得", "Q포인트획득")
+            qpoint_pattern = self._create_jp_kr_regex("Qポイント", "Q포인트")
+            qpoint_text_elem = soup.find(string=re.compile(f'{qpoint_method_pattern}|{qpoint_get_pattern}|{qpoint_pattern}', re.I))
+            if qpoint_text_elem:
+                qpoint_section = qpoint_text_elem.find_parent()
+                # 더 넓은 범위로 검색 (부모의 부모까지)
+                if qpoint_section:
+                    parent = qpoint_section.find_parent()
+                    if parent:
+                        qpoint_section = parent
+        
         if qpoint_section:
-            parent = qpoint_section.find_parent()
-            if parent:
-                # 부모 요소의 모든 텍스트 추출
-                qpoint_text = parent.get_text()
-                
-                # "受取確認: 最大1P" 또는 "수령확인: 최대1P" 패턴 찾기
-                receive_pattern = self._create_jp_kr_regex("受取確認", "수령확인")
-                max_pattern = self._create_jp_kr_regex("最大", "최대")
-                receive_match = re.search(f'{receive_pattern}[：:]\s*{max_pattern}(\d+)P', qpoint_text)
-                if receive_match:
-                    qpoint_info["receive_confirmation_points"] = int(receive_match.group(1))
-                
-                # "レビュー作成: 最大20P" 또는 "리뷰작성: 최대20P" 패턴 찾기
-                review_create_pattern = self._create_jp_kr_regex("レビュー作成", "리뷰작성")
-                review_match = re.search(f'{review_create_pattern}[：:]\s*{max_pattern}(\d+)P', qpoint_text)
-                if review_match:
-                    qpoint_info["review_points"] = int(review_match.group(1))
-                
-                # "最大(\d+)P" 또는 "최대(\d+)P" 패턴 찾기 (전체 최대 포인트)
-                max_pattern = self._create_jp_kr_regex("最大", "최대")
-                max_match = re.search(f'{max_pattern}(\d+)P', qpoint_text)
-                if max_match:
-                    qpoint_info["max_points"] = int(max_match.group(1))
-                
-                # "配送完了.*自動.*(\d+)P" 또는 "배송완료.*자동.*(\d+)P" 패턴 찾기 (자동 포인트)
-                delivery_complete_pattern = self._create_jp_kr_regex("配送完了", "배송완료")
-                auto_pattern = self._create_jp_kr_regex("自動", "자동")
-                auto_match = re.search(f'{delivery_complete_pattern}.*{auto_pattern}.*(\d+)P', qpoint_text)
-                if auto_match:
-                    qpoint_info["auto_points"] = int(auto_match.group(1))
+            # 섹션의 모든 텍스트 추출
+            qpoint_text = qpoint_section.get_text()
+            
+            # "受取確認: 最大1P" 또는 "수령확인: 최대1P" 패턴 찾기 (더 유연한 패턴)
+            receive_pattern = self._create_jp_kr_regex("受取確認", "수령확인")
+            max_pattern = self._create_jp_kr_regex("最大", "최대")
+            
+            # 패턴 1: "受取確認: 最大1P"
+            receive_match = re.search(f'{receive_pattern}[：:\s]*{max_pattern}?\s*(\d+)P', qpoint_text, re.I)
+            if receive_match:
+                qpoint_info["receive_confirmation_points"] = int(receive_match.group(1))
+            
+            # 패턴 2: "受取確認.*(\d+)P" (더 유연한 패턴)
+            if not qpoint_info["receive_confirmation_points"]:
+                receive_match2 = re.search(f'{receive_pattern}.*?(\d+)P', qpoint_text, re.I)
+                if receive_match2:
+                    qpoint_info["receive_confirmation_points"] = int(receive_match2.group(1))
+            
+            # "レビュー作成: 最大20P" 또는 "리뷰작성: 최대20P" 패턴 찾기
+            review_create_pattern = self._create_jp_kr_regex("レビュー作成", "리뷰작성")
+            
+            # 패턴 1: "レビュー作成: 最大20P"
+            review_match = re.search(f'{review_create_pattern}[：:\s]*{max_pattern}?\s*(\d+)P', qpoint_text, re.I)
+            if review_match:
+                qpoint_info["review_points"] = int(review_match.group(1))
+            
+            # 패턴 2: "レビュー作成.*(\d+)P" (더 유연한 패턴)
+            if not qpoint_info["review_points"]:
+                review_match2 = re.search(f'{review_create_pattern}.*?(\d+)P', qpoint_text, re.I)
+                if review_match2:
+                    qpoint_info["review_points"] = int(review_match2.group(1))
+            
+            # "最大(\d+)P" 또는 "최대(\d+)P" 패턴 찾기 (전체 최대 포인트)
+            max_match = re.search(f'{max_pattern}\s*(\d+)P', qpoint_text, re.I)
+            if max_match:
+                qpoint_info["max_points"] = int(max_match.group(1))
+            
+            # "配送完了.*自動.*(\d+)P" 또는 "배송완료.*자동.*(\d+)P" 패턴 찾기 (자동 포인트)
+            delivery_complete_pattern = self._create_jp_kr_regex("配送完了", "배송완료")
+            auto_pattern = self._create_jp_kr_regex("自動", "자동")
+            auto_match = re.search(f'{delivery_complete_pattern}.*?{auto_pattern}.*?(\d+)P', qpoint_text, re.I | re.DOTALL)
+            if auto_match:
+                qpoint_info["auto_points"] = int(auto_match.group(1))
+        
+        # 추가 시도: 페이지 전체 텍스트에서 Qポイント 정보 찾기
+        if not any(qpoint_info.values()):
+            all_text = soup.get_text()
+            receive_pattern = self._create_jp_kr_regex("受取確認", "수령확인")
+            review_create_pattern = self._create_jp_kr_regex("レビュー作成", "리뷰작성")
+            max_pattern = self._create_jp_kr_regex("最大", "최대")
+            
+            # "受取確認.*(\d+)P" 패턴
+            receive_match = re.search(f'{receive_pattern}.*?(\d+)P', all_text, re.I)
+            if receive_match:
+                qpoint_info["receive_confirmation_points"] = int(receive_match.group(1))
+            
+            # "レビュー作成.*(\d+)P" 패턴
+            review_match = re.search(f'{review_create_pattern}.*?(\d+)P', all_text, re.I)
+            if review_match:
+                qpoint_info["review_points"] = int(review_match.group(1))
+            
+            # "最大(\d+)P" 패턴
+            max_match = re.search(f'{max_pattern}\s*(\d+)P', all_text, re.I)
+            if max_match:
+                qpoint_info["max_points"] = int(max_match.group(1))
         
         # #region agent log
         _log_debug("debug-session", "run1", "I", "crawler.py:_extract_qpoint_info", "Qポイント 정보 추출 완료", {
