@@ -6,6 +6,9 @@ import ChecklistCard from './ChecklistCard'
 import CompetitorComparisonCard from './CompetitorComparisonCard'
 import DownloadButton from './DownloadButton'
 import HelpTooltip from './HelpTooltip'
+import ThemeToggle from './ThemeToggle'
+import ScoreGaugeChart from './charts/ScoreGaugeChart'
+import ScoreBarChart from './charts/ScoreBarChart'
 
 interface AnalysisReportProps {
   result: {
@@ -27,19 +30,22 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return {
-      text: 'text-[#00AA44]',
-      bg: 'bg-green-50',
-      border: 'border-[#00AA44]'
+      text: 'text-green-600 dark:text-green-400',
+      bg: 'bg-green-50 dark:bg-green-900/20',
+      border: 'border-green-500 dark:border-green-400',
+      chartColor: '#00AA44'
     }
     if (score >= 60) return {
-      text: 'text-[#FF9900]',
-      bg: 'bg-yellow-50',
-      border: 'border-[#FF9900]'
+      text: 'text-yellow-600 dark:text-yellow-400',
+      bg: 'bg-yellow-50 dark:bg-yellow-900/20',
+      border: 'border-yellow-500 dark:border-yellow-400',
+      chartColor: '#FF9900'
     }
     return {
-      text: 'text-[#CC0000]',
-      bg: 'bg-red-50',
-      border: 'border-[#CC0000]'
+      text: 'text-red-600 dark:text-red-400',
+      bg: 'bg-red-50 dark:bg-red-900/20',
+      border: 'border-red-500 dark:border-red-400',
+      chartColor: '#CC0000'
     }
   }
 
@@ -55,43 +61,62 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
   const lowPriorityRecs = recommendations.filter(r => r.priority === 'low')
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5] py-4 sm:py-6 lg:py-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 py-4 sm:py-6 lg:py-8 transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* 헤더 - 종합 점수 및 우선순위 */}
-        <div className="bg-white rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.08)] p-4 sm:p-6 mb-4 sm:mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 sm:p-6 mb-4 sm:mb-6 transition-colors">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-[#1A1A1A] mb-2 sm:mb-3">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2 sm:mb-3">
                 분석 리포트
               </h1>
-              <p className="text-sm sm:text-base text-[#4D4D4D]">
+              <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
                 상품 분석 결과 및 개선 제안
               </p>
             </div>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-              <div className={`px-4 sm:px-6 py-3 sm:py-4 rounded-lg ${colors.bg} border-2 ${colors.border}`}>
-                <div className="text-xs sm:text-sm text-[#4D4D4D] mb-1">종합 점수</div>
+            <ThemeToggle />
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* 종합 점수 게이지 차트 */}
+            <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              <div className="text-center mb-2">
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-2">종합 점수</p>
+                <ScoreGaugeChart 
+                  score={overallScore} 
+                  title={getScoreLabel(overallScore)}
+                  color={colors.chartColor}
+                  size={180}
+                />
+              </div>
+            </div>
+            
+            {/* 점수 카드 */}
+            <div className={`px-4 sm:px-6 py-3 sm:py-4 rounded-lg ${colors.bg} border-2 ${colors.border} flex flex-col justify-center`}>
+              <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">종합 점수</div>
                 <div className="flex items-baseline gap-1">
                   <span className={`text-3xl sm:text-4xl font-bold ${colors.text}`}>{overallScore}</span>
-                  <span className="text-base sm:text-lg text-[#4D4D4D]">/ 100</span>
+                <span className="text-base sm:text-lg text-gray-600 dark:text-gray-400">/ 100</span>
                 </div>
                 <div className={`text-xs sm:text-sm font-medium ${colors.text} mt-1`}>
                   {getScoreLabel(overallScore)}
                 </div>
               </div>
+            
+            {/* 긴급 개선 항목 */}
               {highPriorityRecs.length > 0 && (
-                <div className="px-3 sm:px-4 py-2 sm:py-3 bg-red-50 border-2 border-[#CC0000] rounded-lg">
-                  <div className="text-xs sm:text-sm text-[#CC0000] font-medium mb-1">긴급 개선</div>
-                  <div className="text-xl sm:text-2xl font-bold text-[#CC0000]">{highPriorityRecs.length}</div>
-                  <div className="text-xs text-[#4D4D4D]">개 항목</div>
+              <div className="px-3 sm:px-4 py-2 sm:py-3 bg-red-50 dark:bg-red-900/20 border-2 border-red-500 dark:border-red-400 rounded-lg flex flex-col justify-center">
+                <div className="text-xs sm:text-sm text-red-600 dark:text-red-400 font-medium mb-1">긴급 개선</div>
+                <div className="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400">{highPriorityRecs.length}</div>
+                <div className="text-xs text-gray-600 dark:text-gray-400">개 항목</div>
                 </div>
               )}
-            </div>
           </div>
         </div>
 
         {/* 핵심 지표 카드 그리드 - 반응형 */}
         {product_analysis && (
+          <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-4 sm:mb-6">
             <ScoreCard
               title="이미지"
@@ -114,13 +139,30 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
               analysis={product_analysis.review_analysis}
             />
           </div>
+            
+            {/* 점수 비교 바 차트 */}
+            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 sm:p-6 mb-4 sm:mb-6 transition-colors">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+                📊 점수 비교
+              </h2>
+              <ScoreBarChart
+                data={[
+                  { category: '이미지', score: product_analysis.image_analysis.score, color: '#0066CC' },
+                  { category: '설명', score: product_analysis.description_analysis.score, color: '#00AA44' },
+                  { category: '가격', score: product_analysis.price_analysis.score, color: '#FF9900' },
+                  { category: '리뷰', score: product_analysis.review_analysis.score, color: '#CC0000' },
+                ]}
+                height={250}
+              />
+            </div>
+          </>
         )}
 
         {/* 페이지 구조 분석 카드 */}
         {product_analysis?.page_structure_analysis && (
-          <div className="bg-white rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.08)] p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 sm:p-6 mb-4 sm:mb-6 transition-colors">
             <div className="flex items-center gap-2 mb-4">
-              <h2 className="text-xl sm:text-2xl font-bold text-[#1A1A1A]">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
                 📐 페이지 구조 분석
               </h2>
               <HelpTooltip 
@@ -129,40 +171,40 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="text-sm text-[#4D4D4D] mb-1">총 클래스 수</div>
-                <div className="text-2xl font-bold text-[#1A1A1A]">
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">총 클래스 수</div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                   {product_analysis.page_structure_analysis.total_classes}
                 </div>
               </div>
               
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="text-sm text-[#4D4D4D] mb-1">구조 점수</div>
-                <div className="text-2xl font-bold text-[#1A1A1A]">
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">구조 점수</div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                   {product_analysis.page_structure_analysis.score}
-                  <span className="text-base text-[#4D4D4D]">/ 100</span>
+                  <span className="text-base text-gray-600 dark:text-gray-400">/ 100</span>
                 </div>
               </div>
               
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="text-sm text-[#4D4D4D] mb-1">완성된 요소</div>
-                <div className="text-2xl font-bold text-[#1A1A1A]">
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">완성된 요소</div>
+                <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                   {Object.values(product_analysis.page_structure_analysis.structure_completeness).filter(v => v).length}
-                  <span className="text-base text-[#4D4D4D]">/ {Object.keys(product_analysis.page_structure_analysis.structure_completeness).length}</span>
+                  <span className="text-base text-gray-600 dark:text-gray-400">/ {Object.keys(product_analysis.page_structure_analysis.structure_completeness).length}</span>
                 </div>
               </div>
             </div>
 
             {/* 주요 요소 존재 여부 */}
             <div className="mb-4">
-              <h3 className="text-base font-semibold text-[#1A1A1A] mb-2">주요 요소 확인</h3>
+              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">주요 요소 확인</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                 {Object.entries(product_analysis.page_structure_analysis.key_elements_present).map(([key, present]) => (
                   <div key={key} className="flex items-center gap-2">
-                    <span className={present ? "text-green-500" : "text-red-500"}>
+                    <span className={present ? "text-green-500 dark:text-green-400" : "text-red-500 dark:text-red-400"}>
                       {present ? "✓" : "✗"}
                     </span>
-                    <span className="text-sm text-[#4D4D4D]">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
                       {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                     </span>
                   </div>
@@ -174,12 +216,12 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
             {product_analysis.page_structure_analysis.top_classes && 
              product_analysis.page_structure_analysis.top_classes.length > 0 && (
               <div className="mb-4">
-                <h3 className="text-base font-semibold text-[#1A1A1A] mb-2">주요 사용 클래스 (상위 10개)</h3>
+                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">주요 사용 클래스 (상위 10개)</h3>
                 <div className="flex flex-wrap gap-2">
                   {product_analysis.page_structure_analysis.top_classes.map((item, idx) => (
                     <div 
                       key={idx}
-                      className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm"
+                      className="px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full text-sm border border-blue-200 dark:border-blue-800"
                       title={`사용 횟수: ${item.frequency}`}
                     >
                       {item.class} ({item.frequency})
@@ -192,10 +234,10 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
             {/* 추천 사항 */}
             {product_analysis.page_structure_analysis.recommendations.length > 0 && (
               <div>
-                <h3 className="text-base font-semibold text-[#1A1A1A] mb-2">구조 개선 제안</h3>
+                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">구조 개선 제안</h3>
                 <ul className="list-disc list-inside space-y-1">
                   {product_analysis.page_structure_analysis.recommendations.map((rec, idx) => (
-                    <li key={idx} className="text-sm text-[#4D4D4D]">{rec}</li>
+                    <li key={idx} className="text-sm text-gray-600 dark:text-gray-400">{rec}</li>
                   ))}
                 </ul>
               </div>
@@ -204,22 +246,22 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
         )}
 
         {/* 탭 기반 결과 섹션 */}
-        <div className="bg-white rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.08)] p-4 sm:p-6">
+        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 sm:p-6 transition-colors">
           {/* 탭 헤더 */}
           <div className="flex items-center gap-2 mb-4 sm:mb-6">
-            <h2 className="text-xl sm:text-2xl font-bold text-[#1A1A1A]">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
               분석 결과
             </h2>
           </div>
 
           {/* 탭 네비게이션 */}
-          <div className="flex border-b border-[#E6E6E6] mb-4 sm:mb-6">
+          <div className="flex border-b border-gray-200 dark:border-gray-700 mb-4 sm:mb-6">
             <button
               onClick={() => setActiveTab('recommendations')}
               className={`px-4 sm:px-6 py-3 sm:py-4 text-sm sm:text-base font-semibold transition-colors ${
                 activeTab === 'recommendations'
-                  ? 'text-[#0066CC] border-b-2 border-[#0066CC]'
-                  : 'text-[#4D4D4D] hover:text-[#1A1A1A]'
+                  ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
               }`}
             >
               💡 매출 강화 아이디어
@@ -229,8 +271,8 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
                 onClick={() => setActiveTab('checklist')}
                 className={`px-4 sm:px-6 py-3 sm:py-4 text-sm sm:text-base font-semibold transition-colors ${
                   activeTab === 'checklist'
-                    ? 'text-[#0066CC] border-b-2 border-[#0066CC]'
-                    : 'text-[#4D4D4D] hover:text-[#1A1A1A]'
+                    ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
                 }`}
               >
                 📋 메뉴얼 기반 체크리스트
@@ -254,8 +296,8 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
                   <div className="mb-6 sm:mb-8">
                     <div className="flex items-center gap-2 mb-3 sm:mb-4">
                       <span className="text-lg sm:text-xl">🔴</span>
-                      <h3 className="text-base sm:text-lg font-semibold text-[#1A1A1A]">High Priority</h3>
-                      <span className="px-2 py-0.5 text-xs font-medium bg-[#CC0000] text-white rounded">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">High Priority</h3>
+                      <span className="px-2 py-0.5 text-xs font-medium bg-red-600 dark:bg-red-500 text-white rounded">
                         {highPriorityRecs.length}
                       </span>
                     </div>
@@ -272,8 +314,8 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
                   <div className="mb-6 sm:mb-8">
                     <div className="flex items-center gap-2 mb-3 sm:mb-4">
                       <span className="text-lg sm:text-xl">🟡</span>
-                      <h3 className="text-base sm:text-lg font-semibold text-[#1A1A1A]">Medium Priority</h3>
-                      <span className="px-2 py-0.5 text-xs font-medium bg-[#FF9900] text-white rounded">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">Medium Priority</h3>
+                      <span className="px-2 py-0.5 text-xs font-medium bg-yellow-600 dark:bg-yellow-500 text-white rounded">
                         {mediumPriorityRecs.length}
                       </span>
                     </div>
@@ -290,8 +332,8 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
                   <div>
                     <div className="flex items-center gap-2 mb-3 sm:mb-4">
                       <span className="text-lg sm:text-xl">🟢</span>
-                      <h3 className="text-base sm:text-lg font-semibold text-[#1A1A1A]">Low Priority</h3>
-                      <span className="px-2 py-0.5 text-xs font-medium bg-[#808080] text-white rounded">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">Low Priority</h3>
+                      <span className="px-2 py-0.5 text-xs font-medium bg-gray-600 dark:bg-gray-500 text-white rounded">
                         {lowPriorityRecs.length}
                       </span>
                     </div>
@@ -305,7 +347,7 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
 
                 {recommendations.length === 0 && (
                   <div className="text-center py-8 sm:py-12">
-                    <p className="text-[#4D4D4D] text-sm sm:text-base">개선 제안이 없습니다.</p>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm sm:text-base">개선 제안이 없습니다.</p>
                   </div>
                 )}
               </div>
@@ -329,11 +371,11 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
 
         {/* 리포트 다운로드 버튼 (Phase 2) - 숨김 처리 */}
         {false && analysisId && (
-        <div className="mt-4 sm:mt-6 bg-white rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.08)] p-4 sm:p-6">
-          <h2 className="text-xl sm:text-2xl font-bold text-[#1A1A1A] mb-4">
+        <div className="mt-4 sm:mt-6 bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 sm:p-6 transition-colors">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
             📥 리포트 다운로드
           </h2>
-          <p className="text-sm text-[#4D4D4D] mb-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             분석 결과를 PDF, Excel, 또는 Markdown 형식으로 다운로드할 수 있습니다.
           </p>
           <div className="flex flex-wrap gap-3">

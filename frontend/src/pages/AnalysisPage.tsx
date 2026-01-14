@@ -52,24 +52,24 @@ function AnalysisPage() {
     const percentage = progress?.percentage || 0
     
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F5] px-4">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4 transition-colors">
         <div className="text-center max-w-md w-full">
           <LoadingSpinner />
-          <p className="mt-6 text-base sm:text-lg text-[#1A1A1A] font-medium mb-2">
+          <p className="mt-6 text-base sm:text-lg text-gray-900 dark:text-gray-100 font-medium mb-2">
             {message}
           </p>
           {percentage > 0 && (
             <div className="mt-4 mb-2">
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
                 <div 
-                  className="bg-[#0066CC] h-2.5 rounded-full transition-all duration-300"
+                  className="bg-blue-600 dark:bg-blue-500 h-2.5 rounded-full transition-all duration-300"
                   style={{ width: `${percentage}%` }}
                 ></div>
               </div>
-              <p className="mt-2 text-xs text-[#4D4D4D]">{percentage}%</p>
+              <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">{percentage}%</p>
             </div>
           )}
-          <p className="text-sm sm:text-base text-[#4D4D4D]">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
             잠시만 기다려주세요
           </p>
         </div>
@@ -79,22 +79,22 @@ function AnalysisPage() {
 
   if (error || (result && result.status === 'failed')) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F5] px-4">
-        <div className="text-center max-w-md w-full bg-white rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.08)] p-6 sm:p-8">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4 transition-colors">
+        <div className="text-center max-w-md w-full bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-6 sm:p-8">
           <div className="mb-4">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-red-50 rounded-full">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-red-50 dark:bg-red-900/20 rounded-full">
               <span className="text-3xl">⚠️</span>
             </div>
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-[#1A1A1A] mb-3">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-3">
             분석 실패
           </h2>
-          <p className="text-sm sm:text-base text-[#CC0000] mb-6">
+          <p className="text-sm sm:text-base text-red-600 dark:text-red-400 mb-6">
             {error || result?.error || '분석에 실패했습니다.'}
           </p>
           <button
             onClick={() => window.location.href = '/'}
-            className="px-6 py-3 bg-[#0066CC] text-white rounded-lg font-medium hover:bg-[#004499] transition-colors"
+            className="px-6 py-3 bg-blue-600 dark:bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
           >
             다시 시도
           </button>
@@ -106,11 +106,11 @@ function AnalysisPage() {
   if (result && result.status === 'completed' && result.result) {
     return (
       <div>
-        <div className="bg-white border-b border-[#E6E6E6] px-4 sm:px-6 py-3 sm:py-4">
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-3 sm:py-4 transition-colors">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <button
               onClick={() => navigate('/')}
-              className="text-sm sm:text-base text-[#0066CC] hover:text-[#004499] font-medium"
+              className="text-sm sm:text-base text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors"
             >
               ← 새로운 분석
             </button>

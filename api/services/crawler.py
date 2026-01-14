@@ -250,10 +250,10 @@ class Qoo10Crawler:
         
         # 데이터베이스 조회는 최소화 (성능 최적화)
         try:
-        best_ua = self.db.get_best_user_agent()
-        if best_ua:
-            self.current_user_agent = best_ua
-            return best_ua
+            best_ua = self.db.get_best_user_agent()
+            if best_ua:
+                self.current_user_agent = best_ua
+                return best_ua
         except:
             # DB 조회 실패 시 무시하고 계속 진행
             pass
@@ -274,15 +274,15 @@ class Qoo10Crawler:
         # 데이터베이스 조회는 최소화 (성능 최적화)
         try:
             best_proxy = self.db.get_best_proxy()
-        if best_proxy:
-            self.current_proxy = best_proxy
+            if best_proxy:
+                self.current_proxy = best_proxy
                 return {"http://": self.current_proxy, "https://": self.current_proxy}
         except:
             # DB 조회 실패 시 무시하고 계속 진행
             pass
         
-            # 없으면 랜덤 선택
-            self.current_proxy = random.choice(self.proxies)
+        # 없으면 랜덤 선택
+        self.current_proxy = random.choice(self.proxies)
         return {"http://": self.current_proxy, "https://": self.current_proxy}
     
     def _get_headers(self) -> Dict[str, str]:
@@ -607,12 +607,12 @@ class Qoo10Crawler:
                 if result and result != "상품명 없음" and result != "":
                     # 성공 기록은 비동기로 처리 (성능 최적화)
                     try:
-                    self.db.record_selector_performance(
-                        selector_type=selector_type,
-                        selector=selector,
-                        success=True,
-                        data_quality=1.0 if result else 0.0
-                    )
+                        self.db.record_selector_performance(
+                            selector_type=selector_type,
+                            selector=selector,
+                            success=True,
+                            data_quality=1.0 if result else 0.0
+                        )
                     except:
                         pass  # DB 기록 실패해도 무시
                     return result
@@ -2227,16 +2227,16 @@ class Qoo10Crawler:
                         coupon["discount_rate"] = int(discount_match.group(1))
                         break
                 
-        # 최소 금액 추출 (다양한 패턴) - 일본어-한국어 모두 지원
-        above_pattern = self._create_jp_kr_regex("以上", "이상")
-        above_purchase_pattern = self._create_jp_kr_regex("以上購入", "이상구매")
+                # 최소 금액 추출 (다양한 패턴) - 일본어-한국어 모두 지원
+                above_pattern = self._create_jp_kr_regex("以上", "이상")
+                above_purchase_pattern = self._create_jp_kr_regex("以上購入", "이상구매")
                 amount_patterns = [
-            f'(\\d{{1,3}}(?:,\\d{{3}})*)[,円]{above_pattern}',
-            f'(\\d+)[,円]{above_pattern}',
-            f'(\\d{{1,3}}(?:,\\d{{3}})*)[,円]{above_pattern}の',
-            f'(\\d+)[,円]{above_pattern}の',
-            f'(\\d{{1,3}}(?:,\\d{{3}})*)[,円]{above_purchase_pattern}',
-            f'(\\d+)[,円]{above_purchase_pattern}'
+                    f'(\\d{{1,3}}(?:,\\d{{3}})*)[,円]{above_pattern}',
+                    f'(\\d+)[,円]{above_pattern}',
+                    f'(\\d{{1,3}}(?:,\\d{{3}})*)[,円]{above_pattern}の',
+                    f'(\\d+)[,円]{above_pattern}の',
+                    f'(\\d{{1,3}}(?:,\\d{{3}})*)[,円]{above_purchase_pattern}',
+                    f'(\\d+)[,円]{above_purchase_pattern}'
                 ]
                 
                 for pattern in amount_patterns:

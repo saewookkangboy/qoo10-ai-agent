@@ -12,7 +12,7 @@ function App() {
         v7_startTransition: true,
       }}
     >
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/analysis/:analysisId" element={<AnalysisPage />} />

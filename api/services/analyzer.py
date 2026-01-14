@@ -71,8 +71,8 @@ class ProductAnalyzer:
                                 analysis["thumbnail_quality"] = "small"
                                 analysis["score"] += 20
                         else:
-                        analysis["thumbnail_quality"] = "good"
-                        analysis["score"] += 30
+                            analysis["thumbnail_quality"] = "good"
+                            analysis["score"] += 30
                     else:
                         analysis["thumbnail_quality"] = "poor"
                         analysis["recommendations"].append("썸네일 이미지를 확인할 수 없습니다")
