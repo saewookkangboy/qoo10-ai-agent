@@ -36,7 +36,7 @@ export default function ScoreGaugeChart({
       ],
       categoryField: 'type',
       valueField: 'value',
-      innerRadius: 0.7,
+      innerRadius: 0.65,
       startAngle: -180,
       endAngle: 0,
       gauge: {
@@ -44,13 +44,15 @@ export default function ScoreGaugeChart({
         progress: {
           style: {
             fill: color,
-            cornerRadius: 4
+            cornerRadius: 6,
+            lineWidth: 8
           }
         },
         track: {
           style: {
-            fill: isDark ? '#374151' : '#E5E7EB',
-            cornerRadius: 4
+            fill: isDark ? '#1F2937' : '#E5E7EB',
+            cornerRadius: 6,
+            lineWidth: 8
           }
         },
         tickMask: {
@@ -59,9 +61,10 @@ export default function ScoreGaugeChart({
         label: {
           visible: true,
           style: {
-            fill: textColor,
-            fontSize: 24,
-            fontWeight: 'bold'
+            fill: color,
+            fontSize: 32,
+            fontWeight: 'bold',
+            fontFamily: 'system-ui, -apple-system, sans-serif'
           },
           formatMethod: (datum: any) => `${datum.value}`
         }
@@ -88,9 +91,8 @@ export default function ScoreGaugeChart({
   }, [score, title, color, size, actualTheme])
 
   return (
-    <div className="flex flex-col items-center">
-      <div ref={chartRef} className="w-full" style={{ height: `${size / 2}px` }} />
-      <p className="mt-2 text-sm font-medium text-gray-700 dark:text-gray-300">{title}</p>
+    <div className="flex flex-col items-center w-full">
+      <div ref={chartRef} className="w-full flex items-center justify-center" style={{ height: `${size / 2}px` }} />
     </div>
   )
 }

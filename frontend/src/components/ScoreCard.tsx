@@ -17,22 +17,22 @@ const helpContent: Record<string, string> = {
 function ScoreCard({ title, score, analysis }: ScoreCardProps) {
   const getScoreColor = (score: number) => {
     if (score >= 80) return {
-      bg: 'bg-[#00AA44]',
-      text: 'text-[#00AA44]',
-      bgLight: 'bg-green-50',
-      border: 'border-[#00AA44]'
+      bg: 'bg-green-600 dark:bg-green-500',
+      text: 'text-green-600 dark:text-green-400',
+      bgLight: 'bg-green-50 dark:bg-green-900/20',
+      border: 'border-green-500 dark:border-green-400'
     }
     if (score >= 60) return {
-      bg: 'bg-[#FF9900]',
-      text: 'text-[#FF9900]',
-      bgLight: 'bg-yellow-50',
-      border: 'border-[#FF9900]'
+      bg: 'bg-yellow-600 dark:bg-yellow-500',
+      text: 'text-yellow-600 dark:text-yellow-400',
+      bgLight: 'bg-yellow-50 dark:bg-yellow-900/20',
+      border: 'border-yellow-500 dark:border-yellow-400'
     }
     return {
-      bg: 'bg-[#CC0000]',
-      text: 'text-[#CC0000]',
-      bgLight: 'bg-red-50',
-      border: 'border-[#CC0000]'
+      bg: 'bg-red-600 dark:bg-red-500',
+      text: 'text-red-600 dark:text-red-400',
+      bgLight: 'bg-red-50 dark:bg-red-900/20',
+      border: 'border-red-500 dark:border-red-400'
     }
   }
 

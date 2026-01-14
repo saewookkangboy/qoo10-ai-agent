@@ -742,13 +742,21 @@ class ChecklistEvaluator:
         # HTML 태그 제거 (간단한 방법)
         import re
         description_text = re.sub(r'<[^>]+>', '', description_text)
-        has_description = len(description_text) >= 50
+        description_length = len(description_text)
+        has_description = description_length >= 50
         
         # 이미지 확인 (썸네일 또는 상세 이미지)
         # 유효한 이미지 URL인지 확인
         has_thumbnail = bool(thumbnail) and isinstance(thumbnail, str) and ('http' in thumbnail or thumbnail.startswith('//'))
         has_detail_images = isinstance(detail_images, list) and len(detail_images) > 0
         has_images = has_thumbnail or has_detail_images
+        image_count = len(detail_images) + (1 if has_thumbnail else 0)
+        
+        # 분석 결과에서 이미지 분석 점수 확인 (더 정확한 평가)
+        image_score = 0
+        if analysis_result:
+            image_analysis = analysis_result.get("image_analysis", {})
+            image_score = image_analysis.get("score", 0)
         
         # 점수 계산 (더 세밀한 평가)
         score = 0
@@ -761,17 +769,16 @@ class ChecklistEvaluator:
             score += 1
         
         if score == max_score:
-            image_count = len(detail_images) + (1 if has_thumbnail else 0)
             return {
                 "passed": True,
-                "recommendation": f"상품 등록 완료 (상품명: {product_name[:30]}..., 설명: {len(description_text)}자, 이미지: {image_count}개)"
+                "recommendation": f"상품 등록 완료 (상품명: {product_name[:30]}{'...' if len(product_name) > 30 else ''}, 설명: {description_length}자, 이미지: {image_count}개)"
             }
         else:
             missing = []
             if not has_name:
                 missing.append("상품명")
             if not has_description:
-                missing.append(f"상품 설명 (현재: {len(description_text)}자, 최소 50자 필요)")
+                missing.append(f"상품 설명 (현재: {description_length}자, 최소 50자 필요)")
             if not has_images:
                 missing.append("이미지 (썸네일 또는 상세 이미지)")
             return {
@@ -804,15 +811,21 @@ class ChecklistEvaluator:
         shop_data: Optional[Dict[str, Any]],
         analysis_result: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """카테고리 및 브랜드 등록 체크"""
+        """카테고리 및 브랜드 등록 체크 - 실제 데이터 정확히 반영"""
         if not product_data:
             return {"passed": False, "recommendation": "상품 데이터가 없습니다"}
         
-        has_category = bool(product_data.get("category"))
-        has_brand = bool(product_data.get("brand"))
+        category = product_data.get("category")
+        brand = product_data.get("brand")
+        
+        has_category = bool(category) and category not in ["", "N/A", "카테고리 없음"]
+        has_brand = bool(brand) and brand not in ["", "N/A", "브랜드 없음"]
         
         if has_category and has_brand:
-            return {"passed": True}
+            return {
+                "passed": True,
+                "recommendation": f"카테고리 및 브랜드 등록 완료 (카테고리: {category}, 브랜드: {brand})"
+            }
         else:
             missing = []
             if not has_category:
@@ -924,18 +937,40 @@ class ChecklistEvaluator:
         shop_data: Optional[Dict[str, Any]],
         analysis_result: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """상품 페이지 최적화 체크"""
+        """상품 페이지 최적화 체크 - 실제 분석 점수 정확히 반영"""
         if not analysis_result:
             return {"passed": False, "recommendation": "분석 결과가 없습니다"}
         
         overall_score = analysis_result.get("overall_score", 0)
         
+        # 실제 분석 점수 확인 (정확도 향상)
         if overall_score >= 70:
-            return {"passed": True}
+            return {
+                "passed": True,
+                "recommendation": f"페이지 최적화 완료 (현재 점수: {overall_score}점)"
+            }
         else:
+            # 세부 점수 정보 추가
+            detail_info = []
+            image_analysis = analysis_result.get("image_analysis", {})
+            description_analysis = analysis_result.get("description_analysis", {})
+            price_analysis = analysis_result.get("price_analysis", {})
+            review_analysis = analysis_result.get("review_analysis", {})
+            
+            if image_analysis:
+                detail_info.append(f"이미지: {image_analysis.get('score', 0)}점")
+            if description_analysis:
+                detail_info.append(f"설명: {description_analysis.get('score', 0)}점")
+            if price_analysis:
+                detail_info.append(f"가격: {price_analysis.get('score', 0)}점")
+            if review_analysis:
+                detail_info.append(f"리뷰: {review_analysis.get('score', 0)}점")
+            
+            detail_str = f" ({', '.join(detail_info)})" if detail_info else ""
+            
             return {
                 "passed": False,
-                "recommendation": f"현재 점수 {overall_score}점. 70점 이상을 목표로 개선하세요"
+                "recommendation": f"현재 점수 {overall_score}점{detail_str}. 70점 이상을 목표로 개선하세요"
             }
     
     async def _check_keyword_optimization(
@@ -944,19 +979,36 @@ class ChecklistEvaluator:
         shop_data: Optional[Dict[str, Any]],
         analysis_result: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """검색 키워드 최적화 체크"""
+        """검색 키워드 최적화 체크 - 실제 분석 결과 정확히 반영"""
         if not analysis_result:
             return {"passed": False, "recommendation": "분석 결과가 없습니다"}
         
         seo_analysis = analysis_result.get("seo_analysis", {})
         keywords_in_name = seo_analysis.get("keywords_in_name", False)
+        keywords_in_description = seo_analysis.get("keywords_in_description", False)
+        seo_score = seo_analysis.get("score", 0)
         
-        if keywords_in_name:
-            return {"passed": True}
+        # 실제 상품명과 검색어 확인
+        product_name = ""
+        search_keywords = []
+        if product_data:
+            product_name = product_data.get("product_name", "")
+            search_keywords = product_data.get("search_keywords", [])
+        
+        if keywords_in_name or (search_keywords and len(search_keywords) > 0):
+            keyword_info = []
+            if search_keywords:
+                keyword_info.append(f"검색어: {', '.join(search_keywords[:3])}{'...' if len(search_keywords) > 3 else ''}")
+            if seo_score > 0:
+                keyword_info.append(f"SEO 점수: {seo_score}점")
+            return {
+                "passed": True,
+                "recommendation": f"검색 키워드 최적화 완료{(' (' + ', '.join(keyword_info) + ')' if keyword_info else '')}"
+            }
         else:
             return {
                 "passed": False,
-                "recommendation": "상품명에 인기 키워드를 포함하세요"
+                "recommendation": f"상품명에 인기 키워드를 포함하세요{' (현재 상품명: ' + product_name[:30] + '...)' if product_name and len(product_name) > 30 else (' (현재 상품명: ' + product_name + ')' if product_name else '')}"
             }
     
     async def _check_price_strategy(
@@ -965,19 +1017,39 @@ class ChecklistEvaluator:
         shop_data: Optional[Dict[str, Any]],
         analysis_result: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """가격 전략 체크"""
+        """가격 전략 체크 - 실제 분석 결과 정확히 반영"""
         if not analysis_result:
             return {"passed": False, "recommendation": "분석 결과가 없습니다"}
         
         price_analysis = analysis_result.get("price_analysis", {})
         score = price_analysis.get("score", 0)
+        positioning = price_analysis.get("positioning", "")
+        sale_price = None
+        discount_rate = 0
+        
+        if product_data:
+            price = product_data.get("price", {})
+            if isinstance(price, dict):
+                sale_price = price.get("sale_price")
+                discount_rate = price.get("discount_rate", 0)
         
         if score >= 60:
-            return {"passed": True}
+            price_info = []
+            if sale_price:
+                price_info.append(f"판매가: {sale_price:,}円")
+            if discount_rate > 0:
+                price_info.append(f"할인율: {discount_rate}%")
+            if positioning:
+                price_info.append(f"포지셔닝: {positioning}")
+            
+            return {
+                "passed": True,
+                "recommendation": f"가격 전략 수립 완료 (점수: {score}점{', ' + ', '.join(price_info) if price_info else ''})"
+            }
         else:
             return {
                 "passed": False,
-                "recommendation": "가격 전략을 재검토하세요"
+                "recommendation": f"가격 전략을 재검토하세요 (현재 점수: {score}점)"
             }
     
     async def _check_promotion(
@@ -1202,26 +1274,45 @@ class ChecklistEvaluator:
         shop_data: Optional[Dict[str, Any]],
         analysis_result: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Shop 레벨 체크"""
+        """Shop 레벨 체크 - 실제 데이터 정확히 반영"""
+        # product_data에서 seller_info 확인 (shop_data가 없을 경우)
+        if not shop_data and product_data:
+            seller_info = product_data.get("seller_info", {})
+            shop_level = seller_info.get("shop_level")
+            shop_name = seller_info.get("shop_name")
+            
+            if shop_level:
+                shop_data = {"shop_level": shop_level, "shop_name": shop_name}
+        
         if not shop_data:
-            return {"passed": False, "recommendation": "Shop 데이터가 없습니다"}
+            # product_data에서도 확인 불가능한 경우
+            return {
+                "passed": False,
+                "recommendation": "Shop 데이터가 없습니다. 상품 페이지에서 Shop 정보를 확인할 수 없습니다"
+            }
         
         shop_level = shop_data.get("shop_level")
+        shop_name = shop_data.get("shop_name", "")
         
-        if shop_level == "power":
+        if shop_level == "power" or shop_level == "POWER":
             return {
                 "passed": True,
-                "recommendation": "POWER 셀러 등급으로 정산 리드타임이 단축됩니다 (배송 완료 후 5일)"
+                "recommendation": f"POWER 셀러 등급{' (' + shop_name + ')' if shop_name else ''}으로 정산 리드타임이 단축됩니다 (배송 완료 후 5일)"
             }
-        elif shop_level == "excellent":
+        elif shop_level == "excellent" or shop_level == "우수":
             return {
                 "passed": True,
-                "recommendation": "우수 셀러 등급입니다. POWER 셀러 등급 달성을 목표로 하세요 (정산 리드타임: 배송 완료 후 10일)"
+                "recommendation": f"우수 셀러 등급{' (' + shop_name + ')' if shop_name else ''}입니다. POWER 셀러 등급 달성을 목표로 하세요 (정산 리드타임: 배송 완료 후 10일)"
             }
-        elif shop_level == "normal":
+        elif shop_level == "normal" or shop_level == "일반":
             return {
                 "passed": True,
-                "recommendation": "일반 셀러 등급입니다. 우수 셀러 등급 달성을 목표로 하세요 (정산 리드타임: 배송 완료 후 15일)"
+                "recommendation": f"일반 셀러 등급{' (' + shop_name + ')' if shop_name else ''}입니다. 우수 셀러 등급 달성을 목표로 하세요 (정산 리드타임: 배송 완료 후 15일)"
+            }
+        elif shop_level:
+            return {
+                "passed": True,
+                "recommendation": f"Shop 레벨: {shop_level}{' (' + shop_name + ')' if shop_name else ''}. POWER 셀러 등급 달성을 목표로 하세요"
             }
         else:
             return {
@@ -1235,11 +1326,27 @@ class ChecklistEvaluator:
         shop_data: Optional[Dict[str, Any]],
         analysis_result: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Shop 팔로워 수 체크"""
+        """Shop 팔로워 수 체크 - 실제 데이터 정확히 반영"""
+        # product_data에서 seller_info 확인 (shop_data가 없을 경우)
+        if not shop_data and product_data:
+            seller_info = product_data.get("seller_info", {})
+            if seller_info:
+                shop_data = seller_info
+        
         if not shop_data:
-            return {"passed": False, "recommendation": "Shop 데이터가 없습니다"}
+            return {
+                "passed": False,
+                "recommendation": "Shop 데이터가 없습니다. 상품 페이지에서 Shop 정보를 확인할 수 없습니다"
+            }
         
         follower_count = shop_data.get("follower_count", 0)
+        
+        # 숫자 타입 확인 및 변환
+        if isinstance(follower_count, str):
+            try:
+                follower_count = int(follower_count.replace(',', '').replace('명', '').strip())
+            except:
+                follower_count = 0
         
         if follower_count >= 1000:
             return {
@@ -1268,13 +1375,29 @@ class ChecklistEvaluator:
         shop_data: Optional[Dict[str, Any]],
         analysis_result: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Shop 상품 다양성 체크"""
+        """Shop 상품 다양성 체크 - 실제 데이터 정확히 반영"""
+        # product_data에서 seller_info 확인 (shop_data가 없을 경우)
+        if not shop_data and product_data:
+            seller_info = product_data.get("seller_info", {})
+            if seller_info:
+                shop_data = seller_info
+        
         if not shop_data:
-            return {"passed": False, "recommendation": "Shop 데이터가 없습니다"}
+            return {
+                "passed": False,
+                "recommendation": "Shop 데이터가 없습니다. 상품 페이지에서 Shop 정보를 확인할 수 없습니다"
+            }
         
         product_count = shop_data.get("product_count", 0)
         categories = shop_data.get("categories", {})
         category_count = len(categories) if isinstance(categories, dict) else 0
+        
+        # 숫자 타입 확인 및 변환
+        if isinstance(product_count, str):
+            try:
+                product_count = int(product_count.replace(',', '').replace('개', '').strip())
+            except:
+                product_count = 0
         
         if product_count >= 20 and category_count >= 3:
             return {

@@ -7,7 +7,6 @@ import CompetitorComparisonCard from './CompetitorComparisonCard'
 import DownloadButton from './DownloadButton'
 import HelpTooltip from './HelpTooltip'
 import ThemeToggle from './ThemeToggle'
-import ScoreGaugeChart from './charts/ScoreGaugeChart'
 import ScoreBarChart from './charts/ScoreBarChart'
 
 interface AnalysisReportProps {
@@ -77,40 +76,27 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
             <ThemeToggle />
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* 종합 점수 게이지 차트 */}
-            <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-              <div className="text-center mb-2">
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-2">종합 점수</p>
-                <ScoreGaugeChart 
-                  score={overallScore} 
-                  title={getScoreLabel(overallScore)}
-                  color={colors.chartColor}
-                  size={180}
-                />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+            {/* 점수 카드 */}
+            <div className={`px-4 sm:px-6 py-4 sm:py-6 rounded-xl ${colors.bg} border ${colors.border} flex flex-col justify-center hover:shadow-md transition-all duration-200`}>
+              <div className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">종합 점수</div>
+              <div className="flex items-baseline gap-1 mb-2">
+                <span className={`text-3xl sm:text-4xl font-bold ${colors.text}`}>{overallScore}</span>
+                <span className="text-base sm:text-lg text-gray-600 dark:text-gray-400">/ 100</span>
+              </div>
+              <div className={`text-xs sm:text-sm font-semibold ${colors.text} mt-1`}>
+                {getScoreLabel(overallScore)}
               </div>
             </div>
             
-            {/* 점수 카드 */}
-            <div className={`px-4 sm:px-6 py-3 sm:py-4 rounded-lg ${colors.bg} border-2 ${colors.border} flex flex-col justify-center`}>
-              <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">종합 점수</div>
-                <div className="flex items-baseline gap-1">
-                  <span className={`text-3xl sm:text-4xl font-bold ${colors.text}`}>{overallScore}</span>
-                <span className="text-base sm:text-lg text-gray-600 dark:text-gray-400">/ 100</span>
-                </div>
-                <div className={`text-xs sm:text-sm font-medium ${colors.text} mt-1`}>
-                  {getScoreLabel(overallScore)}
-                </div>
-              </div>
-            
             {/* 긴급 개선 항목 */}
-              {highPriorityRecs.length > 0 && (
-              <div className="px-3 sm:px-4 py-2 sm:py-3 bg-red-50 dark:bg-red-900/20 border-2 border-red-500 dark:border-red-400 rounded-lg flex flex-col justify-center">
-                <div className="text-xs sm:text-sm text-red-600 dark:text-red-400 font-medium mb-1">긴급 개선</div>
-                <div className="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400">{highPriorityRecs.length}</div>
+            {highPriorityRecs.length > 0 && (
+              <div className="px-4 sm:px-6 py-4 sm:py-6 bg-red-50 dark:bg-red-900/20 border border-red-500 dark:border-red-400 rounded-xl flex flex-col justify-center hover:shadow-md transition-all duration-200">
+                <div className="text-xs sm:text-sm font-medium text-red-600 dark:text-red-400 mb-2">긴급 개선</div>
+                <div className="text-2xl sm:text-3xl font-bold text-red-600 dark:text-red-400 mb-1">{highPriorityRecs.length}</div>
                 <div className="text-xs text-gray-600 dark:text-gray-400">개 항목</div>
-                </div>
-              )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -156,93 +142,6 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
               />
             </div>
           </>
-        )}
-
-        {/* 페이지 구조 분석 카드 */}
-        {product_analysis?.page_structure_analysis && (
-          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 sm:p-6 mb-4 sm:mb-6 transition-colors">
-            <div className="flex items-center gap-2 mb-4">
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
-                📐 페이지 구조 분석
-              </h2>
-              <HelpTooltip 
-                content="페이지의 모든 div class를 분석하여 구조적 완성도를 평가합니다.\n\n• 총 클래스 수: 페이지의 구조 복잡도\n• 주요 요소 존재 여부: 필수 정보 요소 확인\n• 구조 완성도: 각 정보 요소의 완성도 평가" 
-              />
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">총 클래스 수</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {product_analysis.page_structure_analysis.total_classes}
-                </div>
-              </div>
-              
-              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">구조 점수</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {product_analysis.page_structure_analysis.score}
-                  <span className="text-base text-gray-600 dark:text-gray-400">/ 100</span>
-                </div>
-              </div>
-              
-              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">완성된 요소</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {Object.values(product_analysis.page_structure_analysis.structure_completeness).filter(v => v).length}
-                  <span className="text-base text-gray-600 dark:text-gray-400">/ {Object.keys(product_analysis.page_structure_analysis.structure_completeness).length}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 주요 요소 존재 여부 */}
-            <div className="mb-4">
-              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">주요 요소 확인</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-                {Object.entries(product_analysis.page_structure_analysis.key_elements_present).map(([key, present]) => (
-                  <div key={key} className="flex items-center gap-2">
-                    <span className={present ? "text-green-500 dark:text-green-400" : "text-red-500 dark:text-red-400"}>
-                      {present ? "✓" : "✗"}
-                    </span>
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                      {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* 상위 클래스 목록 */}
-            {product_analysis.page_structure_analysis.top_classes && 
-             product_analysis.page_structure_analysis.top_classes.length > 0 && (
-              <div className="mb-4">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">주요 사용 클래스 (상위 10개)</h3>
-                <div className="flex flex-wrap gap-2">
-                  {product_analysis.page_structure_analysis.top_classes.map((item, idx) => (
-                    <div 
-                      key={idx}
-                      className="px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-full text-sm border border-blue-200 dark:border-blue-800"
-                      title={`사용 횟수: ${item.frequency}`}
-                    >
-                      {item.class} ({item.frequency})
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* 추천 사항 */}
-            {product_analysis.page_structure_analysis.recommendations.length > 0 && (
-              <div>
-                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">구조 개선 제안</h3>
-                <ul className="list-disc list-inside space-y-1">
-                  {product_analysis.page_structure_analysis.recommendations.map((rec, idx) => (
-                    <li key={idx} className="text-sm text-gray-600 dark:text-gray-400">{rec}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
         )}
 
         {/* 탭 기반 결과 섹션 */}
@@ -294,14 +193,14 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
                 {/* High Priority */}
                 {highPriorityRecs.length > 0 && (
                   <div className="mb-6 sm:mb-8">
-                    <div className="flex items-center gap-2 mb-3 sm:mb-4">
-                      <span className="text-lg sm:text-xl">🔴</span>
+                    <div className="flex items-center gap-3 mb-4 sm:mb-5">
+                      <div className="w-2 h-2 rounded-full bg-red-500"></div>
                       <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">High Priority</h3>
-                      <span className="px-2 py-0.5 text-xs font-medium bg-red-600 dark:bg-red-500 text-white rounded">
+                      <span className="px-2.5 py-1 text-xs font-semibold bg-red-600 dark:bg-red-500 text-white rounded-lg">
                         {highPriorityRecs.length}
                       </span>
                     </div>
-                    <div className="space-y-3 sm:space-y-4">
+                    <div className="space-y-4 sm:space-y-5">
                       {highPriorityRecs.map((rec) => (
                         <RecommendationCard key={rec.id} recommendation={rec} />
                       ))}
@@ -312,14 +211,14 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
                 {/* Medium Priority */}
                 {mediumPriorityRecs.length > 0 && (
                   <div className="mb-6 sm:mb-8">
-                    <div className="flex items-center gap-2 mb-3 sm:mb-4">
-                      <span className="text-lg sm:text-xl">🟡</span>
+                    <div className="flex items-center gap-3 mb-4 sm:mb-5">
+                      <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
                       <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">Medium Priority</h3>
-                      <span className="px-2 py-0.5 text-xs font-medium bg-yellow-600 dark:bg-yellow-500 text-white rounded">
+                      <span className="px-2.5 py-1 text-xs font-semibold bg-yellow-600 dark:bg-yellow-500 text-white rounded-lg">
                         {mediumPriorityRecs.length}
                       </span>
                     </div>
-                    <div className="space-y-3 sm:space-y-4">
+                    <div className="space-y-4 sm:space-y-5">
                       {mediumPriorityRecs.map((rec) => (
                         <RecommendationCard key={rec.id} recommendation={rec} />
                       ))}
@@ -330,14 +229,14 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
                 {/* Low Priority */}
                 {lowPriorityRecs.length > 0 && (
                   <div>
-                    <div className="flex items-center gap-2 mb-3 sm:mb-4">
-                      <span className="text-lg sm:text-xl">🟢</span>
+                    <div className="flex items-center gap-3 mb-4 sm:mb-5">
+                      <div className="w-2 h-2 rounded-full bg-gray-500"></div>
                       <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">Low Priority</h3>
-                      <span className="px-2 py-0.5 text-xs font-medium bg-gray-600 dark:bg-gray-500 text-white rounded">
+                      <span className="px-2.5 py-1 text-xs font-semibold bg-gray-600 dark:bg-gray-500 text-white rounded-lg">
                         {lowPriorityRecs.length}
                       </span>
                     </div>
-                    <div className="space-y-3 sm:space-y-4">
+                    <div className="space-y-4 sm:space-y-5">
                       {lowPriorityRecs.map((rec) => (
                         <RecommendationCard key={rec.id} recommendation={rec} />
                       ))}

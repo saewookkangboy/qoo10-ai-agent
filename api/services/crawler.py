@@ -2200,6 +2200,9 @@ class Qoo10Crawler:
         for selector in coupon_selectors:
             coupon_elements = soup.select(selector)
             for elem in coupon_elements:
+                if not elem:
+                    continue
+                    
                 coupon = {
                     "discount_rate": 0,
                     "min_amount": 0,
@@ -2207,8 +2210,18 @@ class Qoo10Crawler:
                     "description": ""
                 }
                 
-                # 쿠폰 텍스트 추출
-                discount_text = elem.get_text(strip=True)
+                # 쿠폰 텍스트 추출 - 안전하게 처리
+                discount_text = ""
+                try:
+                    discount_text = elem.get_text(strip=True) if elem else ""
+                    if not discount_text:
+                        continue
+                except (AttributeError, TypeError):
+                    continue
+                
+                # discount_text가 여전히 비어있으면 건너뛰기
+                if not discount_text:
+                    continue
                 
                 # 할인율 추출 (다양한 패턴) - 일본어-한국어 모두 지원
                 discount_pattern = self._create_jp_kr_regex("割引", "할인")
@@ -2259,8 +2272,8 @@ class Qoo10Crawler:
                         coupon["valid_until"] = date_match.group(2)
                         break
                 
-                # 쿠폰 설명
-                coupon["description"] = discount_text[:100]  # 최대 100자
+                # 쿠폰 설명 - 안전하게 처리
+                coupon["description"] = discount_text[:100] if discount_text else ""  # 최대 100자
                 
                 # 중복 제거 (할인율과 최소 금액이 같은 쿠폰)
                 coupon_key = f"{coupon['discount_rate']}_{coupon['min_amount']}"
