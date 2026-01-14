@@ -1,6 +1,11 @@
 """
 상품 분석 서비스
 수집된 상품 데이터를 분석하여 점수와 인사이트를 제공합니다.
+
+분석 원칙:
+- CRAWLING_ANALYSIS_PRINCIPLES.md 참조
+- 모든 분석은 일관된 기준과 원칙을 따라야 함
+- 크롤링 방법(crawled_with)에 따라 적절한 분석 수행
 """
 from typing import Dict, Any, List
 import re

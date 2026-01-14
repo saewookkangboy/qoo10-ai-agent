@@ -1,6 +1,12 @@
 """
 Qoo10 크롤링 서비스 (AI 강화 학습 및 방화벽 우회 기능 포함)
 Qoo10 상품 및 Shop 페이지에서 데이터를 수집하며, 학습을 통해 성능을 지속적으로 개선합니다.
+
+크롤링 원칙:
+- CRAWLING_ANALYSIS_PRINCIPLES.md 참조
+- Playwright 크롤링을 기본 권장 (동적 콘텐츠 추출)
+- 모든 크롤링 결과에 crawled_with 필드 포함
+- 데이터 검증 및 정규화 규칙 준수
 """
 import httpx
 from bs4 import BeautifulSoup
@@ -13,10 +19,31 @@ import time
 from datetime import datetime
 import os
 from dotenv import load_dotenv
+import json
 
 from services.database import CrawlerDatabase
 
 load_dotenv()
+
+# 디버그 로깅 설정
+LOG_PATH = "/Users/chunghyo/qoo10-ai-agent/.cursor/debug.log"
+
+def _log_debug(session_id: str, run_id: str, hypothesis_id: str, location: str, message: str, data: Dict[str, Any] = None):
+    """디버그 로그 작성"""
+    try:
+        log_entry = {
+            "sessionId": session_id,
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(datetime.now().timestamp() * 1000)
+        }
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass  # 로깅 실패해도 크롤링은 계속 진행
 
 # Playwright 임포트 (선택적)
 try:
@@ -1031,6 +1058,10 @@ class Qoo10Crawler:
     
     def _extract_product_name(self, soup: BeautifulSoup) -> str:
         """상품명 추출 (AI 학습 기반) - 실제 Qoo10 페이지 구조에 맞게 개선 및 정확도 향상"""
+        # #region agent log
+        _log_debug("debug-session", "run1", "A", "crawler.py:_extract_product_name", "상품명 추출 시작", {})
+        # #endregion
+        
         default_selectors = [
             'h1.product-name',
             'h1[itemprop="name"]',
@@ -1108,6 +1139,13 @@ class Qoo10Crawler:
             result = ' '.join(result.split())
             # 특수 문자 정제 (필요시)
             result = result.strip()
+        
+        # #region agent log
+        _log_debug("debug-session", "run1", "A", "crawler.py:_extract_product_name", "상품명 추출 완료", {
+            "result": result[:100] if result else "",
+            "is_empty": result == "상품명 없음" or not result
+        })
+        # #endregion
         
         return result
     
@@ -1204,6 +1242,10 @@ class Qoo10Crawler:
     
     def _extract_price(self, soup: BeautifulSoup) -> Dict[str, Any]:
         """가격 정보 추출 (AI 학습 기반) - 실제 Qoo10 페이지 구조에 맞게 개선 및 정확도 향상"""
+        # #region agent log
+        _log_debug("debug-session", "run1", "B", "crawler.py:_extract_price", "가격 정보 추출 시작", {})
+        # #endregion
+        
         price_data = {
             "original_price": None,
             "sale_price": None,
@@ -1367,6 +1409,16 @@ class Qoo10Crawler:
                             price_data["sale_price"] = max(valid_prices)
                             break
         
+        # #region agent log
+        _log_debug("debug-session", "run1", "B", "crawler.py:_extract_price", "가격 정보 추출 완료", {
+            "sale_price": price_data.get("sale_price"),
+            "original_price": price_data.get("original_price"),
+            "discount_rate": price_data.get("discount_rate"),
+            "has_coupon": bool(price_data.get("coupon_discount")),
+            "is_empty": not price_data.get("sale_price")
+        })
+        # #endregion
+        
         return price_data
     
     def _parse_price(self, price_text: Optional[str]) -> Optional[int]:
@@ -1447,6 +1499,15 @@ class Qoo10Crawler:
                         if not any(exclude in src.lower() for exclude in ['icon', 'logo', 'banner', 'button']):
                             images["detail_images"].append(src)
                             seen_images.add(src)
+        
+        # #region agent log
+        _log_debug("debug-session", "run1", "E", "crawler.py:_extract_images", "이미지 추출 완료", {
+            "has_thumbnail": bool(images.get("thumbnail")),
+            "detail_images_count": len(images.get("detail_images", [])),
+            "total_images": len(images.get("detail_images", [])) + (1 if images.get("thumbnail") else 0),
+            "is_empty": not images.get("thumbnail") and len(images.get("detail_images", [])) == 0
+        })
+        # #endregion
         
         return images
     
@@ -1538,6 +1599,13 @@ class Qoo10Crawler:
             if len(result) > 5000:
                 result = result[:5000] + "..."
         
+        # #region agent log
+        _log_debug("debug-session", "run1", "D", "crawler.py:_extract_description", "상품 설명 추출 완료", {
+            "description_length": len(result) if result else 0,
+            "is_empty": not result or len(result) < 50
+        })
+        # #endregion
+        
         return result
     
     def _extract_search_keywords(self, soup: BeautifulSoup) -> List[str]:
@@ -1558,6 +1626,10 @@ class Qoo10Crawler:
     
     def _extract_reviews(self, soup: BeautifulSoup) -> Dict[str, Any]:
         """리뷰 정보 추출 - 실제 Qoo10 페이지 구조에 맞게 개선 및 정확도 향상"""
+        # #region agent log
+        _log_debug("debug-session", "run1", "C", "crawler.py:_extract_reviews", "리뷰 정보 추출 시작", {})
+        # #endregion
+        
         reviews_data = {
             "rating": 0.0,
             "review_count": 0,
@@ -1666,6 +1738,15 @@ class Qoo10Crawler:
             if len(reviews_data["reviews"]) >= 10:
                 break
         
+        # #region agent log
+        _log_debug("debug-session", "run1", "C", "crawler.py:_extract_reviews", "리뷰 정보 추출 완료", {
+            "rating": reviews_data.get("rating"),
+            "review_count": reviews_data.get("review_count"),
+            "reviews_count": len(reviews_data.get("reviews", [])),
+            "is_empty": not reviews_data.get("rating") and not reviews_data.get("review_count")
+        })
+        # #endregion
+        
         return reviews_data
     
     def _extract_seller_info(self, soup: BeautifulSoup) -> Dict[str, Any]:
@@ -1689,6 +1770,10 @@ class Qoo10Crawler:
     
     def _extract_shipping_info(self, soup: BeautifulSoup) -> Dict[str, Any]:
         """배송 정보 추출 - 실제 Qoo10 페이지 구조에 맞게 개선"""
+        # #region agent log
+        _log_debug("debug-session", "run1", "F", "crawler.py:_extract_shipping_info", "배송 정보 추출 시작", {})
+        # #endregion
+        
         shipping_info = {
             "shipping_fee": None,
             "shipping_method": None,
@@ -1750,6 +1835,16 @@ class Qoo10Crawler:
                 elif re.search(return_pattern, return_text):
                     shipping_info["return_policy"] = "return_available"
         
+        # #region agent log
+        _log_debug("debug-session", "run1", "F", "crawler.py:_extract_shipping_info", "배송 정보 추출 완료", {
+            "shipping_fee": shipping_info.get("shipping_fee"),
+            "free_shipping": shipping_info.get("free_shipping"),
+            "shipping_method": shipping_info.get("shipping_method"),
+            "estimated_delivery": shipping_info.get("estimated_delivery"),
+            "is_empty": not shipping_info.get("shipping_fee") and not shipping_info.get("free_shipping")
+        })
+        # #endregion
+        
         return shipping_info
     
     def _extract_move_product(self, soup: BeautifulSoup) -> bool:
@@ -1780,6 +1875,10 @@ class Qoo10Crawler:
     
     def _extract_qpoint_info(self, soup: BeautifulSoup) -> Dict[str, Any]:
         """Qポイント 정보 상세 추출 - 실제 Qoo10 페이지 구조에 맞게 개선"""
+        # #region agent log
+        _log_debug("debug-session", "run1", "I", "crawler.py:_extract_qpoint_info", "Qポイント 정보 추출 시작", {})
+        # #endregion
+        
         qpoint_info = {
             "max_points": None,
             "receive_confirmation_points": None,
@@ -1824,10 +1923,24 @@ class Qoo10Crawler:
                 if auto_match:
                     qpoint_info["auto_points"] = int(auto_match.group(1))
         
+        # #region agent log
+        _log_debug("debug-session", "run1", "I", "crawler.py:_extract_qpoint_info", "Qポイント 정보 추출 완료", {
+            "max_points": qpoint_info.get("max_points"),
+            "receive_confirmation_points": qpoint_info.get("receive_confirmation_points"),
+            "review_points": qpoint_info.get("review_points"),
+            "auto_points": qpoint_info.get("auto_points"),
+            "is_empty": not any(qpoint_info.values())
+        })
+        # #endregion
+        
         return qpoint_info
     
     def _extract_coupon_info(self, soup: BeautifulSoup) -> Dict[str, Any]:
         """쿠폰 상세 정보 추출 - 실제 Qoo10 페이지 구조에 맞게 개선"""
+        # #region agent log
+        _log_debug("debug-session", "run1", "G", "crawler.py:_extract_coupon_info", "쿠폰 정보 추출 시작", {})
+        # #endregion
+        
         coupon_info = {
             "has_coupon": False,
             "coupon_discount": None,
@@ -1866,6 +1979,15 @@ class Qoo10Crawler:
                     coupon_info["coupon_type"] = "password"
                 else:
                     coupon_info["coupon_type"] = "auto"
+        
+        # #region agent log
+        _log_debug("debug-session", "run1", "G", "crawler.py:_extract_coupon_info", "쿠폰 정보 추출 완료", {
+            "has_coupon": coupon_info.get("has_coupon"),
+            "coupon_type": coupon_info.get("coupon_type"),
+            "max_discount": coupon_info.get("max_discount"),
+            "is_empty": not coupon_info.get("has_coupon")
+        })
+        # #endregion
         
         return coupon_info
     
