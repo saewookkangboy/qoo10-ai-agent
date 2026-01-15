@@ -971,3 +971,265 @@ class CrawlerDatabase:
                     score += weight
         
         return score / max_score if max_score > 0 else 0.0
+    
+    def save_error_report(
+        self,
+        analysis_id: str,
+        url: str,
+        field_name: str,
+        issue_type: str,
+        severity: str,
+        user_description: Optional[str] = None,
+        crawler_value: Optional[str] = None,
+        report_value: Optional[str] = None,
+        page_structure_chunk: Optional[Dict[str, Any]] = None
+    ) -> int:
+        """
+        오류 신고 저장
+        
+        Args:
+            analysis_id: 분석 ID
+            url: 분석된 URL
+            field_name: 문제가 있는 필드명
+            issue_type: 문제 유형 (mismatch, missing, incorrect)
+            severity: 심각도 (high, medium, low)
+            user_description: 사용자 설명
+            crawler_value: 크롤러가 수집한 값 (JSON 문자열)
+            report_value: 리포트에 표시된 값 (JSON 문자열)
+            page_structure_chunk: 페이지 구조 Chunk (딕셔너리)
+            
+        Returns:
+            저장된 오류 신고 ID
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # page_structure_chunk를 JSON 문자열로 변환
+            page_structure_chunk_str = json.dumps(page_structure_chunk, ensure_ascii=False) if page_structure_chunk else None
+            
+            if self.use_postgres:
+                cursor.execute("""
+                    INSERT INTO error_reports (
+                        analysis_id, url, field_name, issue_type, severity,
+                        user_description, crawler_value, report_value, page_structure_chunk,
+                        status, created_at, updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (
+                    analysis_id,
+                    url,
+                    field_name,
+                    issue_type,
+                    severity,
+                    user_description,
+                    crawler_value,
+                    report_value,
+                    page_structure_chunk_str,
+                    "pending",
+                    datetime.now().isoformat(),
+                    datetime.now().isoformat()
+                ))
+                error_report_id = cursor.fetchone()["id"]
+            else:
+                cursor.execute("""
+                    INSERT INTO error_reports (
+                        analysis_id, url, field_name, issue_type, severity,
+                        user_description, crawler_value, report_value, page_structure_chunk,
+                        status, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    analysis_id,
+                    url,
+                    field_name,
+                    issue_type,
+                    severity,
+                    user_description,
+                    crawler_value,
+                    report_value,
+                    page_structure_chunk_str,
+                    "pending",
+                    datetime.now().isoformat(),
+                    datetime.now().isoformat()
+                ))
+                error_report_id = cursor.lastrowid
+            
+            return error_report_id
+    
+    def get_error_reports_by_field(
+        self,
+        field_name: str,
+        status: str = "pending"
+    ) -> List[Dict[str, Any]]:
+        """
+        특정 필드의 오류 신고 목록 조회
+        
+        Args:
+            field_name: 필드명
+            status: 신고 상태 (pending, resolved)
+            
+        Returns:
+            오류 신고 목록
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if self.use_postgres:
+                cursor.execute("""
+                    SELECT * FROM error_reports
+                    WHERE field_name = %s AND status = %s
+                    ORDER BY created_at DESC
+                """, (field_name, status))
+            else:
+                cursor.execute("""
+                    SELECT * FROM error_reports
+                    WHERE field_name = ? AND status = ?
+                    ORDER BY created_at DESC
+                """, (field_name, status))
+            
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+    
+    def update_error_report_status(
+        self,
+        error_report_id: int,
+        status: str
+    ) -> bool:
+        """
+        오류 신고 상태 업데이트
+        
+        Args:
+            error_report_id: 오류 신고 ID
+            status: 새로운 상태 (pending, resolved)
+            
+        Returns:
+            업데이트 성공 여부
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            resolved_at = datetime.now().isoformat() if status == "resolved" else None
+            
+            if self.use_postgres:
+                if resolved_at:
+                    cursor.execute("""
+                        UPDATE error_reports
+                        SET status = %s, resolved_at = %s, updated_at = %s
+                        WHERE id = %s
+                    """, (status, resolved_at, datetime.now().isoformat(), error_report_id))
+                else:
+                    cursor.execute("""
+                        UPDATE error_reports
+                        SET status = %s, updated_at = %s
+                        WHERE id = %s
+                    """, (status, datetime.now().isoformat(), error_report_id))
+            else:
+                if resolved_at:
+                    cursor.execute("""
+                        UPDATE error_reports
+                        SET status = ?, resolved_at = ?, updated_at = ?
+                        WHERE id = ?
+                    """, (status, resolved_at, datetime.now().isoformat(), error_report_id))
+                else:
+                    cursor.execute("""
+                        UPDATE error_reports
+                        SET status = ?, updated_at = ?
+                        WHERE id = ?
+                    """, (status, datetime.now().isoformat(), error_report_id))
+            
+            return cursor.rowcount > 0
+    
+    def save_error_report_chunk(
+        self,
+        error_report_id: int,
+        chunk_type: str,
+        chunk_data: Dict[str, Any],
+        selector_pattern: Optional[str] = None,
+        extraction_method: Optional[str] = None
+    ) -> int:
+        """
+        오류 신고 Chunk 저장
+        
+        Args:
+            error_report_id: 오류 신고 ID
+            chunk_type: Chunk 유형
+            chunk_data: Chunk 데이터 (딕셔너리)
+            selector_pattern: 선택자 패턴
+            extraction_method: 추출 방법
+            
+        Returns:
+            저장된 Chunk ID
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            chunk_data_str = json.dumps(chunk_data, ensure_ascii=False)
+            
+            if self.use_postgres:
+                cursor.execute("""
+                    INSERT INTO error_report_chunks (
+                        error_report_id, chunk_type, chunk_data,
+                        selector_pattern, extraction_method,
+                        created_at, updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (
+                    error_report_id,
+                    chunk_type,
+                    chunk_data_str,
+                    selector_pattern,
+                    extraction_method,
+                    datetime.now().isoformat(),
+                    datetime.now().isoformat()
+                ))
+                chunk_id = cursor.fetchone()["id"]
+            else:
+                cursor.execute("""
+                    INSERT INTO error_report_chunks (
+                        error_report_id, chunk_type, chunk_data,
+                        selector_pattern, extraction_method,
+                        created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    error_report_id,
+                    chunk_type,
+                    chunk_data_str,
+                    selector_pattern,
+                    extraction_method,
+                    datetime.now().isoformat(),
+                    datetime.now().isoformat()
+                ))
+                chunk_id = cursor.lastrowid
+            
+            return chunk_id
+    
+    def get_error_report_chunks(
+        self,
+        error_report_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        오류 신고의 Chunk 목록 조회
+        
+        Args:
+            error_report_id: 오류 신고 ID
+            
+        Returns:
+            Chunk 목록
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if self.use_postgres:
+                cursor.execute("""
+                    SELECT * FROM error_report_chunks
+                    WHERE error_report_id = %s
+                    ORDER BY created_at DESC
+                """, (error_report_id,))
+            else:
+                cursor.execute("""
+                    SELECT * FROM error_report_chunks
+                    WHERE error_report_id = ?
+                    ORDER BY created_at DESC
+                """, (error_report_id,))
+            
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]

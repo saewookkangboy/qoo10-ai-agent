@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { reportError } from '../services/api'
 
 interface ErrorReportButtonProps {
@@ -23,6 +23,21 @@ export default function ErrorReportButton({
   const [description, setDescription] = useState('')
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
+  // ESC 키로 모달 닫기
+  useEffect(() => {
+    if (isOpen) {
+      const handleEscape = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          setIsOpen(false)
+          setMessage(null)
+          setDescription('')
+        }
+      }
+      document.addEventListener('keydown', handleEscape)
+      return () => document.removeEventListener('keydown', handleEscape)
+    }
+  }, [isOpen])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
@@ -39,15 +54,17 @@ export default function ErrorReportButton({
         report_value: reportValue
       })
 
-      setMessage({ type: 'success', text: '오류 신고가 저장되었습니다. 감사합니다!' })
-      setIsOpen(false)
-      setDescription('')
-      
-      if (onReported) {
-        onReported()
-      }
+      setMessage({ type: 'success', text: '신고가 저장되었습니다.' })
+      setTimeout(() => {
+        setIsOpen(false)
+        setDescription('')
+        setMessage(null)
+        if (onReported) {
+          onReported()
+        }
+      }, 1500)
     } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || '오류 신고에 실패했습니다.' })
+      setMessage({ type: 'error', text: error.message || '신고에 실패했습니다.' })
     } finally {
       setIsSubmitting(false)
     }
@@ -57,108 +74,148 @@ export default function ErrorReportButton({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+        className="px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50/80 dark:bg-red-900/30 backdrop-blur-sm border border-red-200/50 dark:border-red-800/50 rounded-lg hover:bg-red-100/80 dark:hover:bg-red-900/40 transition-all duration-200"
         title="오류 신고"
       >
-        ⚠️ 오류 신고
+        ⚠️ 신고
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70">
-          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-              오류 신고
-            </h3>
-            
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  필드명
-                </label>
-                <input
-                  type="text"
-                  value={fieldName}
-                  disabled
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-500 dark:text-gray-400"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  문제 유형
-                </label>
-                <select
-                  value={issueType}
-                  onChange={(e) => setIssueType(e.target.value as any)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                >
-                  <option value="mismatch">불일치 (크롤러 값 ≠ 리포트 값)</option>
-                  <option value="missing">누락 (크롤러에 있지만 리포트에 없음)</option>
-                  <option value="incorrect">잘못된 값</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  심각도
-                </label>
-                <select
-                  value={severity}
-                  onChange={(e) => setSeverity(e.target.value as any)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                >
-                  <option value="high">높음</option>
-                  <option value="medium">보통</option>
-                  <option value="low">낮음</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  설명 (선택사항)
-                </label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                  placeholder="문제에 대한 추가 설명을 입력해주세요..."
-                />
-              </div>
-
-              {message && (
-                <div
-                  className={`p-3 rounded-md text-sm ${
-                    message.type === 'success'
-                      ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200'
-                      : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200'
-                  }`}
-                >
-                  {message.text}
-                </div>
-              )}
-
-              <div className="flex gap-2 justify-end">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsOpen(false)
+              setMessage(null)
+              setDescription('')
+            }
+          }}
+        >
+          {/* 배경 오버레이 */}
+          <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm"></div>
+          
+          {/* 모달 */}
+          <div className="glass-elevated dark:glass-elevated-dark rounded-2xl shadow-2xl max-w-sm w-full relative z-10 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent dark:from-white/5 pointer-events-none"></div>
+            <div className="relative z-10 p-5 sm:p-6">
+              {/* 헤더 */}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  오류 신고
+                </h3>
                 <button
-                  type="button"
                   onClick={() => {
                     setIsOpen(false)
                     setMessage(null)
                     setDescription('')
                   }}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                  className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                 >
-                  취소
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 dark:bg-red-500 rounded-md hover:bg-red-700 dark:hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isSubmitting ? '신고 중...' : '신고하기'}
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
               </div>
-            </form>
+              
+              <form onSubmit={handleSubmit} className="space-y-3">
+                {/* 필드명 (읽기 전용) */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
+                    필드
+                  </label>
+                  <input
+                    type="text"
+                    value={fieldName}
+                    disabled
+                    className="w-full px-3 py-2 text-xs glass-card dark:glass-card-dark border border-gray-200/50 dark:border-gray-700/50 rounded-lg text-gray-500 dark:text-gray-400"
+                  />
+                </div>
+
+                {/* 문제 유형 */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
+                    문제 유형
+                  </label>
+                  <select
+                    value={issueType}
+                    onChange={(e) => setIssueType(e.target.value as any)}
+                    className="w-full px-3 py-2 text-xs glass-card dark:glass-card-dark border border-gray-200/50 dark:border-gray-700/50 rounded-lg text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  >
+                    <option value="mismatch">불일치</option>
+                    <option value="missing">누락</option>
+                    <option value="incorrect">잘못된 값</option>
+                  </select>
+                </div>
+
+                {/* 심각도 */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
+                    심각도
+                  </label>
+                  <select
+                    value={severity}
+                    onChange={(e) => setSeverity(e.target.value as any)}
+                    className="w-full px-3 py-2 text-xs glass-card dark:glass-card-dark border border-gray-200/50 dark:border-gray-700/50 rounded-lg text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  >
+                    <option value="high">높음</option>
+                    <option value="medium">보통</option>
+                    <option value="low">낮음</option>
+                  </select>
+                </div>
+
+                {/* 설명 (선택사항) */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">
+                    설명 <span className="text-gray-400">(선택)</span>
+                  </label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={2}
+                    className="w-full px-3 py-2 text-xs glass-card dark:glass-card-dark border border-gray-200/50 dark:border-gray-700/50 rounded-lg text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
+                    placeholder="추가 설명을 입력하세요..."
+                  />
+                </div>
+
+                {/* 메시지 */}
+                {message && (
+                  <div
+                    className={`p-2.5 rounded-lg text-xs ${
+                      message.type === 'success'
+                        ? 'bg-green-50/80 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200/50 dark:border-green-800/50'
+                        : 'bg-red-50/80 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200/50 dark:border-red-800/50'
+                    }`}
+                  >
+                    {message.text}
+                  </div>
+                )}
+
+                {/* 버튼 */}
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsOpen(false)
+                      setMessage(null)
+                      setDescription('')
+                    }}
+                    className="flex-1 px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 glass-card dark:glass-card-dark border border-gray-200/50 dark:border-gray-700/50 rounded-lg hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-all"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="flex-1 px-3 py-2 text-xs font-medium text-white bg-gradient-to-r from-red-600 to-red-500 dark:from-red-500 dark:to-red-400 rounded-lg hover:from-red-700 hover:to-red-600 dark:hover:from-red-600 dark:hover:to-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md backdrop-blur-sm relative overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent"></div>
+                    <span className="relative z-10">
+                      {isSubmitting ? '신고 중...' : '신고하기'}
+                    </span>
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

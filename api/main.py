@@ -12,6 +12,8 @@ from datetime import datetime
 import os
 import re
 import logging
+import time
+import json
 from dotenv import load_dotenv
 import httpx
 
@@ -657,19 +659,30 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                 )
                 checklist_result = None
             
-            # ========== 5단계: 데이터 검증 (85%) ==========
+            # ========== 5단계: 데이터 검증 및 동기화 (85%) ==========
             validation_result = None
             validation_start_time = time.time()
             try:
-                _update_progress(analysis_id, "validating", 85, "데이터 일치 여부를 검증하는 중...")
-                logger.info(f"[{analysis_id}] Validating data consistency...")
+                _update_progress(analysis_id, "validating", 85, "데이터 일치 여부를 검증하고 동기화하는 중...")
+                logger.info(f"[{analysis_id}] Validating and syncing data consistency...")
                 
-                # 크롤링 결과와 리포트 내용 일치 여부 검증
+                # 크롤링 결과와 리포트 내용 일치 여부 검증 (자동 보정 포함)
                 validation_result = data_validator.validate_crawler_vs_report(
                     product_data=product_data,
                     analysis_result=analysis_result,
                     checklist_result=checklist_result or {}
                 )
+                
+                # 크롤러 데이터를 기반으로 analysis_result 동기화
+                analysis_result = data_validator.sync_analysis_result_with_crawler_data(
+                    product_data=product_data,
+                    analysis_result=analysis_result
+                )
+                
+                # 보정된 필드가 있으면 로그 기록
+                corrected_fields = validation_result.get("corrected_fields", [])
+                if corrected_fields:
+                    logger.info(f"[{analysis_id}] Corrected fields from crawler data: {', '.join(corrected_fields)}")
                 
                 validation_duration_ms = int((time.time() - validation_start_time) * 1000)
                 pipeline_monitor.record_stage(
@@ -683,11 +696,13 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                         "validation_score": validation_result.get("validation_score", 0),
                         "is_valid": validation_result.get("is_valid", False),
                         "mismatches_count": len(validation_result.get("mismatches", [])),
-                        "missing_items_count": len(validation_result.get("missing_items", []))
+                        "missing_items_count": len(validation_result.get("missing_items", [])),
+                        "corrected_fields_count": len(corrected_fields),
+                        "corrected_fields": corrected_fields
                     }
                 )
                 
-                logger.info(f"[{analysis_id}] Validation completed - Score: {validation_result.get('validation_score', 0)}%, Valid: {validation_result.get('is_valid', False)}")
+                logger.info(f"[{analysis_id}] Validation and sync completed - Score: {validation_result.get('validation_score', 0)}%, Valid: {validation_result.get('is_valid', False)}, Corrected: {len(corrected_fields)} fields")
                 
                 # 검증 실패 시 경고 로그
                 if not validation_result.get("is_valid"):
@@ -1601,6 +1616,7 @@ async def report_error(request: ErrorReportRequest):
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error reporting failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Error reporting failed: {str(e)}"

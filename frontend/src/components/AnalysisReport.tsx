@@ -24,7 +24,7 @@ interface AnalysisReportProps {
 }
 
 function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
-  const { product_analysis, shop_analysis, recommendations, checklist, competitor_analysis, validation } = result
+  const { product_analysis, shop_analysis, recommendations, checklist, competitor_analysis, product_data, shop_data, validation } = result
   const overallScore = product_analysis?.overall_score || shop_analysis?.overall_score || 0
   const [activeTab, setActiveTab] = useState<'recommendations' | 'checklist'>('recommendations')
 
@@ -329,7 +329,11 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
             {/* 메뉴얼 기반 체크리스트 탭 */}
             {activeTab === 'checklist' && checklist && (
               <div className="mt-4">
-                <ChecklistCard checklist={checklist} />
+                <ChecklistCard 
+                  checklist={checklist} 
+                  analysisId={analysisId}
+                  productData={result.product_data}
+                />
               </div>
             )}
           </div>

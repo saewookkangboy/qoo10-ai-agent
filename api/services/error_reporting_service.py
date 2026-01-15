@@ -66,11 +66,15 @@ class ErrorReportingService:
         
         # Chunk 분석 및 저장
         if page_structure_chunk:
-            self._analyze_and_save_chunks(
-                error_report_id=error_report_id,
-                field_name=field_name,
-                page_structure_chunk=page_structure_chunk
-            )
+            try:
+                self._analyze_and_save_chunks(
+                    error_report_id=error_report_id,
+                    field_name=field_name,
+                    page_structure_chunk=page_structure_chunk
+                )
+            except Exception as e:
+                # Chunk 분석 실패해도 오류 신고는 성공으로 처리
+                logger.warning(f"Chunk analysis failed: {str(e)}")
         
         return {
             "error_report_id": error_report_id,

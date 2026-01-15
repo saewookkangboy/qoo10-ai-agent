@@ -22,7 +22,7 @@ class DataValidator:
         checklist_result: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        크롤링 결과와 리포트 내용 일치 여부 검증
+        크롤링 결과와 리포트 내용 일치 여부 검증 (강화된 버전)
         
         Args:
             product_data: 크롤러가 수집한 원본 데이터
@@ -37,57 +37,135 @@ class DataValidator:
             "mismatches": [],
             "missing_items": [],
             "validation_score": 100.0,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            "corrected_fields": []  # 자동 수정된 필드 목록
         }
         
         mismatches = []
         missing_items = []
+        corrected_fields = []
         
-        # 1. 상품명 검증
+        # 1. 상품명 검증 및 보정
         crawler_name = product_data.get("product_name", "")
-        report_name = analysis_result.get("product_analysis", {}).get("product_name", "")
-        if crawler_name and report_name and crawler_name != report_name:
-            mismatches.append({
-                "field": "product_name",
-                "crawler_value": crawler_name,
-                "report_value": report_name,
-                "severity": "high"
-            })
+        if crawler_name and crawler_name != "상품명 없음":
+            product_analysis = analysis_result.get("product_analysis", {})
+            original_name = product_analysis.get("product_name", "")
+            if not original_name or original_name != crawler_name:
+                # Record mismatch BEFORE correction (only if there was an original value)
+                if original_name and original_name != crawler_name:
+                    mismatches.append({
+                        "field": "product_name",
+                        "crawler_value": crawler_name,
+                        "report_value": original_name,
+                        "severity": "high",
+                        "corrected": True
+                    })
+                product_analysis["product_name"] = crawler_name
+                corrected_fields.append("product_name")
         
-        # 2. 가격 검증
+        # 2. 가격 검증 및 보정
         crawler_price = product_data.get("price", {}).get("sale_price")
-        report_price = analysis_result.get("product_analysis", {}).get("price_analysis", {}).get("sale_price")
-        if crawler_price and report_price and crawler_price != report_price:
-            mismatches.append({
-                "field": "price_sale",
-                "crawler_value": crawler_price,
-                "report_value": report_price,
-                "severity": "high"
-            })
+        crawler_original_price = product_data.get("price", {}).get("original_price")
+        if crawler_price:
+            price_analysis = analysis_result.get("product_analysis", {}).get("price_analysis", {})
+            original_sale = price_analysis.get("sale_price")
+            if not original_sale or original_sale != crawler_price:
+                # 기존 값과 다를 경우 mismatch 기록
+                if original_sale and original_sale != crawler_price:
+                    mismatches.append({
+                        "field": "price_sale",
+                        "crawler_value": crawler_price,
+                        "report_value": original_sale,
+                        "severity": "high",
+                        "corrected": True
+                    })
+                price_analysis["sale_price"] = crawler_price
+                corrected_fields.append("price_sale")
+            
+            if crawler_original_price:
+                original_original = price_analysis.get("original_price")
+                if not original_original or original_original != crawler_original_price:
+                    # 기존 값과 다를 경우 mismatch 기록
+                    if original_original and original_original != crawler_original_price:
+                        mismatches.append({
+                            "field": "price_original",
+                            "crawler_value": crawler_original_price,
+                            "report_value": original_original,
+                            "severity": "high",
+                            "corrected": True
+                        })
+                    price_analysis["original_price"] = crawler_original_price
+                    corrected_fields.append("price_original")
+                
+                # 할인율 재계산
+                if crawler_price and crawler_original_price and crawler_original_price > crawler_price:
+                    discount_rate = int((crawler_original_price - crawler_price) / crawler_original_price * 100)
+                    price_analysis["discount_rate"] = discount_rate
         
-        # 3. 리뷰 수 검증
+        # 3. 리뷰 수 검증 및 보정
         crawler_reviews = product_data.get("reviews", {}).get("review_count", 0)
-        report_reviews = analysis_result.get("product_analysis", {}).get("review_analysis", {}).get("review_count", 0)
-        if crawler_reviews != report_reviews:
+        crawler_rating = product_data.get("reviews", {}).get("rating", 0)
+        review_analysis = analysis_result.get("product_analysis", {}).get("review_analysis", {})
+        if review_analysis.get("review_count", 0) != crawler_reviews:
+            review_analysis["review_count"] = crawler_reviews
+            corrected_fields.append("review_count")
             mismatches.append({
                 "field": "review_count",
                 "crawler_value": crawler_reviews,
-                "report_value": report_reviews,
-                "severity": "medium"
+                "report_value": review_analysis.get("review_count", 0),
+                "severity": "medium",
+                "corrected": True
             })
         
-        # 4. 이미지 개수 검증
+        if crawler_rating and review_analysis.get("rating", 0) != crawler_rating:
+            review_analysis["rating"] = crawler_rating
+            corrected_fields.append("rating")
+        
+        # 4. 이미지 개수 검증 및 보정
         crawler_images = len(product_data.get("images", {}).get("detail_images", []))
-        report_images = analysis_result.get("product_analysis", {}).get("image_analysis", {}).get("image_count", 0)
-        if crawler_images != report_images:
+        image_analysis = analysis_result.get("product_analysis", {}).get("image_analysis", {})
+        if image_analysis.get("image_count", 0) != crawler_images:
+            image_analysis["image_count"] = crawler_images
+            corrected_fields.append("image_count")
             mismatches.append({
                 "field": "image_count",
                 "crawler_value": crawler_images,
-                "report_value": report_images,
-                "severity": "medium"
+                "report_value": image_analysis.get("image_count", 0),
+                "severity": "medium",
+                "corrected": True
             })
         
-        # 5. 체크리스트 항목 검증
+        # 5. 설명 길이 검증 및 보정
+        crawler_description = product_data.get("description", "")
+        description_length = len(crawler_description)
+        description_analysis = analysis_result.get("product_analysis", {}).get("description_analysis", {})
+        if description_analysis.get("description_length", 0) != description_length:
+            description_analysis["description_length"] = description_length
+            corrected_fields.append("description_length")
+        
+        # 6. Qポイント 정보 검증 및 보정
+        qpoint_info = product_data.get("qpoint_info", {})
+        if qpoint_info and any(qpoint_info.values()):
+            # analysis_result에 Qポイント 정보가 없으면 추가
+            if "qpoint_info" not in analysis_result.get("product_analysis", {}):
+                analysis_result.setdefault("product_analysis", {})["qpoint_info"] = qpoint_info
+                corrected_fields.append("qpoint_info")
+        
+        # 7. 쿠폰 정보 검증 및 보정
+        coupon_info = product_data.get("coupon_info", {})
+        if coupon_info and coupon_info.get("has_coupon"):
+            if "coupon_info" not in analysis_result.get("product_analysis", {}):
+                analysis_result.setdefault("product_analysis", {})["coupon_info"] = coupon_info
+                corrected_fields.append("coupon_info")
+        
+        # 8. 배송 정보 검증 및 보정
+        shipping_info = product_data.get("shipping_info", {})
+        if shipping_info:
+            if "shipping_info" not in analysis_result.get("product_analysis", {}):
+                analysis_result.setdefault("product_analysis", {})["shipping_info"] = shipping_info
+                corrected_fields.append("shipping_info")
+        
+        # 9. 체크리스트 항목 검증
         checklist_items = []
         for checklist in checklist_result.get("checklists", []):
             for item in checklist.get("items", []):
@@ -100,7 +178,7 @@ class DataValidator:
         
         # 크롤러 데이터가 있지만 체크리스트에서 누락된 항목 확인
         if product_data.get("qpoint_info") and not any(
-            item["id"] in ["item_006b"] for item in checklist_items
+            item["id"] in ["item_006a", "item_006b"] for item in checklist_items
         ):
             missing_items.append({
                 "field": "qpoint_info",
@@ -110,7 +188,7 @@ class DataValidator:
             })
         
         if product_data.get("coupon_info", {}).get("has_coupon") and not any(
-            item["id"] in ["item_011", "item_021"] for item in checklist_items
+            item["id"] in ["item_011", "item_020", "item_021"] for item in checklist_items
         ):
             missing_items.append({
                 "field": "coupon_info",
@@ -120,18 +198,102 @@ class DataValidator:
             })
         
         # 검증 점수 계산
-        total_fields = 5
-        error_count = len(mismatches) + len(missing_items)
+        total_fields = 9  # 검증 필드 수 증가
+        error_count = len([m for m in mismatches if not m.get("corrected", False)]) + len(missing_items)
         validation_score = max(0, 100 - (error_count / total_fields * 100))
         
         validation_result.update({
-            "is_valid": len(mismatches) == 0 and len(missing_items) == 0,
+            "is_valid": len([m for m in mismatches if not m.get("corrected", False)]) == 0 and len(missing_items) == 0,
             "mismatches": mismatches,
             "missing_items": missing_items,
-            "validation_score": validation_score
+            "validation_score": validation_score,
+            "corrected_fields": corrected_fields
         })
         
         return validation_result
+    
+    def sync_analysis_result_with_crawler_data(
+        self,
+        product_data: Dict[str, Any],
+        analysis_result: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        크롤러 데이터를 기반으로 analysis_result를 동기화
+        
+        Args:
+            product_data: 크롤러가 수집한 원본 데이터
+            analysis_result: 분석 결과 (수정됨)
+            
+        Returns:
+            동기화된 analysis_result
+        """
+        # product_analysis가 없으면 생성
+        if "product_analysis" not in analysis_result:
+            analysis_result["product_analysis"] = {}
+        
+        product_analysis = analysis_result["product_analysis"]
+        
+        # 상품명 동기화
+        if product_data.get("product_name") and product_data.get("product_name") != "상품명 없음":
+            product_analysis["product_name"] = product_data.get("product_name")
+        
+        # 가격 동기화
+        price_data = product_data.get("price", {})
+        if "price_analysis" not in product_analysis:
+            product_analysis["price_analysis"] = {}
+        
+        price_analysis = product_analysis["price_analysis"]
+        if price_data.get("sale_price"):
+            price_analysis["sale_price"] = price_data.get("sale_price")
+        if price_data.get("original_price"):
+            price_analysis["original_price"] = price_data.get("original_price")
+            if price_data.get("sale_price") and price_data.get("original_price") > price_data.get("sale_price"):
+                discount_rate = int((price_data.get("original_price") - price_data.get("sale_price")) / price_data.get("original_price") * 100)
+                price_analysis["discount_rate"] = discount_rate
+        
+        # 리뷰 동기화
+        reviews_data = product_data.get("reviews", {})
+        if "review_analysis" not in product_analysis:
+            product_analysis["review_analysis"] = {}
+        
+        review_analysis = product_analysis["review_analysis"]
+        if reviews_data.get("review_count") is not None:
+            review_analysis["review_count"] = reviews_data.get("review_count")
+        if reviews_data.get("rating") is not None:
+            review_analysis["rating"] = reviews_data.get("rating")
+        
+        # 이미지 동기화
+        images_data = product_data.get("images", {})
+        if "image_analysis" not in product_analysis:
+            product_analysis["image_analysis"] = {}
+        
+        image_analysis = product_analysis["image_analysis"]
+        image_analysis["image_count"] = len(images_data.get("detail_images", []))
+        
+        # 설명 동기화
+        if "description_analysis" not in product_analysis:
+            product_analysis["description_analysis"] = {}
+        
+        description_analysis = product_analysis["description_analysis"]
+        description = product_data.get("description", "")
+        description_analysis["description_length"] = len(description)
+        
+        # Qポイント 정보 동기화
+        qpoint_info = product_data.get("qpoint_info")
+        if qpoint_info:
+            product_analysis["qpoint_info"] = qpoint_info
+        
+        # 쿠폰 정보 동기화
+        coupon_info = product_data.get("coupon_info")
+        if coupon_info:
+            product_analysis["coupon_info"] = coupon_info
+        
+        # 배송 정보 동기화
+        shipping_info = product_data.get("shipping_info")
+        if shipping_info:
+            product_analysis["shipping_info"] = shipping_info
+        
+        return analysis_result
     
     def extract_validation_chunks(
         self,

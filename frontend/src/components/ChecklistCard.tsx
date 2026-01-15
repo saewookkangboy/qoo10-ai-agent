@@ -1,13 +1,16 @@
 import { ChecklistResult } from '../types'
 import HelpTooltip from './HelpTooltip'
+import ErrorReportButton from './ErrorReportButton'
 
 interface ChecklistCardProps {
   checklist: ChecklistResult
+  analysisId?: string
+  productData?: any
 }
 
 const helpContent = '이 체크리스트는 Qoo10 큐텐 대학의 판매 준비 가이드를 기반으로 합니다.\n\n• 상품 등록: 상품명, 설명, 이미지 등 필수 정보를 확인합니다\n• 가격 설정: 판매가, 할인율, 쿠폰 할인 등을 점검합니다\n• 배송 정보: 배송비, 배송 방법, 통관 정보를 확인합니다\n• 프로모션: 샵 쿠폰, 상품 할인, 광고 활용 여부를 점검합니다\n\n완성도가 높을수록 검색 노출과 전환율이 향상됩니다.'
 
-function ChecklistCard({ checklist }: ChecklistCardProps) {
+function ChecklistCard({ checklist, analysisId, productData }: ChecklistCardProps) {
   const overallCompletion = checklist.overall_completion
 
   const getCompletionColor = (rate: number) => {
@@ -36,6 +39,52 @@ function ChecklistCard({ checklist }: ChecklistCardProps) {
   }
 
   const overallColors = getCompletionColor(overallCompletion)
+
+  // 체크리스트 항목 ID를 필드명으로 매핑하는 헬퍼 함수
+  const _getFieldValueFromProductData = (itemId: string, productData: any): any => {
+    // 체크리스트 항목 ID를 실제 데이터 필드로 매핑
+    const fieldMapping: Record<string, string> = {
+      'item_001': 'product_name',
+      'item_002': 'description',
+      'item_003': 'images',
+      'item_004': 'price.sale_price',
+      'item_005': 'price.original_price',
+      'item_006a': 'qpoint_info.max_points',
+      'item_006b': 'qpoint_info',
+      'item_007': 'shipping_info.shipping_fee',
+      'item_008': 'shipping_info.free_shipping',
+      'item_009': 'shipping_info.return_policy',
+      'item_010': 'reviews.review_count',
+      'item_011': 'coupon_info.has_coupon',
+      'item_012': 'coupon_info',
+      'item_013': 'seller_info.shop_name',
+      'item_014': 'seller_info.follower_count',
+      'item_015': 'seller_info.shop_level',
+      'item_016': 'seller_info.product_count',
+      'item_017': 'category',
+      'item_018': 'brand',
+      'item_019': 'search_keywords',
+      'item_020': 'coupon_info.shop_coupon',
+      'item_021': 'coupon_info.product_discount',
+      'item_022': 'coupon_info.promotion',
+    }
+    
+    const fieldPath = fieldMapping[itemId]
+    if (!fieldPath || !productData) return undefined
+    
+    // 중첩된 필드 접근 (예: 'price.sale_price')
+    const parts = fieldPath.split('.')
+    let value = productData
+    for (const part of parts) {
+      if (value && typeof value === 'object' && part in value) {
+        value = value[part]
+      } else {
+        return undefined
+      }
+    }
+    
+    return value
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -162,6 +211,23 @@ function ChecklistCard({ checklist }: ChecklistCardProps) {
                                     {item.recommendation}
                                   </p>
                                 </div>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* 오류 신고 버튼 */}
+                          {analysisId && (
+                            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  이 항목의 결과가 정확하지 않나요?
+                                </span>
+                                <ErrorReportButton
+                                  analysisId={analysisId}
+                                  fieldName={item.id}
+                                  crawlerValue={productData ? _getFieldValueFromProductData(item.id, productData) : undefined}
+                                  reportValue={item.status === 'completed' ? 'completed' : 'pending'}
+                                />
                               </div>
                             </div>
                           )}

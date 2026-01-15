@@ -602,6 +602,18 @@ class Qoo10Crawler(ShopCrawlerMixin):
                 product_data["reviews"] = {}
             
             try:
+                product_data["qna"] = self._extract_qna(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract Q&A: {str(e)}")
+                product_data["qna"] = {}
+            
+            try:
+                product_data["goods_info"] = self._extract_goods_info(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract goods info: {str(e)}")
+                product_data["goods_info"] = {}
+            
+            try:
                 product_data["seller_info"] = self._extract_seller_info(soup)
             except Exception as e:
                 logger.warning(f"Failed to extract seller info: {str(e)}")
@@ -957,6 +969,18 @@ class Qoo10Crawler(ShopCrawlerMixin):
             except Exception as e:
                 logger.warning(f"Failed to extract reviews: {str(e)}")
                 product_data["reviews"] = {}
+            
+            try:
+                product_data["qna"] = self._extract_qna(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract Q&A: {str(e)}")
+                product_data["qna"] = {}
+            
+            try:
+                product_data["goods_info"] = self._extract_goods_info(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract goods info: {str(e)}")
+                product_data["goods_info"] = {}
             
             try:
                 product_data["seller_info"] = self._extract_seller_info(soup)
@@ -1600,10 +1624,11 @@ class Qoo10Crawler(ShopCrawlerMixin):
             return None
     
     def _extract_images(self, soup: BeautifulSoup) -> Dict[str, List[str]]:
-        """이미지 정보 추출 - 실제 Qoo10 페이지 구조에 맞게 개선"""
+        """이미지 정보 추출 - 실제 Qoo10 페이지 구조에 맞게 개선 (itemGoods 영역 포함)"""
         images = {
             "thumbnail": None,
-            "detail_images": []
+            "detail_images": [],
+            "item_goods_images": []  # itemGoods 영역의 모든 이미지
         }
         
         # 썸네일 이미지 (다양한 선택자 시도)
@@ -1633,6 +1658,28 @@ class Qoo10Crawler(ShopCrawlerMixin):
                     images["thumbnail"] = src
                     break
         
+        # itemGoods 영역의 모든 이미지 추출 (상세 페이지 이미지 영역)
+        item_goods_div = soup.find('div', {'id': 'itemGoods'})
+        if item_goods_div:
+            seen_item_images = set()
+            # itemGoods 내의 모든 img 태그 찾기
+            item_imgs = item_goods_div.find_all('img')
+            for img in item_imgs:
+                src = img.get('src') or img.get('data-src') or img.get('data-original')
+                if src:
+                    # 상대 경로를 절대 경로로 변환
+                    if src.startswith('//'):
+                        src = 'https:' + src
+                    elif src.startswith('/'):
+                        src = 'https://www.qoo10.jp' + src
+                    
+                    # 중복 제거 및 유효한 이미지 URL인지 확인
+                    if src not in seen_item_images and ('http' in src or src.startswith('//')):
+                        # 작은 아이콘이나 배너 이미지 제외
+                        if not any(exclude in src.lower() for exclude in ['icon', 'logo', 'banner', 'button']):
+                            images["item_goods_images"].append(src)
+                            seen_item_images.add(src)
+        
         # 상세 이미지 (다양한 선택자 시도)
         detail_img_selectors = [
             '.product-detail img',
@@ -1648,6 +1695,9 @@ class Qoo10Crawler(ShopCrawlerMixin):
         seen_images = set()
         if images["thumbnail"]:
             seen_images.add(images["thumbnail"])
+        # item_goods_images도 중복 체크에 추가
+        for img_url in images["item_goods_images"]:
+            seen_images.add(img_url)
         
         for selector in detail_img_selectors:
             imgs = soup.select(selector)
@@ -1671,8 +1721,9 @@ class Qoo10Crawler(ShopCrawlerMixin):
         _log_debug("debug-session", "run1", "E", "crawler.py:_extract_images", "이미지 추출 완료", {
             "has_thumbnail": bool(images.get("thumbnail")),
             "detail_images_count": len(images.get("detail_images", [])),
-            "total_images": len(images.get("detail_images", [])) + (1 if images.get("thumbnail") else 0),
-            "is_empty": not images.get("thumbnail") and len(images.get("detail_images", [])) == 0
+            "item_goods_images_count": len(images.get("item_goods_images", [])),
+            "total_images": len(images.get("detail_images", [])) + len(images.get("item_goods_images", [])) + (1 if images.get("thumbnail") else 0),
+            "is_empty": not images.get("thumbnail") and len(images.get("detail_images", [])) == 0 and len(images.get("item_goods_images", [])) == 0
         })
         # #endregion
         
@@ -1879,31 +1930,115 @@ class Qoo10Crawler(ShopCrawlerMixin):
                             reviews_data["review_count"] = count_value
                             break
         
-        # 리뷰 텍스트 (최근 리뷰) - 다양한 선택자 시도
-        review_selectors = [
-            '.review-item',
-            '.review-text',
-            '[itemprop="reviewBody"]',
-            '.review_content',
-            '.review-body',
-            'div[class*="review"]',
-            'p[class*="review"]'
-        ]
+        # CustomerReview 영역의 상세 리뷰 추출
+        customer_review_div = soup.find('div', {'id': 'CustomerReview'}) or soup.find('div', {'class': 'sec_review'})
+        if customer_review_div:
+            # review_list 내의 각 리뷰 항목 추출
+            review_list = customer_review_div.find('ul', {'class': 'review_list'}) or customer_review_div.find('ul', {'id': 'reviews_wrapper'})
+            if review_list:
+                review_items = review_list.find_all('li', recursive=False)
+                for review_item in review_items[:50]:  # 최대 50개 리뷰
+                    review_detail = {}
+                    
+                    # 평점 추출
+                    review_star_area = review_item.find('div', {'class': 'review_star_area'})
+                    if review_star_area:
+                        score_elem = review_star_area.find('span', {'class': 'score'})
+                        total_elem = review_star_area.find('span', {'class': 'total'})
+                        if score_elem and total_elem:
+                            try:
+                                review_detail["rating"] = float(score_elem.get_text(strip=True))
+                                review_detail["max_rating"] = float(total_elem.get_text(strip=True))
+                            except (ValueError, AttributeError):
+                                pass
+                    
+                    # 사용자 정보 추출
+                    review_user_info = review_item.find('div', {'class': 'review_user_info'})
+                    if review_user_info:
+                        spans = review_user_info.find_all('span')
+                        if len(spans) > 0:
+                            review_detail["user_name"] = spans[0].get_text(strip=True)
+                        if len(spans) > 1:
+                            review_detail["date"] = spans[1].get_text(strip=True)
+                        # 옵션 정보 추출
+                        option_texts = []
+                        for span in spans[2:]:
+                            text = span.get_text(strip=True)
+                            if text and text not in option_texts:
+                                option_texts.append(text)
+                        if option_texts:
+                            review_detail["options"] = option_texts
+                    
+                    # 옵션 상세 정보
+                    review_user_type = review_item.find('div', {'class': 'review_user_type'})
+                    if review_user_type:
+                        option_span = review_user_type.find('span')
+                        if option_span:
+                            review_detail["option_detail"] = option_span.get_text(strip=True)
+                    
+                    # 리뷰 텍스트 추출
+                    review_txt = review_item.find('p', {'class': 'review_txt'})
+                    if review_txt:
+                        review_detail["text"] = review_txt.get_text(strip=True)
+                    
+                    # 리뷰 이미지 추출
+                    review_photo = review_item.find('ul', {'class': 'review_photo'})
+                    if review_photo:
+                        review_images = []
+                        for img_li in review_photo.find_all('li'):
+                            img = img_li.find('img')
+                            if img:
+                                img_src = img.get('src') or img.get('data-src')
+                                if img_src:
+                                    # 상대 경로를 절대 경로로 변환
+                                    if img_src.startswith('//'):
+                                        img_src = 'https:' + img_src
+                                    elif img_src.startswith('/'):
+                                        img_src = 'https://www.qoo10.jp' + img_src
+                                    review_images.append(img_src)
+                        if review_images:
+                            review_detail["images"] = review_images
+                    
+                    # 좋아요 수 추출
+                    review_button = review_item.find('div', {'class': 'review_button'})
+                    if review_button:
+                        count_elem = review_button.find('span', {'class': 'count'})
+                        if count_elem:
+                            try:
+                                review_detail["like_count"] = int(count_elem.get_text(strip=True))
+                            except (ValueError, AttributeError):
+                                pass
+                    
+                    # 리뷰가 유효한 경우에만 추가
+                    if review_detail.get("text") or review_detail.get("rating"):
+                        reviews_data["reviews"].append(review_detail)
         
-        seen_reviews = set()
-        for selector in review_selectors:
-            review_elements = soup.select(selector)
-            for elem in review_elements[:20]:  # 최대 20개
-                review_text = elem.get_text(strip=True)
-                if review_text and len(review_text) > 10:  # 의미있는 리뷰인지 확인
-                    # 중복 제거
-                    if review_text not in seen_reviews:
-                        reviews_data["reviews"].append(review_text)
-                        seen_reviews.add(review_text)
-                        if len(reviews_data["reviews"]) >= 10:  # 최대 10개
-                            break
-            if len(reviews_data["reviews"]) >= 10:
-                break
+        # 기존 방식으로도 리뷰 텍스트 추출 (fallback)
+        if len(reviews_data["reviews"]) == 0:
+            review_selectors = [
+                '.review-item',
+                '.review-text',
+                '[itemprop="reviewBody"]',
+                '.review_content',
+                '.review-body',
+                'div[class*="review"]',
+                'p[class*="review"]'
+            ]
+            
+            seen_reviews = set()
+            for selector in review_selectors:
+                review_elements = soup.select(selector)
+                for elem in review_elements[:20]:  # 최대 20개
+                    review_text = elem.get_text(strip=True)
+                    if review_text and len(review_text) > 10:  # 의미있는 리뷰인지 확인
+                        # 중복 제거
+                        if review_text not in seen_reviews:
+                            reviews_data["reviews"].append({"text": review_text})
+                            seen_reviews.add(review_text)
+                            if len(reviews_data["reviews"]) >= 10:  # 최대 10개
+                                break
+                if len(reviews_data["reviews"]) >= 10:
+                    break
         
         # review_count가 0이지만 reviews 배열에 리뷰가 있으면 fallback
         if reviews_data["review_count"] == 0 and len(reviews_data["reviews"]) > 0:
@@ -1919,6 +2054,391 @@ class Qoo10Crawler(ShopCrawlerMixin):
         # #endregion
         
         return reviews_data
+    
+    def _extract_qna(self, soup: BeautifulSoup) -> Dict[str, Any]:
+        """Q&A 정보 추출 - Question_Answer 영역의 상세 Q&A 정보 추출"""
+        qna_data = {
+            "total_count": 0,
+            "qna_list": []
+        }
+        
+        # Question_Answer 영역 찾기
+        qna_div = soup.find('div', {'id': 'Question_Answer'})
+        if not qna_div:
+            return qna_data
+        
+        # Q&A 총 개수 추출
+        qna_count_elem = qna_div.find('span', {'id': 'qnaList_count_1'})
+        if qna_count_elem:
+            try:
+                qna_data["total_count"] = int(qna_count_elem.get_text(strip=True))
+            except (ValueError, AttributeError):
+                pass
+        
+        # Q&A 목록 추출
+        qna_board = qna_div.find('div', {'class': 'qna_board'})
+        if qna_board:
+            qna_list_div = qna_board.find('div', {'id': 'dv_lst'})
+            if qna_list_div:
+                # 각 Q&A 항목 추출
+                qna_rows = qna_list_div.find_all('div', {'class': 'row'}, recursive=False)
+                for row in qna_rows[:50]:  # 최대 50개 Q&A
+                    qna_item = {}
+                    
+                    # 상태 추출 (回答完了, 未回答, 処理中 등)
+                    col1 = row.find('div', {'class': 'col1'})
+                    if col1:
+                        status_tag = col1.find('span', {'class': re.compile(r'tag')})
+                        if status_tag:
+                            qna_item["status"] = status_tag.get_text(strip=True)
+                    
+                    # 질문 제목 추출
+                    col2 = row.find('div', {'class': 'col2'})
+                    if col2:
+                        title_link = col2.find('a')
+                        if title_link:
+                            qna_item["question_title"] = title_link.get_text(strip=True)
+                    
+                    # 날짜 추출
+                    col3 = row.find('div', {'class': 'col3'})
+                    if col3:
+                        qna_item["date"] = col3.get_text(strip=True)
+                    
+                    # 작성자 추출
+                    col4 = row.find('div', {'class': 'col4'})
+                    if col4:
+                        qna_item["author"] = col4.get_text(strip=True)
+                    
+                    # 질문 내용 추출
+                    mode_user = row.find('div', {'class': 'mode_user'})
+                    if mode_user:
+                        user_col2 = mode_user.find('div', {'class': 'col2'})
+                        if user_col2:
+                            cont = user_col2.find('div', {'class': 'cont'})
+                            if cont:
+                                qna_item["question"] = cont.get_text(strip=True)
+                    
+                    # 답변 내용 추출
+                    mode_sllr = row.find('div', {'class': 'mode_sllr'})
+                    if mode_sllr:
+                        seller_col2 = mode_sllr.find('div', {'class': 'col2'})
+                        if seller_col2:
+                            cont = seller_col2.find('div', {'class': 'cont'})
+                            if cont:
+                                qna_item["answer"] = cont.get_text(strip=True)
+                    
+                    # Q&A가 유효한 경우에만 추가
+                    if qna_item.get("question") or qna_item.get("question_title"):
+                        qna_data["qna_list"].append(qna_item)
+        
+        # total_count가 0이지만 qna_list에 Q&A가 있으면 fallback
+        if qna_data["total_count"] == 0 and len(qna_data["qna_list"]) > 0:
+            qna_data["total_count"] = len(qna_data["qna_list"])
+        
+        # #region agent log
+        _log_debug("debug-session", "run1", "C", "crawler.py:_extract_qna", "Q&A 정보 추출 완료", {
+            "total_count": qna_data.get("total_count"),
+            "qna_list_count": len(qna_data.get("qna_list", [])),
+            "is_empty": qna_data.get("total_count") == 0 and len(qna_data.get("qna_list", [])) == 0
+        })
+        # #endregion
+        
+        return qna_data
+    
+    def _extract_goods_info(self, soup: BeautifulSoup) -> Dict[str, Any]:
+        """상품 정보 영역 추출 - goods_info div 내의 모든 상세 정보 추출"""
+        goods_info = {
+            "product_images": [],
+            "brand": None,
+            "product_title": None,
+            "promotion_text": None,
+            "price_info": {},
+            "benefits": {},
+            "shipping_info": {},
+            "return_info": {},
+            "options": [],
+            "custom_name_field": None
+        }
+        
+        # goods_info 영역 찾기
+        goods_info_div = soup.find('div', {'class': 'goods_info'})
+        if not goods_info_div:
+            return goods_info
+        
+        # 상품 이미지 영역 (goods_img)
+        goods_img_div = goods_info_div.find('div', {'class': 'goods_img'})
+        if goods_img_div:
+            # div_Default_Image 내의 이미지 목록 추출
+            default_image_div = goods_img_div.find('div', {'id': 'div_Default_Image'})
+            if default_image_div:
+                # 기본 이미지
+                basic_image_input = default_image_div.find('input', {'id': 'basic_image'})
+                if basic_image_input:
+                    basic_image_url = basic_image_input.get('value', '')
+                    if basic_image_url:
+                        goods_info["product_images"].append(basic_image_url)
+                
+                # 썸네일 목록 (ulIndicate)
+                thumb_list = default_image_div.find('ul', {'id': 'ulIndicate'})
+                if thumb_list:
+                    thumb_items = thumb_list.find_all('li', {'name': 'liIndicateID'})
+                    for item in thumb_items:
+                        img = item.find('img')
+                        if img:
+                            img_src = img.get('src') or img.get('data-src')
+                            if img_src:
+                                # 상대 경로를 절대 경로로 변환
+                                if img_src.startswith('//'):
+                                    img_src = 'https:' + img_src
+                                elif img_src.startswith('/'):
+                                    img_src = 'https://www.qoo10.jp' + img_src
+                                if img_src not in goods_info["product_images"]:
+                                    goods_info["product_images"].append(img_src)
+                
+                # 확대 이미지 레이어 (gei_layer_enlarge) 내의 이미지 목록
+                enlarge_layer = goods_img_div.find('div', {'id': 'gei_layer_enlarge'})
+                if enlarge_layer:
+                    thumb_list_enlarge = enlarge_layer.find('ul', {'id': re.compile(r'gei_goodsimg')})
+                    if thumb_list_enlarge:
+                        enlarge_items = thumb_list_enlarge.find_all('li')
+                        for item in enlarge_items:
+                            large_img = item.get('large_img')
+                            if large_img:
+                                if large_img.startswith('//'):
+                                    large_img = 'https:' + large_img
+                                elif large_img.startswith('/'):
+                                    large_img = 'https://www.qoo10.jp' + large_img
+                                if large_img not in goods_info["product_images"]:
+                                    goods_info["product_images"].append(large_img)
+        
+        # 상품 상세 정보 영역 (goods_detail)
+        goods_detail_div = goods_info_div.find('div', {'class': 'goods_detail'})
+        if goods_detail_div:
+            # 브랜드 및 상품명
+            detail_title = goods_detail_div.find('div', {'class': 'detail_title'})
+            if detail_title:
+                brand_link = detail_title.find('a', {'class': 'title_brand'})
+                if brand_link:
+                    goods_info["brand"] = brand_link.get_text(strip=True)
+                
+                text_title = detail_title.find('div', {'class': 'text_title'})
+                if text_title:
+                    # 브랜드 링크를 제외한 텍스트가 상품명
+                    brand_link_clone = text_title.find('a', {'class': 'title_brand'})
+                    if brand_link_clone:
+                        brand_link_clone.decompose()
+                    goods_info["product_title"] = text_title.get_text(strip=True)
+                
+                promotion_p = detail_title.find('p', {'class': 'text_promotion'})
+                if promotion_p:
+                    goods_info["promotion_text"] = promotion_p.get_text(strip=True)
+            
+            # 가격 정보
+            info_area = goods_detail_div.find('ul', {'class': 'infoArea'})
+            if info_area:
+                # 판매 가격
+                sell_price_dl = info_area.find('dl', {'id': 'dl_sell_price'})
+                if sell_price_dl:
+                    price_dd = sell_price_dl.find('dd')
+                    if price_dd:
+                        price_strong = price_dd.find('strong')
+                        if price_strong:
+                            price_text = price_strong.get_text(strip=True)
+                            # 숫자 추출
+                            price_match = re.search(r'([\d,]+)', price_text.replace(',', ''))
+                            if price_match:
+                                try:
+                                    goods_info["price_info"]["selling_price"] = int(price_match.group(1).replace(',', ''))
+                                except ValueError:
+                                    pass
+                
+                # 타임세일 가격
+                discount_info = info_area.find('span', {'id': re.compile(r'discount_info')})
+                if discount_info:
+                    dcprice_dl = discount_info.find('dl', {'class': 'q_dcprice'})
+                    if dcprice_dl:
+                        dcprice_dd = dcprice_dl.find('dd')
+                        if dcprice_dd:
+                            dcprice_strong = dcprice_dd.find('strong')
+                            if dcprice_strong:
+                                dcprice_text = dcprice_strong.get_text(strip=True)
+                                dcprice_match = re.search(r'([\d,]+)', dcprice_text.replace(',', ''))
+                                if dcprice_match:
+                                    try:
+                                        goods_info["price_info"]["timesale_price"] = int(dcprice_match.group(1).replace(',', ''))
+                                    except ValueError:
+                                        pass
+                    
+                    # 세일 시간 정보
+                    dsc_txt_dl = discount_info.find('dl', {'class': 'dsc_txt'})
+                    if dsc_txt_dl:
+                        dsc_dd = dsc_txt_dl.find('dd')
+                        if dsc_dd:
+                            sale_time_p = dsc_dd.find('p', {'class': 'fs_11'})
+                            if sale_time_p:
+                                goods_info["price_info"]["sale_time"] = sale_time_p.get_text(strip=True)
+                
+                # 추가 혜택 (Q포인트)
+                benefit_li = info_area.find('li', {'id': re.compile(r'li_BenefitInfo')})
+                if benefit_li:
+                    super_point = benefit_li.find('span', {'class': 'super_point'})
+                    if super_point:
+                        point_strong = super_point.find('strong')
+                        if point_strong:
+                            goods_info["benefits"]["qpoint"] = point_strong.get_text(strip=True)
+                
+                # 배송 정보 - infoData 클래스를 가진 모든 li 중에서 배송 관련 찾기
+                all_info_data = info_area.find_all('li', {'class': 'infoData'})
+                shipping_li = None
+                for li in all_info_data:
+                    text = li.get_text()
+                    if '발송국' in text or '送料' in text or '配送' in text or '배송' in text:
+                        shipping_li = li
+                        break
+                
+                if shipping_li:
+                    # 발송국
+                    shipping_dl = shipping_li.find('dl', {'name': 'shipping_panel_area'})
+                    if shipping_dl:
+                        shipping_dt = shipping_dl.find('dt')
+                        shipping_dd = shipping_dl.find('dd')
+                        if shipping_dt and shipping_dd:
+                            key = shipping_dt.get_text(strip=True)
+                            value = shipping_dd.get_text(strip=True)
+                            goods_info["shipping_info"][key] = value
+                    
+                    # 배송비
+                    shipping_fee_dl = shipping_li.find('dl', {'class': 'detailsArea'})
+                    if shipping_fee_dl:
+                        shipping_fee_dt = shipping_fee_dl.find('dt')
+                        shipping_fee_dd = shipping_fee_dl.find('dd')
+                        if shipping_fee_dt and shipping_fee_dd:
+                            fee_text = shipping_fee_dd.get_text(strip=True)
+                            if '무료' in fee_text or '無料' in fee_text or 'FREE' in fee_text.upper():
+                                goods_info["shipping_info"]["shipping_fee"] = 0
+                                goods_info["shipping_info"]["free_shipping"] = True
+                            else:
+                                fee_match = re.search(r'(\d+)', fee_text)
+                                if fee_match:
+                                    try:
+                                        goods_info["shipping_info"]["shipping_fee"] = int(fee_match.group(1))
+                                    except ValueError:
+                                        pass
+                    
+                    # 배송일
+                    delivery_date_panel = shipping_li.find('div', {'id': re.compile(r'availabledatePanel')})
+                    if delivery_date_panel:
+                        delivery_dl = delivery_date_panel.find('dl', {'class': 'detailsArea'})
+                        if delivery_dl:
+                            delivery_dd = delivery_dl.find('dd')
+                            if delivery_dd:
+                                goods_info["shipping_info"]["delivery_date"] = delivery_dd.get_text(strip=True)
+                
+                # 반품 정보
+                return_panel = info_area.find('div', {'id': re.compile(r'deliveryRuleExplain')})
+                if return_panel:
+                    return_li = return_panel.find('li', {'class': 'infoData'})
+                    if return_li:
+                        return_dl = return_li.find('dl', {'class': 'detailsArea'})
+                        if return_dl:
+                            return_dt = return_dl.find('dt')
+                            return_dd = return_dl.find('dd')
+                            if return_dt and return_dd:
+                                goods_info["return_info"]["title"] = return_dt.get_text(strip=True)
+                                goods_info["return_info"]["description"] = return_dd.get_text(strip=True)
+                
+                # 상품 옵션 추출
+                option_info = info_area.find('div', {'id': re.compile(r'OptionInfo')})
+                if option_info:
+                    # 본체 컬러 (inventory) - stock 클래스가 있는 dl 찾기
+                    all_dls = option_info.find_all('dl', {'class': 'detailsArea'})
+                    inventory_dl = None
+                    for dl in all_dls:
+                        if 'stock' in dl.get('class', []):
+                            inventory_dl = dl
+                            break
+                    if not inventory_dl:
+                        # stock 클래스가 없으면 첫 번째 detailsArea dl 사용
+                        inventory_dl = option_info.find('dl', {'class': 'detailsArea'})
+                    if inventory_dl:
+                        inventory_dt = inventory_dl.find('dt')
+                        if inventory_dt:
+                            option_name = inventory_dt.get_text(strip=True)
+                            inventory_outer = inventory_dl.find('div', {'id': re.compile(r'inventory_outer')})
+                            if inventory_outer:
+                                content_inventory = inventory_outer.find('ul', {'id': re.compile(r'content_inventory')})
+                                if content_inventory:
+                                    option_items = content_inventory.find_all('li')
+                                    option_values = []
+                                    for item in option_items:
+                                        span = item.find('span')
+                                        if span:
+                                            option_text = span.get_text(strip=True)
+                                            if option_text and option_text != '-----------------------------------------------------------':
+                                                option_values.append(option_text)
+                                    if option_values:
+                                        goods_info["options"].append({
+                                            "name": option_name,
+                                            "type": "inventory",
+                                            "values": option_values
+                                        })
+                    
+                    # 이라스트 (opt)
+                    opt_dls = option_info.find_all('dl', {'class': 'detailsArea'})
+                    for opt_dl in opt_dls:
+                        opt_dt = opt_dl.find('dt')
+                        if opt_dt:
+                            opt_name = opt_dt.get_text(strip=True)
+                            # inventory가 아닌 경우만 (이미 처리했으므로)
+                            if '본체 컬러' not in opt_name and '∙' not in opt_name:
+                                opt_outer = opt_dl.find('div', {'id': re.compile(r'opt_outer')})
+                                if opt_outer:
+                                    content_opt = opt_outer.find('ul', {'id': re.compile(r'content_opt')})
+                                    if content_opt:
+                                        opt_items = content_opt.find_all('li')
+                                        opt_values = []
+                                        for item in opt_items:
+                                            span = item.find('span')
+                                            if span:
+                                                opt_text = span.get_text(strip=True)
+                                                if opt_text and opt_text != '-----------------------------------------------------------':
+                                                    opt_values.append(opt_text)
+                                        if opt_values:
+                                            goods_info["options"].append({
+                                                "name": opt_name,
+                                                "type": "option",
+                                                "values": opt_values
+                                            })
+                    
+                    # 작성 이름 필드
+                    request_info = option_info.find('span', {'id': re.compile(r'RequestInfo')})
+                    if request_info:
+                        request_dl = request_info.find('dl', {'class': 'detailsArea'})
+                        if request_dl:
+                            request_dt = request_dl.find('dt')
+                            request_dd = request_dl.find('dd')
+                            if request_dt and request_dd:
+                                field_name = request_dt.get_text(strip=True)
+                                input_field = request_dd.find('input')
+                                if input_field:
+                                    maxlength = input_field.get('maxlength', '')
+                                    goods_info["custom_name_field"] = {
+                                        "name": field_name,
+                                        "maxlength": maxlength
+                                    }
+        
+        # #region agent log
+        _log_debug("debug-session", "run1", "D", "crawler.py:_extract_goods_info", "상품 정보 영역 추출 완료", {
+            "has_images": len(goods_info.get("product_images", [])) > 0,
+            "has_brand": bool(goods_info.get("brand")),
+            "has_title": bool(goods_info.get("product_title")),
+            "has_price": bool(goods_info.get("price_info")),
+            "options_count": len(goods_info.get("options", [])),
+            "is_empty": not goods_info.get("product_title") and not goods_info.get("price_info")
+        })
+        # #endregion
+        
+        return goods_info
     
     def _extract_seller_info(self, soup: BeautifulSoup) -> Dict[str, Any]:
         """판매자 정보 추출"""
