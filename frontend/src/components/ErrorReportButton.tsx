@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { reportError } from '../services/api'
 
 interface ErrorReportButtonProps {
@@ -22,12 +22,38 @@ export default function ErrorReportButton({
   const [severity, setSeverity] = useState<'high' | 'medium' | 'low'>('medium')
   const [description, setDescription] = useState('')
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const submitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 컴포넌트 unmount 시 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (submitTimerRef.current) {
+        clearTimeout(submitTimerRef.current)
+        submitTimerRef.current = null
+      }
+    }
+  }, [])
+
+  // 모달을 닫는 헬퍼 함수 (타이머 정리 포함)
+  const closeModal = () => {
+    if (submitTimerRef.current) {
+      clearTimeout(submitTimerRef.current)
+      submitTimerRef.current = null
+    }
+    setIsOpen(false)
+    setMessage(null)
+    setDescription('')
+  }
 
   // ESC 키로 모달 닫기
   useEffect(() => {
     if (isOpen) {
       const handleEscape = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
+          if (submitTimerRef.current) {
+            clearTimeout(submitTimerRef.current)
+            submitTimerRef.current = null
+          }
           setIsOpen(false)
           setMessage(null)
           setDescription('')
@@ -55,7 +81,8 @@ export default function ErrorReportButton({
       })
 
       setMessage({ type: 'success', text: '신고가 저장되었습니다.' })
-      setTimeout(() => {
+      submitTimerRef.current = setTimeout(() => {
+        submitTimerRef.current = null
         setIsOpen(false)
         setDescription('')
         setMessage(null)
@@ -85,9 +112,7 @@ export default function ErrorReportButton({
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
-              setIsOpen(false)
-              setMessage(null)
-              setDescription('')
+              closeModal()
             }
           }}
         >
@@ -104,11 +129,7 @@ export default function ErrorReportButton({
                   오류 신고
                 </h3>
                 <button
-                  onClick={() => {
-                    setIsOpen(false)
-                    setMessage(null)
-                    setDescription('')
-                  }}
+                  onClick={closeModal}
                   className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -194,11 +215,7 @@ export default function ErrorReportButton({
                 <div className="flex gap-2 pt-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsOpen(false)
-                      setMessage(null)
-                      setDescription('')
-                    }}
+                    onClick={closeModal}
                     className="flex-1 px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 glass-card dark:glass-card-dark border border-gray-200/50 dark:border-gray-700/50 rounded-lg hover:bg-gray-100/50 dark:hover:bg-gray-800/50 transition-all"
                   >
                     취소

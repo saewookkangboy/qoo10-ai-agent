@@ -106,16 +106,17 @@ class DataValidator:
         crawler_reviews = product_data.get("reviews", {}).get("review_count", 0)
         crawler_rating = product_data.get("reviews", {}).get("rating", 0)
         review_analysis = analysis_result.get("product_analysis", {}).get("review_analysis", {})
-        if review_analysis.get("review_count", 0) != crawler_reviews:
-            review_analysis["review_count"] = crawler_reviews
-            corrected_fields.append("review_count")
+        orig_report = review_analysis.get("review_count", 0)
+        if orig_report != crawler_reviews:
             mismatches.append({
                 "field": "review_count",
                 "crawler_value": crawler_reviews,
-                "report_value": review_analysis.get("review_count", 0),
+                "report_value": orig_report,
                 "severity": "medium",
                 "corrected": True
             })
+            review_analysis["review_count"] = crawler_reviews
+            corrected_fields.append("review_count")
         
         if crawler_rating and review_analysis.get("rating", 0) != crawler_rating:
             review_analysis["rating"] = crawler_rating
@@ -124,16 +125,17 @@ class DataValidator:
         # 4. 이미지 개수 검증 및 보정
         crawler_images = len(product_data.get("images", {}).get("detail_images", []))
         image_analysis = analysis_result.get("product_analysis", {}).get("image_analysis", {})
-        if image_analysis.get("image_count", 0) != crawler_images:
-            image_analysis["image_count"] = crawler_images
-            corrected_fields.append("image_count")
+        original_image_count = image_analysis.get("image_count", 0)
+        if original_image_count != crawler_images:
             mismatches.append({
                 "field": "image_count",
                 "crawler_value": crawler_images,
-                "report_value": image_analysis.get("image_count", 0),
+                "report_value": original_image_count,
                 "severity": "medium",
                 "corrected": True
             })
+            image_analysis["image_count"] = crawler_images
+            corrected_fields.append("image_count")
         
         # 5. 설명 길이 검증 및 보정
         crawler_description = product_data.get("description", "")
