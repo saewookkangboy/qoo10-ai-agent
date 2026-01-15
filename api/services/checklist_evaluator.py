@@ -334,7 +334,7 @@ class ChecklistEvaluator:
         if consistency_issues:
             evaluation_result["data_quality"]["warnings"].extend(consistency_issues)
         
-In @api/services/checklist_evaluator.py around lines 10 - 28, The LOG_PATH constant is hardcoded to a local absolute path which will break on other machines; update the debug logging by removing the hardcoded LOG_PATH and making _log_debug obtain the log path from a configurable source (e.g., environment variable or a shared config) and/or move _log_debug into a shared logging utility used by report_generator.py to avoid duplication; specifically modify the LOG_PATH usage and the _log_debug function to read from a centralized config/env var and ensure callers still pass session_id/run_id/hypothesis_id/location/message/data unchanged.In @api/services/checklist_evaluator.py around lines 10 - 28, The LOG_PATH constant is hardcoded to a local absolute path which will break on other machines; update the debug logging by removing the hardcoded LOG_PATH and making _log_debug obtain the log path from a configurable source (e.g., environment variable or a shared config) and/or move _log_debug into a shared logging utility used by report_generator.py to avoid duplication; specifically modify the LOG_PATH usage and the _log_debug function to read from a centralized config/env var and ensure callers still pass session_id/run_id/hypothesis_id/location/message/data unchanged.        # 자동 체크 가능한 항목만으로 완성도 계산 (수동 확인 필요 항목 제외)
+        # 자동 체크 가능한 항목만으로 완성도 계산 (수동 확인 필요 항목 제외)
         auto_checkable_total = 0
         auto_checkable_completed = 0
         

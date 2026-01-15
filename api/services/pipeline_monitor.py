@@ -129,31 +129,7 @@ class PipelineMonitor:
         duration_ms: Optional[int]
     ):
         """특정 기간의 성공률 업데이트"""
-        from contextlib import contextmanager
-        
-        @contextmanager
-        def get_connection():
-            if self.db.use_postgres:
-                import psycopg2
-                from psycopg2.extras import RealDictCursor
-                conn = psycopg2.connect(self.db._get_connection_string())
-                conn.cursor_factory = RealDictCursor
-            else:
-                import sqlite3
-                db_path = self.db._get_db_path()
-                conn = sqlite3.connect(db_path)
-                conn.row_factory = sqlite3.Row
-            
-            try:
-                yield conn
-                conn.commit()
-            except Exception:
-                conn.rollback()
-                raise
-            finally:
-                conn.close()
-        
-        with get_connection() as conn:
+        with self.db.get_connection() as conn:
             cursor = conn.cursor()
             
             period_start_str = period_start.isoformat()
@@ -367,32 +343,8 @@ class PipelineMonitor:
         Returns:
             상세 기록 리스트
         """
-        from contextlib import contextmanager
-        
-        @contextmanager
-        def get_connection():
-            if self.db.use_postgres:
-                import psycopg2
-                from psycopg2.extras import RealDictCursor
-                conn = psycopg2.connect(self.db._get_connection_string())
-                conn.cursor_factory = RealDictCursor
-            else:
-                import sqlite3
-                db_path = self.db._get_db_path()
-                conn = sqlite3.connect(db_path)
-                conn.row_factory = sqlite3.Row
-            
-            try:
-                yield conn
-                conn.commit()
-            except Exception:
-                conn.rollback()
-                raise
-            finally:
-                conn.close()
-        
         try:
-            with get_connection() as conn:
+            with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
                 if self.db.use_postgres:

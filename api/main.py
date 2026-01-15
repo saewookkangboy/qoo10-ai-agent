@@ -13,6 +13,7 @@ import os
 import re
 import logging
 from dotenv import load_dotenv
+import httpx
 
 from services.crawler import Qoo10Crawler
 from services.analyzer import ProductAnalyzer
@@ -873,12 +874,14 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
         else:
             error_msg = f"알 수 없는 URL 타입: {url_type}"
             logger.error(f"[{analysis_id}] {error_msg}")
-import re
-import logging
-from dotenv import load_dotenv
-import httpx
-
-from services.crawler import Qoo10Crawler
+            if analysis_id in analysis_store:
+                analysis_store[analysis_id]["status"] = "failed"
+                analysis_store[analysis_id]["error"] = error_msg
+                _update_progress(analysis_id, "failed", 0, error_msg)
+    
+    except Exception as e:
+        error_msg = f"분석 중 예상치 못한 오류 발생: {str(e)}"
+        logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
         if analysis_id in analysis_store:
             analysis_store[analysis_id]["status"] = "failed"
             analysis_store[analysis_id]["error"] = error_msg
@@ -1839,74 +1842,6 @@ async def get_analysis_results_list(
 async def get_ai_insight_report(days: int = 30):
     """AI 분석 리포트 생성"""
     return admin_service.generate_ai_insight_report(days=days)
-
-
-# ========== 파이프라인 모니터링 API ==========
-
-@app.get("/api/v1/admin/pipeline/success-rates")
-async def get_pipeline_success_rates(
-    period_type: str = "day",
-    days: int = 7
-):
-    """
-    파이프라인 성공률 조회
-    
-    - period_type: 집계 기간 타입 (hour/day/week/month)
-    - days: 조회할 일수 (day 타입일 때만 사용)
-    """
-    try:
-        if period_type not in ["hour", "day", "week", "month"]:
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid period_type. Use 'hour', 'day', 'week', or 'month'"
-            )
-        
-        stats = pipeline_monitor.get_success_rates(period_type=period_type, days=days)
-        return {
-            "status": "success",
-            "data": stats
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get pipeline success rates: {str(e)}"
-        )
-
-
-@app.get("/api/v1/admin/pipeline/stage-details/{stage}")
-async def get_pipeline_stage_details(
-    stage: str,
-    limit: int = 100
-):
-    """
-    특정 파이프라인 단계의 상세 기록 조회
-    
-    - stage: 파이프라인 단계 (crawling, analyzing, generating_recommendations, evaluating_checklist, validating, finalizing)
-    - limit: 조회할 레코드 수
-    """
-    try:
-        if stage not in pipeline_monitor.STAGES:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid stage. Use one of: {', '.join(pipeline_monitor.STAGES)}"
-            )
-        
-        details = pipeline_monitor.get_stage_details(stage=stage, limit=limit)
-        return {
-            "status": "success",
-            "stage": stage,
-            "data": details,
-            "count": len(details)
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get stage details: {str(e)}"
-        )
 
 
 if __name__ == "__main__":

@@ -75,27 +75,26 @@ function ChecklistCard({ checklist }: ChecklistCardProps) {
             >
               <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent dark:from-white/5 pointer-events-none"></div>
               <div className="relative z-10">
-              {/* 카테고리 헤더 */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
-                <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100">
-                  {category.category}
-                </h3>
-                <div className="flex items-center gap-3">
-                  <div className="text-right">
-                    <div className="text-xs text-gray-600 dark:text-gray-400">완성도</div>
-                    <div className={`text-xl sm:text-2xl font-bold ${categoryColors.text}`}>
-                      {category.completion_rate}%
+                {/* 카테고리 헤더 */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100">
+                    {category.category}
+                  </h3>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="text-xs text-gray-600 dark:text-gray-400">완성도</div>
+                      <div className={`text-xl sm:text-2xl font-bold ${categoryColors.text}`}>
+                        {category.completion_rate}%
+                      </div>
+                    </div>
+                    <div className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg ${categoryColors.badge} shadow-md backdrop-blur-sm`}>
+                      {category.completion_rate >= 80 ? '완료' : category.completion_rate >= 60 ? '진행중' : '미완료'}
                     </div>
                   </div>
-                  <div className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg ${categoryColors.badge} shadow-md backdrop-blur-sm`}>
-                    {category.completion_rate >= 80 ? '완료' : category.completion_rate >= 60 ? '진행중' : '미완료'}
-                  </div>
                 </div>
-              </div>
-              </div>
 
-              {/* 체크리스트 항목 */}
-              <div className="space-y-3 sm:space-y-4">
+                {/* 체크리스트 항목 */}
+                <div className="space-y-3 sm:space-y-4">
                 {category.items.map((item) => {
                   const isCompleted = item.status === 'completed'
                   
@@ -172,7 +171,7 @@ function ChecklistCard({ checklist }: ChecklistCardProps) {
                     </div>
                   )
                 })}
-              </div>
+                </div>
               </div>
             </div>
           )
