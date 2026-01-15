@@ -52,26 +52,39 @@ function AnalysisPage() {
     const percentage = progress?.percentage || 0
     
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4 transition-colors">
-        <div className="text-center max-w-md w-full">
-          <LoadingSpinner />
-          <p className="mt-6 text-base sm:text-lg text-gray-900 dark:text-gray-100 font-medium mb-2">
-            {message}
-          </p>
-          {percentage > 0 && (
-            <div className="mt-4 mb-2">
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-                <div 
-                  className="bg-blue-600 dark:bg-blue-500 h-2.5 rounded-full transition-all duration-300"
-                  style={{ width: `${percentage}%` }}
-                ></div>
-              </div>
-              <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">{percentage}%</p>
+      <div className="min-h-screen flex items-center justify-center glass-bg dark:glass-bg-dark px-4 transition-colors relative overflow-hidden">
+        {/* 배경 장식 요소 */}
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-400/10 dark:bg-blue-500/10 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-400/10 dark:bg-purple-500/10 rounded-full blur-3xl"></div>
+        </div>
+        
+        <div className="text-center max-w-md w-full relative z-10">
+          <div className="glass-elevated dark:glass-elevated-dark rounded-2xl p-8 sm:p-10 glass-transition relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent dark:from-white/5 pointer-events-none"></div>
+            <div className="relative z-10">
+              <LoadingSpinner />
+              <p className="mt-6 text-base sm:text-lg text-gray-900 dark:text-gray-100 font-medium mb-2">
+                {message}
+              </p>
+              {percentage > 0 && (
+                <div className="mt-4 mb-2">
+                  <div className="w-full bg-gray-200/50 dark:bg-gray-700/50 backdrop-blur-sm rounded-full h-2.5 overflow-hidden">
+                    <div 
+                      className="bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-400 dark:to-purple-500 h-2.5 rounded-full transition-all duration-300 shadow-md relative overflow-hidden"
+                      style={{ width: `${percentage}%` }}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-white/30 to-transparent"></div>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-xs text-gray-600 dark:text-gray-400 font-medium">{percentage}%</p>
+                </div>
+              )}
+              <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
+                잠시만 기다려주세요
+              </p>
             </div>
-          )}
-          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
-            잠시만 기다려주세요
-          </p>
+          </div>
         </div>
       </div>
     )
@@ -79,25 +92,36 @@ function AnalysisPage() {
 
   if (error || (result && result.status === 'failed')) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4 transition-colors">
-        <div className="text-center max-w-md w-full bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-6 sm:p-8">
-          <div className="mb-4">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-red-50 dark:bg-red-900/20 rounded-full">
-              <span className="text-3xl">⚠️</span>
+      <div className="min-h-screen flex items-center justify-center glass-bg dark:glass-bg-dark px-4 transition-colors relative overflow-hidden">
+        {/* 배경 장식 요소 */}
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-0 left-1/4 w-96 h-96 bg-red-400/10 dark:bg-red-500/10 rounded-full blur-3xl"></div>
+        </div>
+        
+        <div className="text-center max-w-md w-full relative z-10">
+          <div className="glass-elevated dark:glass-elevated-dark rounded-2xl p-6 sm:p-8 glass-transition relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent pointer-events-none"></div>
+            <div className="relative z-10">
+              <div className="mb-4">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-red-50/80 dark:bg-red-900/30 backdrop-blur-xl rounded-full border border-red-200/50 dark:border-red-800/50 shadow-md">
+                  <span className="text-3xl">⚠️</span>
+                </div>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-3">
+                분석 실패
+              </h2>
+              <p className="text-sm sm:text-base text-red-600 dark:text-red-400 mb-6">
+                {error || result?.error || '분석에 실패했습니다.'}
+              </p>
+              <button
+                onClick={() => navigate('/')}
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-500 dark:to-purple-500 text-white rounded-xl font-medium hover:from-blue-700 hover:to-purple-700 dark:hover:from-blue-600 dark:hover:to-purple-600 transition-all duration-200 shadow-lg backdrop-blur-sm relative overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent"></div>
+                <span className="relative z-10">다시 시도</span>
+              </button>
             </div>
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-3">
-            분석 실패
-          </h2>
-          <p className="text-sm sm:text-base text-red-600 dark:text-red-400 mb-6">
-            {error || result?.error || '분석에 실패했습니다.'}
-          </p>
-          <button
-            onClick={() => window.location.href = '/'}
-            className="px-6 py-3 bg-blue-600 dark:bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
-          >
-            다시 시도
-          </button>
         </div>
       </div>
     )
@@ -106,11 +130,11 @@ function AnalysisPage() {
   if (result && result.status === 'completed' && result.result) {
     return (
       <div>
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-3 sm:py-4 transition-colors">
+        <div className="glass-elevated dark:glass-elevated-dark border-b border-gray-200/50 dark:border-gray-800/50 px-4 sm:px-6 py-3 sm:py-4 relative z-20">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <button
               onClick={() => navigate('/')}
-              className="text-sm sm:text-base text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors"
+              className="text-sm sm:text-base text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors backdrop-blur-sm px-3 py-1.5 rounded-lg hover:bg-white/20 dark:hover:bg-gray-800/20"
             >
               ← 새로운 분석
             </button>

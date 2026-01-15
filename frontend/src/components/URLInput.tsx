@@ -23,7 +23,7 @@ function URLInput({ url, onChange, onSubmit, loading, error }: URLInputProps) {
   return (
     <form onSubmit={onSubmit} className="space-y-4 sm:space-y-5">
       <div>
-        <label htmlFor="url" className="block text-sm sm:text-base font-medium text-[#1A1A1A] mb-2 sm:mb-3">
+        <label htmlFor="url" className="block text-sm sm:text-base font-medium text-gray-900 dark:text-gray-100 mb-2 sm:mb-3">
           상품 또는 Shop URL
         </label>
         <input
@@ -32,11 +32,11 @@ function URLInput({ url, onChange, onSubmit, loading, error }: URLInputProps) {
           value={url}
           onChange={(e) => onChange(e.target.value)}
           placeholder="https://www.qoo10.jp/gmkt.inc/Goods/Goods.aspx?goodscode=..."
-          className={`w-full px-4 sm:px-5 py-3 sm:py-4 text-sm sm:text-base border-2 rounded-lg focus:outline-none focus:ring-2 transition-all ${
+          className={`w-full px-4 sm:px-5 py-3 sm:py-4 text-sm sm:text-base border-2 rounded-xl focus:outline-none focus:ring-2 transition-all backdrop-blur-xl ${
             !isValid
-              ? 'border-[#CC0000] focus:ring-[#CC0000] focus:border-[#CC0000]'
-              : 'border-[#E6E6E6] focus:ring-[#0066CC] focus:border-[#0066CC]'
-          } disabled:bg-[#F5F5F5] disabled:cursor-not-allowed text-[#1A1A1A] placeholder-[#808080]`}
+              ? 'bg-red-50/80 dark:bg-red-900/30 border-red-500/50 dark:border-red-400/50 focus:ring-red-500 focus:border-red-500'
+              : 'glass-card dark:glass-card-dark border-gray-200/50 dark:border-gray-700/50 focus:ring-blue-500 focus:border-blue-500'
+          } disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400`}
           disabled={loading}
         />
         {!isValid && (
@@ -55,8 +55,10 @@ function URLInput({ url, onChange, onSubmit, loading, error }: URLInputProps) {
       <button
         type="submit"
         disabled={!url || !isValid || loading}
-        className="w-full bg-[#0066CC] text-white py-3 sm:py-4 px-6 sm:px-8 rounded-lg font-semibold text-base sm:text-lg hover:bg-[#004499] disabled:bg-[#808080] disabled:cursor-not-allowed transition-all duration-200 shadow-[0_2px_4px_rgba(0,0,0,0.08)] hover:shadow-[0_4px_8px_rgba(0,0,0,0.12)] active:scale-[0.98]"
+        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-500 dark:to-purple-500 text-white py-3 sm:py-4 px-6 sm:px-8 rounded-xl font-semibold text-base sm:text-lg hover:from-blue-700 hover:to-purple-700 dark:hover:from-blue-600 dark:hover:to-purple-600 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl backdrop-blur-sm relative overflow-hidden active:scale-[0.98]"
       >
+        <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent"></div>
+        <span className="relative z-10">
         {loading ? (
           <span className="flex items-center justify-center gap-2">
             <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -68,6 +70,7 @@ function URLInput({ url, onChange, onSubmit, loading, error }: URLInputProps) {
         ) : (
           '분석 시작'
         )}
+        </span>
       </button>
     </form>
   )
