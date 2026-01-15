@@ -32,6 +32,14 @@ _logger = logging.getLogger(__name__)
 
 from services.logging_utils import log_debug as _log_debug
 
+# Qoo10 API 서비스 임포트 (선택적)
+try:
+    from .qoo10_api_service import Qoo10APIService
+    QOO10_API_AVAILABLE = True
+except ImportError:
+    QOO10_API_AVAILABLE = False
+    Qoo10APIService = None
+
 # Playwright 임포트 (선택적)
 try:
     from playwright.async_api import async_playwright, Browser, Page, TimeoutError as PlaywrightTimeoutError
@@ -212,6 +220,16 @@ class Qoo10Crawler(ShopCrawlerMixin):
         # 우선 크롤링 필드 목록 (오류 신고된 필드)
         self._priority_fields = None
         self._priority_chunks = {}  # 필드별 Chunk 정보
+        
+        # Qoo10 API 서비스 (선택적)
+        self.api_service = None
+        if QOO10_API_AVAILABLE:
+            try:
+                self.api_service = Qoo10APIService()
+                if self.api_service.certification_key:
+                    logger.info("Qoo10 API 서비스가 활성화되었습니다.")
+            except Exception as e:
+                logger.warning(f"Qoo10 API 서비스 초기화 실패: {str(e)}")
     
     def _load_proxies(self) -> List[str]:
         """환경 변수에서 프록시 목록 로드"""
@@ -883,6 +901,26 @@ class Qoo10Crawler(ShopCrawlerMixin):
             else:
                 logger.warning("Playwright not available, falling back to HTTP crawling")
         
+        # 상품 코드 추출 (API 사용을 위해)
+        product_code = self._extract_product_code_from_url(url)
+        api_data = None
+        
+        # Qoo10 API를 사용하여 데이터 조회 시도 (우선순위)
+        if self.api_service and product_code:
+            try:
+                logger.info(f"Qoo10 API를 사용하여 상품 정보 조회 시도: {product_code}")
+                api_data = await self.api_service.fetch_product_data(product_code, use_api=True)
+                if api_data:
+                    logger.info(f"Qoo10 API로 상품 정보 조회 성공: {product_code}")
+                    # API 데이터에 URL 추가
+                    api_data["url"] = url
+                    api_data["product_code"] = product_code
+                    return api_data
+                else:
+                    logger.info(f"Qoo10 API로 상품 정보 조회 실패, 크롤링으로 전환: {product_code}")
+            except Exception as e:
+                logger.warning(f"Qoo10 API 호출 중 오류 발생, 크롤링으로 전환: {str(e)}")
+        
         try:
             # URL 정규화 (다양한 형식을 표준 형식으로 변환 시도)
             normalized_url = self._normalize_product_url(url)
@@ -1058,7 +1096,7 @@ class Qoo10Crawler(ShopCrawlerMixin):
         extract_func
     ) -> Any:
         """
-        AI 학습 기반 데이터 추출 - 최적화: DB 조회 최소화
+        AI 학습 기반 데이터 추출 - 최적화: DB 조회 최소화, 우선 크롤링 Chunk 활용
         
         Args:
             selector_type: 선택자 타입 ('product_name', 'price', etc.)
@@ -1069,6 +1107,44 @@ class Qoo10Crawler(ShopCrawlerMixin):
         Returns:
             추출된 데이터
         """
+        # 우선 크롤링 필드인 경우 Chunk 정보의 선택자를 최우선으로 시도
+        field_name = selector_type  # selector_type이 필드명과 일치하는 경우
+        if self._priority_fields and field_name in self._priority_fields:
+            if field_name in self._priority_chunks:
+                chunks = self._priority_chunks[field_name]
+                logger = logging.getLogger(__name__)
+                logger.info(f"Using priority chunks for field: {field_name}, chunks count: {len(chunks)}")
+                
+                # Chunk 정보에서 선택자 패턴 추출하여 우선 시도
+                for chunk in chunks:
+                    chunk_data = chunk.get("chunk_data", {})
+                    selector_pattern = chunk.get("selector_pattern")
+                    
+                    # selector_pattern이 있으면 우선 시도
+                    if selector_pattern:
+                        try:
+                            result = extract_func(soup, selector_pattern)
+                            if result and result != "상품명 없음" and result != "":
+                                logger.info(f"Successfully extracted {field_name} using priority chunk selector: {selector_pattern}")
+                                return result
+                        except Exception as e:
+                            logger.debug(f"Failed to extract using chunk selector {selector_pattern}: {str(e)}")
+                            continue
+                    
+                    # chunk_data에서 관련 클래스 정보 활용
+                    related_classes = chunk_data.get("related_classes", [])
+                    if related_classes:
+                        # 가장 빈번한 클래스를 선택자로 사용
+                        for class_name in related_classes[:3]:  # 상위 3개만 시도
+                            selector = f".{class_name}"
+                            try:
+                                result = extract_func(soup, selector)
+                                if result and result != "상품명 없음" and result != "":
+                                    logger.info(f"Successfully extracted {field_name} using priority chunk class: {class_name}")
+                                    return result
+                            except Exception:
+                                continue
+        
         # 성능 최적화: 기본 선택자를 먼저 시도 (DB 조회 없이)
         for selector in default_selectors[:5]:  # 상위 5개만 먼저 시도
             try:
@@ -1143,6 +1219,24 @@ class Qoo10Crawler(ShopCrawlerMixin):
         # 변환할 수 없으면 원본 반환 (로그 남기기)
         logger.warning(f"Could not extract product code from URL: {url}, using original URL")
         return url
+    
+    def _extract_product_code_from_url(self, url: str) -> Optional[str]:
+        """URL에서 상품 코드 추출 (API 사용을 위해)"""
+        # 다양한 패턴에서 상품 코드 추출
+        patterns = [
+            r'goodscode=(\d+)',  # ?goodscode=123456
+            r'/g/(\d+)',  # /g/123456
+            r'/item/[^/]+/(\d+)',  # /item/.../123456
+            r'/item/[^/]+/(\d+)\?',  # /item/.../123456?
+            r'#(\d+)$',  # #123456 (끝에 있는 경우)
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url, re.IGNORECASE)
+            if match:
+                return match.group(1)
+        
+        return None
     
     def _extract_product_code(self, url: str, soup: BeautifulSoup) -> Optional[str]:
         """상품 코드 추출 (다양한 URL 형식 지원)"""

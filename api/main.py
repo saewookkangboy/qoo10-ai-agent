@@ -291,6 +291,7 @@ async def download_report(
     result = analysis["result"]
     product_data = result.get("product_data")
     shop_data = result.get("shop_data")
+    validation_result = result.get("validation")  # 검증 결과 가져오기
     
     # 리포트 생성기 초기화
     report_generator = ReportGenerator()
@@ -326,7 +327,8 @@ async def download_report(
             report_content = report_generator.generate_markdown_report(
                 result,
                 product_data,
-                shop_data
+                shop_data,
+                validation_result=validation_result  # 검증 결과 전달
             )
             from fastapi.responses import Response
             return Response(
@@ -488,7 +490,13 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                 logger.debug(f"[{analysis_id}] Crawled data keys: {list(product_data.keys())}")
             except httpx.HTTPError as e:
                 crawl_duration_ms = int((time.time() - crawl_start_time) * 1000)
-                error_msg = f"HTTP 오류 발생: {str(e)}"
+                error_type = type(e).__name__
+                status_code = getattr(e, 'response', None)
+                status_code = status_code.status_code if status_code else None
+                error_msg = f"HTTP 오류 발생: {error_type}"
+                if status_code:
+                    error_msg += f" (상태 코드: {status_code})"
+                error_msg += f" - {str(e)}"
                 logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
                 pipeline_monitor.record_stage(
                     analysis_id=analysis_id,
@@ -497,7 +505,12 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                     stage="crawling",
                     status="failure",
                     duration_ms=crawl_duration_ms,
-                    error_message=error_msg
+                    error_message=error_msg,
+                    metadata={
+                        "error_type": error_type,
+                        "status_code": status_code,
+                        "error_details": str(e)[:500]  # 상세 정보 (최대 500자)
+                    }
                 )
                 analysis_store[analysis_id]["status"] = "failed"
                 analysis_store[analysis_id]["error"] = error_msg
@@ -505,7 +518,8 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                 return
             except Exception as e:
                 crawl_duration_ms = int((time.time() - crawl_start_time) * 1000)
-                error_msg = f"크롤링 실패: {str(e)}"
+                error_type = type(e).__name__
+                error_msg = f"크롤링 실패: {error_type} - {str(e)}"
                 logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
                 pipeline_monitor.record_stage(
                     analysis_id=analysis_id,
@@ -514,7 +528,11 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                     stage="crawling",
                     status="failure",
                     duration_ms=crawl_duration_ms,
-                    error_message=error_msg
+                    error_message=error_msg,
+                    metadata={
+                        "error_type": error_type,
+                        "error_details": str(e)[:500]  # 상세 정보 (최대 500자)
+                    }
                 )
                 analysis_store[analysis_id]["status"] = "failed"
                 analysis_store[analysis_id]["error"] = error_msg
@@ -666,18 +684,29 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                 _update_progress(analysis_id, "validating", 85, "데이터 일치 여부를 검증하고 동기화하는 중...")
                 logger.info(f"[{analysis_id}] Validating and syncing data consistency...")
                 
-                # 크롤링 결과와 리포트 내용 일치 여부 검증 (자동 보정 포함)
+                # 크롤링 결과와 리포트 내용 일치 여부 검증 및 동기화 (자동 보정 포함)
+                # API 데이터가 있으면 우선적으로 사용하여 검증
+                api_data = None
+                if product_data.get("crawled_with") == "qoo10_api":
+                    api_data = product_data
+                    # 크롤링 데이터도 함께 비교 (API 데이터가 우선)
+                    # product_data는 이미 API 데이터이므로 그대로 사용
+                
                 validation_result = data_validator.validate_crawler_vs_report(
                     product_data=product_data,
                     analysis_result=analysis_result,
-                    checklist_result=checklist_result or {}
+                    checklist_result=checklist_result or {},
+                    api_data=api_data
                 )
                 
-                # 크롤러 데이터를 기반으로 analysis_result 동기화
-                analysis_result = data_validator.sync_analysis_result_with_crawler_data(
-                    product_data=product_data,
-                    analysis_result=analysis_result
-                )
+                # 추가 동기화 보장 (validate_crawler_vs_report에서 누락된 필드 보완)
+                # sync_analysis_result_with_crawler_data는 내부적으로 validate_crawler_vs_report를 호출하지만,
+                # 여기서는 이미 보정된 analysis_result를 그대로 사용합니다.
+                # (중복 호출 방지를 위해 주석 처리)
+                # analysis_result = data_validator.sync_analysis_result_with_crawler_data(
+                #     product_data=product_data,
+                #     analysis_result=analysis_result
+                # )
                 
                 # 보정된 필드가 있으면 로그 기록
                 corrected_fields = validation_result.get("corrected_fields", [])
@@ -711,7 +740,9 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                     logger.warning(f"[{analysis_id}] Data validation failed - Mismatches: {len(mismatches)}, Missing: {len(missing_items)}")
             except Exception as e:
                 validation_duration_ms = int((time.time() - validation_start_time) * 1000)
-                logger.warning(f"[{analysis_id}] Data validation failed: {str(e)}")
+                error_type = type(e).__name__
+                error_msg = f"데이터 검증 실패: {error_type} - {str(e)}"
+                logger.warning(f"[{analysis_id}] {error_msg}", exc_info=True)
                 pipeline_monitor.record_stage(
                     analysis_id=analysis_id,
                     url=url,
@@ -719,7 +750,11 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                     stage="validating",
                     status="failure",
                     duration_ms=validation_duration_ms,
-                    error_message=str(e)
+                    error_message=error_msg,
+                    metadata={
+                        "error_type": error_type,
+                        "error_details": str(e)[:500]  # 상세 정보 (최대 500자)
+                    }
                 )
                 validation_result = None
             

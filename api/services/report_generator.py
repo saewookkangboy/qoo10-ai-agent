@@ -262,7 +262,8 @@ class ReportGenerator:
         self,
         analysis_result: Dict[str, Any],
         product_data: Optional[Dict[str, Any]] = None,
-        shop_data: Optional[Dict[str, Any]] = None
+        shop_data: Optional[Dict[str, Any]] = None,
+        validation_result: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Markdown 리포트 생성
@@ -271,6 +272,7 @@ class ReportGenerator:
             analysis_result: 분석 결과
             product_data: 상품 데이터 (선택사항)
             shop_data: Shop 데이터 (선택사항)
+            validation_result: 검증 결과 (선택사항)
             
         Returns:
             Markdown 문자열
@@ -282,14 +284,16 @@ class ReportGenerator:
             "has_checklist_in_result": "checklist" in analysis_result if analysis_result and isinstance(analysis_result, dict) else False,
             "checklist_data": analysis_result.get("checklist") if analysis_result and isinstance(analysis_result, dict) else None,
             "checklist_overall_completion": analysis_result.get("checklist", {}).get("overall_completion") if analysis_result and isinstance(analysis_result, dict) and analysis_result.get("checklist") else None,
-            "checklist_count": len(analysis_result.get("checklist", {}).get("checklists", [])) if analysis_result and isinstance(analysis_result, dict) and analysis_result.get("checklist") else 0
+            "checklist_count": len(analysis_result.get("checklist", {}).get("checklists", [])) if analysis_result and isinstance(analysis_result, dict) and analysis_result.get("checklist") else 0,
+            "has_validation_result": bool(validation_result)
         })
         # #endregion
         return self._generate_report_content(
             analysis_result,
             product_data,
             shop_data,
-            format="markdown"
+            format="markdown",
+            validation_result=validation_result
         )
     
     def generate_doc_report(
@@ -730,7 +734,8 @@ class ReportGenerator:
         analysis_result: Dict[str, Any],
         product_data: Optional[Dict[str, Any]],
         shop_data: Optional[Dict[str, Any]],
-        format: str = "markdown"
+        format: str = "markdown",
+        validation_result: Optional[Dict[str, Any]] = None
     ) -> str:
         # #region agent log - H3 가설 검증
         _log_debug("debug-session", "run1", "H3", "report_generator.py:_generate_report_content", "리포트 생성 시작 - 입력 데이터 구조", {
@@ -752,7 +757,7 @@ class ReportGenerator:
         lines.append(f"\n**생성일시:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         lines.append("\n---\n")
         
-        # 크롤링 방법 표시
+        # 데이터 소스 표시 (크롤링 방법 또는 API)
         crawled_with = None
         if product_data and "crawled_with" in product_data:
             crawled_with = product_data["crawled_with"]
@@ -760,7 +765,10 @@ class ReportGenerator:
             crawled_with = shop_data["crawled_with"]
         
         if crawled_with:
-            lines.append(f"**크롤링 방법:** {crawled_with.upper()}")
+            if crawled_with == "qoo10_api":
+                lines.append(f"**데이터 소스:** Qoo10 공식 API")
+            else:
+                lines.append(f"**크롤링 방법:** {crawled_with.upper()}")
             lines.append("\n---\n")
         
         # 상품 정보
@@ -999,6 +1007,70 @@ class ReportGenerator:
                 lines.append("### 차별화 포인트:")
                 for point in competitor_analysis["differentiation_points"]:
                     lines.append(f"- {point}")
+                lines.append("")
+        
+        # 데이터 검증 결과
+        if validation_result:
+            lines.append("## 🔍 데이터 검증 결과")
+            lines.append("")
+            
+            validation_score = validation_result.get("validation_score", 0)
+            is_valid = validation_result.get("is_valid", False)
+            mismatches = validation_result.get("mismatches", [])
+            missing_items = validation_result.get("missing_items", [])
+            corrected_fields = validation_result.get("corrected_fields", [])
+            
+            # 검증 점수 및 상태
+            status_emoji = "✅" if is_valid else "⚠️"
+            status_text = "일치" if is_valid else "불일치"
+            lines.append(f"### {status_emoji} 검증 점수: **{validation_score:.1f}%** ({status_text})")
+            lines.append("")
+            
+            # 보정된 필드
+            if corrected_fields:
+                lines.append(f"**자동 보정된 필드 ({len(corrected_fields)}개):**")
+                for field in corrected_fields:
+                    lines.append(f"- {field}")
+                lines.append("")
+            
+            # 불일치 항목
+            if mismatches:
+                lines.append(f"**불일치 항목 ({len(mismatches)}개):**")
+                for mismatch in mismatches:
+                    field = mismatch.get("field", "N/A")
+                    crawler_value = mismatch.get("crawler_value", "N/A")
+                    report_value = mismatch.get("report_value", "N/A")
+                    severity = mismatch.get("severity", "medium")
+                    corrected = mismatch.get("corrected", False)
+                    severity_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(severity, "⚪")
+                    corrected_text = " (자동 보정됨)" if corrected else ""
+                    lines.append(f"- {severity_emoji} **{field}**: 크롤러={crawler_value}, 리포트={report_value}{corrected_text}")
+                lines.append("")
+            
+            # 누락 항목
+            if missing_items:
+                lines.append(f"**누락 항목 ({len(missing_items)}개):**")
+                for missing in missing_items:
+                    field = missing.get("field", "N/A")
+                    checklist_item_id = missing.get("checklist_item_id", "N/A")
+                    severity = missing.get("severity", "medium")
+                    severity_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(severity, "⚪")
+                    lines.append(f"- {severity_emoji} **{field}**: 체크리스트 항목={checklist_item_id}")
+                lines.append("")
+            
+            # 데이터 소스 정보
+            data_source = validation_result.get("data_source", "unknown")
+            has_api_data = validation_result.get("has_api_data", False)
+            if has_api_data:
+                lines.append(f"**데이터 소스:** Qoo10 공식 API (우선 사용)")
+            else:
+                lines.append(f"**데이터 소스:** {data_source}")
+            lines.append("")
+            
+            # 검증 시간
+            timestamp = validation_result.get("timestamp")
+            if timestamp:
+                lines.append(f"**검증 시간:** {timestamp}")
                 lines.append("")
         
         return "\n".join(lines)
