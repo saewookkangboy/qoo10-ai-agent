@@ -1065,6 +1065,21 @@ class ReportGenerator:
                 lines.append(f"**데이터 소스:** Qoo10 공식 API (우선 사용)")
             else:
                 lines.append(f"**데이터 소스:** {data_source}")
+            
+            # 구조 비교 결과 (API 구조 기반)
+            structure_comparison = validation_result.get("structure_comparison")
+            if structure_comparison:
+                lines.append("")
+                lines.append("**API 구조 기반 검증:**")
+                if structure_comparison.get("structure_match"):
+                    lines.append("- ✅ 데이터 구조가 API 구조와 일치합니다")
+                else:
+                    missing = structure_comparison.get("missing_fields", [])
+                    extra = structure_comparison.get("extra_fields", [])
+                    if missing:
+                        lines.append(f"- ⚠️ 누락된 필드 ({len(missing)}개): {', '.join(missing[:5])}{'...' if len(missing) > 5 else ''}")
+                    if extra:
+                        lines.append(f"- ℹ️ 추가 필드 ({len(extra)}개): {', '.join(extra[:5])}{'...' if len(extra) > 5 else ''}")
             lines.append("")
             
             # 검증 시간

@@ -1,10 +1,19 @@
 """
 데이터 검증 서비스
 크롤링 결과와 리포트 내용의 일치 여부를 검증합니다.
+API 구조를 참고하여 데이터 정확성을 높입니다.
 """
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import logging
+
+# Qoo10 API 스키마 임포트 (API 구조 참고)
+try:
+    from .qoo10_api_schema import Qoo10APISchema
+    API_SCHEMA_AVAILABLE = True
+except ImportError:
+    API_SCHEMA_AVAILABLE = False
+    Qoo10APISchema = None
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +48,27 @@ class DataValidator:
         reference_data = api_data if api_data else product_data
         data_source = "qoo10_api" if api_data else product_data.get("crawled_with", "crawler")
         
+        # API 구조 기반 데이터 정규화 및 구조 검증
+        structure_comparison = None
+        if API_SCHEMA_AVAILABLE and Qoo10APISchema:
+            try:
+                # 예상 구조와 비교
+                expected_structure = Qoo10APISchema.get_expected_structure()
+                structure_comparison = Qoo10APISchema.compare_structures(
+                    product_data,
+                    expected_structure
+                )
+                
+                # 정규화된 데이터를 참조 데이터로 사용 (더 정확한 검증)
+                if not api_data:
+                    # 크롤러 데이터를 정규화하여 참조 데이터로 사용
+                    reference_data = Qoo10APISchema.normalize_crawler_data_to_api_structure(product_data)
+                    # 정규화된 데이터를 크롤러 형식으로 다시 변환
+                    reference_data = self._convert_api_structure_to_crawler_format(reference_data)
+            except (TypeError, ValueError, KeyError) as e:
+                logger.warning("API 스키마 기반 정규화 실패: %s", e)
+                structure_comparison = None
+        
         validation_result = {
             "is_valid": True,
             "mismatches": [],
@@ -47,7 +77,8 @@ class DataValidator:
             "timestamp": datetime.now().isoformat(),
             "corrected_fields": [],  # 자동 수정된 필드 목록
             "data_source": data_source,  # 데이터 소스 표시
-            "has_api_data": bool(api_data)  # API 데이터 사용 여부
+            "has_api_data": bool(api_data),  # API 데이터 사용 여부
+            "structure_comparison": structure_comparison  # 구조 비교 결과
         }
         
         mismatches = []
@@ -224,6 +255,80 @@ class DataValidator:
         })
         
         return validation_result
+    
+    @staticmethod
+    def _convert_api_structure_to_crawler_format(api_structure: Dict[str, Any]) -> Dict[str, Any]:
+        """API 구조를 크롤러 형식으로 변환"""
+        crawler_format = {}
+        
+        # 기본 정보
+        crawler_format["product_name"] = api_structure.get("GoodsName", "")
+        crawler_format["product_code"] = api_structure.get("GoodsCode", "")
+        crawler_format["category"] = api_structure.get("CategoryName", "")
+        crawler_format["brand"] = api_structure.get("BrandName", "")
+        
+        # 가격 정보
+        crawler_format["price"] = {
+            "sale_price": api_structure.get("SalePrice"),
+            "original_price": api_structure.get("OriginalPrice"),
+            "discount_rate": api_structure.get("DiscountRate", 0)
+        }
+        
+        # 리뷰 정보
+        crawler_format["reviews"] = {
+            "review_count": api_structure.get("ReviewCount", 0),
+            "rating": api_structure.get("Rating", 0.0)
+        }
+        
+        # 이미지 정보
+        images = {}
+        if "ImageUrl" in api_structure:
+            images["thumbnail"] = api_structure["ImageUrl"]
+        if "ImageUrlList" in api_structure:
+            images["detail_images"] = api_structure["ImageUrlList"] if isinstance(api_structure["ImageUrlList"], list) else []
+        crawler_format["images"] = images
+        
+        # 설명
+        crawler_format["description"] = api_structure.get("Description", "")
+        
+        # Qポイント 정보
+        qpoint_info = {}
+        if "QPointInfo" in api_structure:
+            qp = api_structure["QPointInfo"]
+            if isinstance(qp, dict):
+                qpoint_info = {
+                    "max_points": qp.get("MaxPoints", 0),
+                    "receive_confirmation_points": qp.get("ReceiveConfirmationPoints", 0),
+                    "review_points": qp.get("ReviewPoints", 0),
+                    "auto_points": qp.get("AutoPoints", 0)
+                }
+        crawler_format["qpoint_info"] = qpoint_info if any(qpoint_info.values()) else {}
+        
+        # 쿠폰 정보
+        coupon_info = {}
+        if "CouponInfo" in api_structure:
+            cp = api_structure["CouponInfo"]
+            if isinstance(cp, dict):
+                coupon_info = {
+                    "has_coupon": cp.get("HasCoupon", False),
+                    "coupon_type": cp.get("CouponType", "auto"),
+                    "max_discount": cp.get("MaxDiscount")
+                }
+        crawler_format["coupon_info"] = coupon_info
+        
+        # 배송 정보
+        shipping_info = {}
+        if "ShippingInfo" in api_structure:
+            sp = api_structure["ShippingInfo"]
+            if isinstance(sp, dict):
+                shipping_info = {
+                    "free_shipping": sp.get("FreeShipping", False),
+                    "shipping_fee": sp.get("ShippingFee"),
+                    "return_policy": sp.get("ReturnPolicy")
+                }
+        crawler_format["shipping_info"] = shipping_info
+        
+        return crawler_format
     
     def sync_analysis_result_with_crawler_data(
         self,

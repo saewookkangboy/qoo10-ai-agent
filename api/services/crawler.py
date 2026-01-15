@@ -40,6 +40,14 @@ except ImportError:
     QOO10_API_AVAILABLE = False
     Qoo10APIService = None
 
+# Qoo10 API 스키마 임포트 (API 구조 참고)
+try:
+    from .qoo10_api_schema import Qoo10APISchema
+    API_SCHEMA_AVAILABLE = True
+except ImportError:
+    API_SCHEMA_AVAILABLE = False
+    Qoo10APISchema = None
+
 # Playwright 임포트 (선택적)
 try:
     from playwright.async_api import async_playwright, Browser, Page, TimeoutError as PlaywrightTimeoutError
@@ -820,6 +828,20 @@ class Qoo10Crawler(ShopCrawlerMixin):
             except Exception as e:
                 logger.warning(f"Failed to extract JS data: {str(e)}")
             
+            # API 구조 기반 데이터 정규화 (API Key 없이도 구조 참고)
+            if API_SCHEMA_AVAILABLE and Qoo10APISchema:
+                try:
+                    # 크롤러 데이터를 API 구조에 맞게 정규화
+                    normalized_data = Qoo10APISchema.normalize_crawler_data_to_api_structure(product_data)
+                    
+                    # 정규화된 데이터의 유효한 필드만 크롤러 데이터에 반영
+                    # (누락된 필드 보완, 타입 변환, 검증 통과한 값만 사용)
+                    product_data = self._apply_api_schema_normalization(product_data, normalized_data)
+                    
+                    logger.info("API 구조 기반 데이터 정규화 완료 (Playwright)")
+                except Exception as e:
+                    logger.warning(f"API 구조 기반 정규화 실패 (계속 진행): {str(e)}")
+            
             logger.info(f"Playwright crawling completed - Product: {product_name or 'Unknown'}, Code: {product_code or 'N/A'}")
             
             # 데이터베이스 저장
@@ -1052,6 +1074,20 @@ class Qoo10Crawler(ShopCrawlerMixin):
             
             product_data["page_structure"] = page_structure  # 페이지 구조 및 모든 div class 정보 추가
             
+            # API 구조 기반 데이터 정규화 (API Key 없이도 구조 참고)
+            if API_SCHEMA_AVAILABLE and Qoo10APISchema:
+                try:
+                    # 크롤러 데이터를 API 구조에 맞게 정규화
+                    normalized_data = Qoo10APISchema.normalize_crawler_data_to_api_structure(product_data)
+                    
+                    # 정규화된 데이터의 유효한 필드만 크롤러 데이터에 반영
+                    # (누락된 필드 보완, 타입 변환, 검증 통과한 값만 사용)
+                    product_data = self._apply_api_schema_normalization(product_data, normalized_data)
+                    
+                    logger.info("API 구조 기반 데이터 정규화 완료")
+                except Exception as e:
+                    logger.warning(f"API 구조 기반 정규화 실패 (계속 진행): {str(e)}")
+            
             logger.info(f"Crawling completed - Product: {product_name or 'Unknown'}, Code: {product_code or 'N/A'}")
             
             # 데이터베이스 저장은 비동기로 처리 (성능 최적화)
@@ -1237,6 +1273,95 @@ class Qoo10Crawler(ShopCrawlerMixin):
                 return match.group(1)
         
         return None
+    
+    @staticmethod
+    def _apply_api_schema_normalization(
+        crawler_data: Dict[str, Any],
+        normalized_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        API 스키마로 정규화된 데이터를 크롤러 데이터에 반영
+        
+        Args:
+            crawler_data: 원본 크롤러 데이터
+            normalized_data: API 구조로 정규화된 데이터
+            
+        Returns:
+            정규화가 적용된 크롤러 데이터
+        """
+        # 정규화된 데이터를 크롤러 형식으로 변환
+        from services.data_validator import DataValidator
+        normalized_crawler_format = DataValidator._convert_api_structure_to_crawler_format(normalized_data)
+        
+        # 크롤러 데이터에 정규화된 값 반영 (크롤러 데이터가 없거나 유효하지 않은 경우만)
+        result = crawler_data.copy()
+        
+        # 기본 정보
+        if not result.get("product_name") or result.get("product_name") == "상품명 없음":
+            if normalized_crawler_format.get("product_name"):
+                result["product_name"] = normalized_crawler_format["product_name"]
+        
+        if not result.get("product_code"):
+            if normalized_crawler_format.get("product_code"):
+                result["product_code"] = normalized_crawler_format["product_code"]
+        
+        if not result.get("category"):
+            if normalized_crawler_format.get("category"):
+                result["category"] = normalized_crawler_format["category"]
+        
+        if not result.get("brand"):
+            if normalized_crawler_format.get("brand"):
+                result["brand"] = normalized_crawler_format["brand"]
+        
+        # 가격 정보 (크롤러 데이터가 유효하지 않은 경우만)
+        if not result.get("price", {}).get("sale_price") or not (100 <= result.get("price", {}).get("sale_price", 0) <= 1000000):
+            if normalized_crawler_format.get("price", {}).get("sale_price"):
+                if "price" not in result:
+                    result["price"] = {}
+                result["price"]["sale_price"] = normalized_crawler_format["price"]["sale_price"]
+        
+        if not result.get("price", {}).get("original_price"):
+            if normalized_crawler_format.get("price", {}).get("original_price"):
+                if "price" not in result:
+                    result["price"] = {}
+                result["price"]["original_price"] = normalized_crawler_format["price"]["original_price"]
+        
+        # 리뷰 정보
+        if not result.get("reviews", {}).get("review_count"):
+            if normalized_crawler_format.get("reviews", {}).get("review_count"):
+                if "reviews" not in result:
+                    result["reviews"] = {}
+                result["reviews"]["review_count"] = normalized_crawler_format["reviews"]["review_count"]
+        
+        if not result.get("reviews", {}).get("rating"):
+            if normalized_crawler_format.get("reviews", {}).get("rating"):
+                if "reviews" not in result:
+                    result["reviews"] = {}
+                result["reviews"]["rating"] = normalized_crawler_format["reviews"]["rating"]
+        
+        # 이미지 정보 (크롤러 데이터가 없는 경우만)
+        if not result.get("images", {}).get("detail_images"):
+            if normalized_crawler_format.get("images", {}).get("detail_images"):
+                if "images" not in result:
+                    result["images"] = {}
+                result["images"]["detail_images"] = normalized_crawler_format["images"]["detail_images"]
+        
+        # Qポイント 정보 (크롤러 데이터가 없는 경우만)
+        if not result.get("qpoint_info") or not any(result.get("qpoint_info", {}).values()):
+            if normalized_crawler_format.get("qpoint_info") and any(normalized_crawler_format["qpoint_info"].values()):
+                result["qpoint_info"] = normalized_crawler_format["qpoint_info"]
+        
+        # 쿠폰 정보 (크롤러 데이터가 없는 경우만)
+        if not result.get("coupon_info", {}).get("has_coupon"):
+            if normalized_crawler_format.get("coupon_info", {}).get("has_coupon"):
+                result["coupon_info"] = normalized_crawler_format["coupon_info"]
+        
+        # 배송 정보 (크롤러 데이터가 없는 경우만)
+        if not result.get("shipping_info"):
+            if normalized_crawler_format.get("shipping_info"):
+                result["shipping_info"] = normalized_crawler_format["shipping_info"]
+        
+        return result
     
     def _extract_product_code(self, url: str, soup: BeautifulSoup) -> Optional[str]:
         """상품 코드 추출 (다양한 URL 형식 지원)"""
