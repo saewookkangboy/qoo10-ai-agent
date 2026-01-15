@@ -12,6 +12,9 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 import json
 import io
+import os
+
+from services.logging_utils import log_debug as _log_debug
 
 # XML 보안: defusedxml을 사용하여 XML bomb/vector 공격 방지
 try:
@@ -35,6 +38,8 @@ try:
     DOCX_AVAILABLE = True
 except ImportError:
     DOCX_AVAILABLE = False
+    # Document가 없을 때를 위한 더미 클래스 (타입 힌트용)
+    Document = None  # type: ignore
     import warnings
     warnings.warn(
         "python-docx is not installed. DOC report generation will not be available.",
@@ -270,6 +275,16 @@ class ReportGenerator:
         Returns:
             Markdown 문자열
         """
+        # #region agent log - H5 가설 검증
+        _log_debug("debug-session", "run1", "H5", "report_generator.py:generate_markdown_report", "리포트 생성 함수 호출 - 체크리스트 확인", {
+            "has_analysis_result": bool(analysis_result),
+            "analysis_result_keys": list(analysis_result.keys()) if analysis_result and isinstance(analysis_result, dict) else None,
+            "has_checklist_in_result": "checklist" in analysis_result if analysis_result and isinstance(analysis_result, dict) else False,
+            "checklist_data": analysis_result.get("checklist") if analysis_result and isinstance(analysis_result, dict) else None,
+            "checklist_overall_completion": analysis_result.get("checklist", {}).get("overall_completion") if analysis_result and isinstance(analysis_result, dict) and analysis_result.get("checklist") else None,
+            "checklist_count": len(analysis_result.get("checklist", {}).get("checklists", [])) if analysis_result and isinstance(analysis_result, dict) and analysis_result.get("checklist") else 0
+        })
+        # #endregion
         return self._generate_report_content(
             analysis_result,
             product_data,
@@ -489,7 +504,7 @@ class ReportGenerator:
         doc.save(buffer)
         return buffer.getvalue()
     
-    def _add_info_table(self, doc: Document, data: List[tuple]):
+    def _add_info_table(self, doc: Any, data: List[tuple]):
         """정보 테이블 추가"""
         table = doc.add_table(rows=len(data), cols=2)
         table.style = 'Light Grid Accent 1'
@@ -499,7 +514,7 @@ class ReportGenerator:
             table.rows[i].cells[1].text = str(value)
             table.rows[i].cells[0].paragraphs[0].runs[0].bold = True
     
-    def _add_analysis_section(self, doc: Document, title: str, analysis: Dict[str, Any]):
+    def _add_analysis_section(self, doc: Any, title: str, analysis: Dict[str, Any]):
         """분석 섹션 추가"""
         doc.add_heading(title, level=2)
         
@@ -537,7 +552,7 @@ class ReportGenerator:
         
         doc.add_paragraph()
     
-    def _add_price_analysis_section(self, doc: Document, analysis: Dict[str, Any]):
+    def _add_price_analysis_section(self, doc: Any, analysis: Dict[str, Any]):
         """가격 분석 섹션 추가 (개선된 크롤러 데이터 반영)"""
         doc.add_heading('가격 분석', level=2)
         
@@ -576,7 +591,7 @@ class ReportGenerator:
         
         doc.add_paragraph()
     
-    def _add_review_analysis_section(self, doc: Document, analysis: Dict[str, Any]):
+    def _add_review_analysis_section(self, doc: Any, analysis: Dict[str, Any]):
         """리뷰 분석 섹션 추가 (개선된 크롤러 데이터 반영)"""
         doc.add_heading('리뷰 분석', level=2)
         
@@ -614,7 +629,7 @@ class ReportGenerator:
         
         doc.add_paragraph()
     
-    def _add_shop_info_section(self, doc: Document, shop_analysis: Dict[str, Any]):
+    def _add_shop_info_section(self, doc: Any, shop_analysis: Dict[str, Any]):
         """Shop 정보 분석 섹션 추가"""
         shop_info = shop_analysis.get("shop_info", {})
         if shop_info:
@@ -640,7 +655,7 @@ class ReportGenerator:
                     doc.add_paragraph(rec, style='List Bullet 2')
             doc.add_paragraph()
     
-    def _add_shop_specialty_section(self, doc: Document, specialty: Dict[str, Any]):
+    def _add_shop_specialty_section(self, doc: Any, specialty: Dict[str, Any]):
         """Shop 특수성 섹션 추가"""
         doc.add_heading('Shop 특수성 분석', level=2)
         
@@ -663,7 +678,7 @@ class ReportGenerator:
         doc.add_paragraph(f'특수성 점수: {specialty.get("specialty_score", 0)}/100')
         doc.add_paragraph()
     
-    def _add_customized_insights_section(self, doc: Document, insights: Dict[str, Any]):
+    def _add_customized_insights_section(self, doc: Any, insights: Dict[str, Any]):
         """맞춤형 인사이트 섹션 추가"""
         doc.add_heading('맞춤형 인사이트', level=2)
         
@@ -717,6 +732,18 @@ class ReportGenerator:
         shop_data: Optional[Dict[str, Any]],
         format: str = "markdown"
     ) -> str:
+        # #region agent log - H3 가설 검증
+        _log_debug("debug-session", "run1", "H3", "report_generator.py:_generate_report_content", "리포트 생성 시작 - 입력 데이터 구조", {
+            "has_analysis_result": bool(analysis_result),
+            "analysis_result_keys": list(analysis_result.keys()) if analysis_result and isinstance(analysis_result, dict) else None,
+            "has_product_analysis": "product_analysis" in analysis_result if analysis_result and isinstance(analysis_result, dict) else False,
+            "has_checklist": "checklist" in analysis_result if analysis_result and isinstance(analysis_result, dict) else False,
+            "has_product_data": bool(product_data),
+            "product_data_keys": list(product_data.keys()) if product_data and isinstance(product_data, dict) else None,
+            "product_name_in_data": product_data.get("product_name") if product_data and isinstance(product_data, dict) else None,
+            "price_sale_in_data": product_data.get("price", {}).get("sale_price") if product_data and isinstance(product_data, dict) and product_data.get("price") else None
+        })
+        # #endregion
         """리포트 내용 생성 (Markdown 형식)"""
         lines = []
         
@@ -738,6 +765,15 @@ class ReportGenerator:
         
         # 상품 정보
         if product_data:
+            # #region agent log - H3 가설 검증
+            _log_debug("debug-session", "run1", "H3", "report_generator.py:_generate_report_content", "상품 정보 리포트에 추가 시작", {
+                "product_name": product_data.get('product_name'),
+                "price_sale": product_data.get('price', {}).get('sale_price'),
+                "price_original": product_data.get('price', {}).get('original_price'),
+                "has_qpoint": bool(product_data.get('qpoint_info')),
+                "has_coupon": bool(product_data.get('coupon_info', {}).get('has_coupon'))
+            })
+            # #endregion
             lines.append("## 📦 상품 정보")
             lines.append("")
             lines.append("| 항목 | 내용 |")
@@ -900,19 +936,54 @@ class ReportGenerator:
         
         # 체크리스트
         checklist = analysis_result.get("checklist", {})
+        # #region agent log - H5 가설 검증
+        _log_debug("debug-session", "run1", "H5", "report_generator.py:_generate_report_content", "체크리스트 데이터 확인", {
+            "has_checklist": bool(checklist),
+            "checklist_keys": list(checklist.keys()) if checklist and isinstance(checklist, dict) else None,
+            "overall_completion": checklist.get('overall_completion') if checklist and isinstance(checklist, dict) else None,
+            "checklist_count": len(checklist.get("checklists", [])) if checklist and isinstance(checklist, dict) else 0,
+            "first_checklist_category": checklist.get("checklists", [{}])[0].get("category") if checklist and isinstance(checklist, dict) and checklist.get("checklists") else None,
+            "first_checklist_items_count": len(checklist.get("checklists", [{}])[0].get("items", [])) if checklist and isinstance(checklist, dict) and checklist.get("checklists") else 0,
+            "total_items": sum(len(cl.get("items", [])) for cl in checklist.get("checklists", [])) if checklist and isinstance(checklist, dict) else 0,
+            "completed_items": sum(len([item for item in cl.get("items", []) if item.get("status") == "completed"]) for cl in checklist.get("checklists", [])) if checklist and isinstance(checklist, dict) else 0
+        })
+        # #endregion
         if checklist:
             lines.append("## ✅ 메뉴얼 기반 체크리스트")
             lines.append("")
             overall_completion = checklist.get('overall_completion', 0)
             lines.append(f"### 전체 완성도: **{overall_completion}%**")
             lines.append("")
+            # #region agent log - H5 가설 검증
+            _log_debug("debug-session", "run1", "H5", "report_generator.py:_generate_report_content", "체크리스트 리포트에 추가 시작", {
+                "overall_completion": overall_completion,
+                "checklist_categories_count": len(checklist.get("checklists", []))
+            })
+            # #endregion
+            items_added_count = 0
             for cl in checklist.get("checklists", []):
-                lines.append(f"#### {cl.get('category', 'N/A')}: {cl.get('completion_rate', 0)}%")
+                category = cl.get('category', 'N/A')
+                completion_rate = cl.get('completion_rate', 0)
+                lines.append(f"#### {category}: {completion_rate}%")
                 lines.append("")
                 for item in cl.get("items", []):
                     status = "✅" if item.get("status") == "completed" else "⬜"
-                    lines.append(f"- {status} {item.get('title', 'N/A')}")
+                    item_title = item.get('title', 'N/A')
+                    lines.append(f"- {status} {item_title}")
+                    items_added_count += 1
                 lines.append("")
+            # #region agent log - H5 가설 검증
+            _log_debug("debug-session", "run1", "H5", "report_generator.py:_generate_report_content", "체크리스트 리포트에 추가 완료", {
+                "items_added_to_report": items_added_count,
+                "total_items_in_checklist": sum(len(cl.get("items", [])) for cl in checklist.get("checklists", []))
+            })
+            # #endregion
+        else:
+            # #region agent log - H5 가설 검증
+            _log_debug("debug-session", "run1", "H5", "report_generator.py:_generate_report_content", "체크리스트 없음 - 리포트에 추가되지 않음", {
+                "checklist_in_result": bool(analysis_result.get("checklist"))
+            })
+            # #endregion
         
         # 경쟁사 분석
         competitor_analysis = analysis_result.get("competitor_analysis", {})

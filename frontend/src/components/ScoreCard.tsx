@@ -45,7 +45,9 @@ function ScoreCard({ title, score, analysis }: ScoreCardProps) {
   const colors = getScoreColor(score)
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 sm:p-6 hover:shadow-md transition-all duration-200">
+    <div className="glass-card dark:glass-card-dark rounded-2xl p-4 sm:p-6 glass-transition relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent dark:from-white/5 pointer-events-none"></div>
+      <div className="relative z-10">
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <div className="flex items-center gap-2">
@@ -60,8 +62,9 @@ function ScoreCard({ title, score, analysis }: ScoreCardProps) {
       {/* 점수 표시 영역 */}
       <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 mb-4 sm:mb-6">
         {/* 큰 점수 원형 표시 */}
-        <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full ${colors.bg} flex items-center justify-center text-white font-bold text-2xl sm:text-3xl flex-shrink-0 shadow-md`}>
-          {score}
+        <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full ${colors.bg} flex items-center justify-center text-white font-bold text-2xl sm:text-3xl flex-shrink-0 shadow-lg backdrop-blur-sm relative overflow-hidden`}>
+          <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent"></div>
+          <span className="relative z-10">{score}</span>
         </div>
         
         {/* 진행 바 및 세부 정보 */}
@@ -94,6 +97,7 @@ function ScoreCard({ title, score, analysis }: ScoreCardProps) {
           </ul>
         </div>
       )}
+      </div>
     </div>
   )
 }

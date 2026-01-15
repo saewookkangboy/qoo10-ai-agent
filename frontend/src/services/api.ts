@@ -84,6 +84,48 @@ export const analyzeService = {
   },
 }
 
+export const errorReportingService = {
+  /**
+   * 오류 신고
+   */
+  async reportError(data: {
+    analysis_id: string
+    field_name: string
+    issue_type: 'mismatch' | 'missing' | 'incorrect'
+    severity: 'high' | 'medium' | 'low'
+    user_description?: string
+    crawler_value?: any
+    report_value?: any
+  }) {
+    const response = await api.post('/api/v1/error/report', data)
+    return response.data
+  },
+
+  /**
+   * 오류 신고 목록 조회
+   */
+  async getErrorReports(fieldName?: string, status: string = 'pending', limit: number = 50) {
+    const params = new URLSearchParams()
+    if (fieldName) params.append('field_name', fieldName)
+    params.append('status', status)
+    params.append('limit', limit.toString())
+    
+    const response = await api.get(`/api/v1/error/reports?${params.toString()}`)
+    return response.data
+  },
+
+  /**
+   * 우선 크롤링 필드 목록 조회
+   */
+  async getPriorityFields() {
+    const response = await api.get('/api/v1/error/priority-fields')
+    return response.data
+  },
+}
+
+// 편의 함수
+export const reportError = errorReportingService.reportError
+
 export const adminService = {
   /**
    * 점수 통계 조회

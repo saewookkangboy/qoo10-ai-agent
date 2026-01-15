@@ -44,7 +44,9 @@ function RecommendationCard({ recommendation }: RecommendationCardProps) {
   const colors = getPriorityColor(recommendation.priority)
 
   return (
-    <div className={`border-l-4 rounded-xl p-4 sm:p-5 ${colors.border} ${colors.bg} hover:shadow-md transition-all duration-200 border border-gray-200 dark:border-gray-700`}>
+    <div className={`border-l-4 rounded-2xl p-4 sm:p-5 ${colors.border} backdrop-blur-xl ${colors.bg} glass-transition border border-gray-200/50 dark:border-gray-700/50 relative overflow-hidden`}>
+      <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent dark:from-white/5 pointer-events-none"></div>
+      <div className="relative z-10">
       {/* 헤더 */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3 sm:mb-4">
         <div className="flex-1">
@@ -73,7 +75,7 @@ function RecommendationCard({ recommendation }: RecommendationCardProps) {
       
       {/* 실행 방법 */}
       {recommendation.action_items && recommendation.action_items.length > 0 && (
-        <div className="mb-4 sm:mb-5 bg-white dark:bg-gray-800 rounded-lg p-3 sm:p-4 border border-gray-200 dark:border-gray-700">
+        <div className="mb-4 sm:mb-5 glass-card dark:glass-card-dark rounded-xl p-3 sm:p-4 border border-gray-200/50 dark:border-gray-700/50">
           <p className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2 sm:mb-3">실행 방법</p>
           <ul className="space-y-1.5 sm:space-y-2">
             {recommendation.action_items.map((item, idx) => (
@@ -100,6 +102,7 @@ function RecommendationCard({ recommendation }: RecommendationCardProps) {
           <span className="text-xs text-gray-600 dark:text-gray-400">예상 시간:</span>
           <span className="text-xs font-medium text-gray-900 dark:text-gray-100">{recommendation.estimated_time}</span>
         </div>
+      </div>
       </div>
     </div>
   )

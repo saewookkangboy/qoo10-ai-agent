@@ -6,6 +6,8 @@ import asyncio
 import sys
 import os
 
+import pytest
+
 # API 디렉토리를 경로에 추가
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'api'))
 
@@ -14,8 +16,11 @@ from services.shop_analyzer import ShopAnalyzer
 from services.recommender import SalesEnhancementRecommender
 
 
-async def test_shop_analysis(url: str):
+@pytest.mark.asyncio
+async def test_shop_analysis():
     """Shop 분석 테스트"""
+    # 테스트 전용 Shop URL (실제 분석 시에는 다양한 URL을 사용)
+    url = "https://www.qoo10.jp/shop/whippedofficial"
     print(f"🔍 Shop 분석 시작: {url}\n")
     
     try:
@@ -96,7 +101,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         url = sys.argv[1]
     
-    result = asyncio.run(test_shop_analysis(url))
+    result = asyncio.run(test_shop_analysis())
     
     if result:
         print("\n✅ 테스트 성공!")

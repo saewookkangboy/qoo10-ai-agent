@@ -29,6 +29,9 @@ from services.seo_optimizer import SEOOptimizer
 from services.ai_seo_optimizer import AISEOOptimizer
 from services.geo_optimizer import GEOOptimizer
 from services.aio_optimizer import AIOOptimizer
+from services.data_validator import DataValidator
+from services.error_reporting_service import ErrorReportingService
+from services.pipeline_monitor import PipelineMonitor
 
 load_dotenv()
 
@@ -63,6 +66,9 @@ history_manager = HistoryManager()
 notification_service = NotificationService()
 batch_analyzer = BatchAnalyzer()
 admin_service = AdminService()
+data_validator = DataValidator()
+error_reporting_service = ErrorReportingService()
+pipeline_monitor = PipelineMonitor()
 
 
 class AnalyzeRequest(BaseModel):
@@ -432,15 +438,18 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
     4. 결과 저장
     """
     import asyncio
+    import time
     
     try:
         logger.info(f"[{analysis_id}] Analysis started - URL: {url}, Type: {url_type}")
         
         # ========== 1단계: 크롤링 (20%) ==========
         _update_progress(analysis_id, "crawling", 10, "상품 페이지를 수집하는 중...")
-        crawler = Qoo10Crawler()
+        # 오류 신고 서비스를 크롤러에 주입하여 우선 크롤링 지원
+        crawler = Qoo10Crawler(error_reporting_service=error_reporting_service)
         
         if url_type == "product":
+            crawl_start_time = time.time()
             try:
                 _update_progress(analysis_id, "crawling", 20, "페이지 데이터를 추출하는 중...")
                 logger.info(f"[{analysis_id}] Starting product crawl - URL: {url}")
@@ -461,24 +470,56 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                     logger.warning(f"[{analysis_id}] Product name not found, using fallback: {product_name}")
                     product_data["product_name"] = product_name
                 
+                crawl_duration_ms = int((time.time() - crawl_start_time) * 1000)
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="crawling",
+                    status="success",
+                    duration_ms=crawl_duration_ms,
+                    metadata={"product_name": product_name, "product_code": product_data.get("product_code")}
+                )
+                
                 logger.info(f"[{analysis_id}] Crawling completed - Product: {product_name}, Code: {product_data.get('product_code', 'N/A')}")
                 logger.debug(f"[{analysis_id}] Crawled data keys: {list(product_data.keys())}")
             except httpx.HTTPError as e:
+                crawl_duration_ms = int((time.time() - crawl_start_time) * 1000)
                 error_msg = f"HTTP 오류 발생: {str(e)}"
                 logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="crawling",
+                    status="failure",
+                    duration_ms=crawl_duration_ms,
+                    error_message=error_msg
+                )
                 analysis_store[analysis_id]["status"] = "failed"
                 analysis_store[analysis_id]["error"] = error_msg
                 _update_progress(analysis_id, "failed", 0, error_msg)
                 return
             except Exception as e:
+                crawl_duration_ms = int((time.time() - crawl_start_time) * 1000)
                 error_msg = f"크롤링 실패: {str(e)}"
                 logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="crawling",
+                    status="failure",
+                    duration_ms=crawl_duration_ms,
+                    error_message=error_msg
+                )
                 analysis_store[analysis_id]["status"] = "failed"
                 analysis_store[analysis_id]["error"] = error_msg
                 _update_progress(analysis_id, "failed", 0, error_msg)
                 return
             
             # ========== 2단계: 기본 분석 (50%) ==========
+            analysis_start_time = time.time()
             try:
                 _update_progress(analysis_id, "analyzing", 30, "상품 데이터를 분석하는 중...")
                 logger.info(f"[{analysis_id}] Starting product analysis...")
@@ -505,16 +546,38 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                     logger.warning(f"[{analysis_id}] Overall score not found, setting default to 0")
                     analysis_result["overall_score"] = 0
                 
+                analysis_duration_ms = int((time.time() - analysis_start_time) * 1000)
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="analyzing",
+                    status="success",
+                    duration_ms=analysis_duration_ms,
+                    metadata={"overall_score": analysis_result.get("overall_score", 0)}
+                )
+                
                 logger.info(f"[{analysis_id}] Analysis completed - Score: {analysis_result.get('overall_score', 0)}")
             except Exception as e:
+                analysis_duration_ms = int((time.time() - analysis_start_time) * 1000)
                 error_msg = f"분석 실패: {str(e)}"
                 logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="analyzing",
+                    status="failure",
+                    duration_ms=analysis_duration_ms,
+                    error_message=error_msg
+                )
                 analysis_store[analysis_id]["status"] = "failed"
                 analysis_store[analysis_id]["error"] = error_msg
                 _update_progress(analysis_id, "failed", 0, error_msg)
                 return
             
             # ========== 3단계: 추천 생성 (80%) ==========
+            recommendations_start_time = time.time()
             try:
                 _update_progress(analysis_id, "generating_recommendations", 60, "개선 제안을 생성하는 중...")
                 logger.info(f"[{analysis_id}] Generating recommendations...")
@@ -529,13 +592,35 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                 if not isinstance(recommendations, list):
                     recommendations = []
                 
+                recommendations_duration_ms = int((time.time() - recommendations_start_time) * 1000)
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="generating_recommendations",
+                    status="success",
+                    duration_ms=recommendations_duration_ms,
+                    metadata={"recommendations_count": len(recommendations)}
+                )
+                
                 logger.info(f"[{analysis_id}] Recommendations generated - Count: {len(recommendations)}")
             except Exception as e:
+                recommendations_duration_ms = int((time.time() - recommendations_start_time) * 1000)
                 logger.warning(f"[{analysis_id}] Recommendations generation failed: {str(e)}")
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="generating_recommendations",
+                    status="failure",
+                    duration_ms=recommendations_duration_ms,
+                    error_message=str(e)
+                )
                 recommendations = []  # 추천 실패해도 계속 진행
             
             # ========== 4단계: 체크리스트 평가 (선택적, 빠르게) ==========
             checklist_result = None
+            checklist_start_time = time.time()
             try:
                 _update_progress(analysis_id, "evaluating_checklist", 75, "체크리스트를 평가하는 중...")
                 checklist_evaluator = ChecklistEvaluator()
@@ -546,12 +631,84 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                     ),
                     timeout=5.0  # 최대 5초로 제한
                 )
+                checklist_duration_ms = int((time.time() - checklist_start_time) * 1000)
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="evaluating_checklist",
+                    status="success",
+                    duration_ms=checklist_duration_ms,
+                    metadata={"completion_rate": checklist_result.get("overall_completion", 0) if checklist_result else 0}
+                )
                 logger.info(f"[{analysis_id}] Checklist evaluation completed")
             except (asyncio.TimeoutError, Exception) as e:
+                checklist_duration_ms = int((time.time() - checklist_start_time) * 1000)
                 logger.warning(f"[{analysis_id}] Checklist evaluation skipped: {str(e)}")
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="evaluating_checklist",
+                    status="failure",
+                    duration_ms=checklist_duration_ms,
+                    error_message=str(e)
+                )
                 checklist_result = None
             
-            # ========== 5단계: 결과 저장 (100%) ==========
+            # ========== 5단계: 데이터 검증 (85%) ==========
+            validation_result = None
+            validation_start_time = time.time()
+            try:
+                _update_progress(analysis_id, "validating", 85, "데이터 일치 여부를 검증하는 중...")
+                logger.info(f"[{analysis_id}] Validating data consistency...")
+                
+                # 크롤링 결과와 리포트 내용 일치 여부 검증
+                validation_result = data_validator.validate_crawler_vs_report(
+                    product_data=product_data,
+                    analysis_result=analysis_result,
+                    checklist_result=checklist_result or {}
+                )
+                
+                validation_duration_ms = int((time.time() - validation_start_time) * 1000)
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="validating",
+                    status="success",
+                    duration_ms=validation_duration_ms,
+                    metadata={
+                        "validation_score": validation_result.get("validation_score", 0),
+                        "is_valid": validation_result.get("is_valid", False),
+                        "mismatches_count": len(validation_result.get("mismatches", [])),
+                        "missing_items_count": len(validation_result.get("missing_items", []))
+                    }
+                )
+                
+                logger.info(f"[{analysis_id}] Validation completed - Score: {validation_result.get('validation_score', 0)}%, Valid: {validation_result.get('is_valid', False)}")
+                
+                # 검증 실패 시 경고 로그
+                if not validation_result.get("is_valid"):
+                    mismatches = validation_result.get("mismatches", [])
+                    missing_items = validation_result.get("missing_items", [])
+                    logger.warning(f"[{analysis_id}] Data validation failed - Mismatches: {len(mismatches)}, Missing: {len(missing_items)}")
+            except Exception as e:
+                validation_duration_ms = int((time.time() - validation_start_time) * 1000)
+                logger.warning(f"[{analysis_id}] Data validation failed: {str(e)}")
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="validating",
+                    status="failure",
+                    duration_ms=validation_duration_ms,
+                    error_message=str(e)
+                )
+                validation_result = None
+            
+            # ========== 6단계: 결과 저장 (100%) ==========
+            finalizing_start_time = time.time()
             try:
                 _update_progress(analysis_id, "finalizing", 90, "결과를 정리하는 중...")
                 logger.info(f"[{analysis_id}] Finalizing results...")
@@ -562,13 +719,24 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                     "recommendations": recommendations,
                     "checklist": checklist_result,
                     "competitor_analysis": None,  # 선택적 기능은 나중에
-                    "product_data": product_data
+                    "product_data": product_data,
+                    "validation": validation_result  # 검증 결과 추가
                 }
                 
                 # 결과 저장
                 analysis_store[analysis_id]["result"] = final_result
                 analysis_store[analysis_id]["status"] = "completed"
                 _update_progress(analysis_id, "completed", 100, "분석이 완료되었습니다.")
+                
+                finalizing_duration_ms = int((time.time() - finalizing_start_time) * 1000)
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="finalizing",
+                    status="success",
+                    duration_ms=finalizing_duration_ms
+                )
                 
                 logger.info(f"[{analysis_id}] Analysis completed successfully - Score: {analysis_result.get('overall_score', 0)}")
                 
@@ -586,8 +754,18 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                     logger.warning(f"[{analysis_id}] Failed to schedule history save: {str(e)}")
                 
             except Exception as e:
+                finalizing_duration_ms = int((time.time() - finalizing_start_time) * 1000)
                 error_msg = f"결과 저장 실패: {str(e)}"
                 logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="finalizing",
+                    status="failure",
+                    duration_ms=finalizing_duration_ms,
+                    error_message=error_msg
+                )
                 analysis_store[analysis_id]["status"] = "failed"
                 analysis_store[analysis_id]["error"] = error_msg
                 _update_progress(analysis_id, "failed", 0, error_msg)
@@ -695,13 +873,12 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
         else:
             error_msg = f"알 수 없는 URL 타입: {url_type}"
             logger.error(f"[{analysis_id}] {error_msg}")
-            analysis_store[analysis_id]["status"] = "failed"
-            analysis_store[analysis_id]["error"] = error_msg
-            _update_progress(analysis_id, "failed", 0, error_msg)
-    
-    except Exception as e:
-        error_msg = f"분석 중 오류 발생: {str(e)}"
-        logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
+import re
+import logging
+from dotenv import load_dotenv
+import httpx
+
+from services.crawler import Qoo10Crawler
         if analysis_id in analysis_store:
             analysis_store[analysis_id]["status"] = "failed"
             analysis_store[analysis_id]["error"] = error_msg
@@ -1349,10 +1526,275 @@ async def get_error_logs(
     )
 
 
+# ========== 오류 신고 API ==========
+
+class ErrorReportRequest(BaseModel):
+    analysis_id: str = Field(..., description="분석 ID")
+    field_name: str = Field(..., description="문제가 있는 필드명")
+    issue_type: str = Field(..., description="문제 유형 (mismatch, missing, incorrect)")
+    severity: str = Field(..., description="심각도 (high, medium, low)")
+    user_description: Optional[str] = Field(None, description="사용자 설명")
+    crawler_value: Optional[Any] = Field(None, description="크롤러가 수집한 값")
+    report_value: Optional[Any] = Field(None, description="리포트에 표시된 값")
+
+
+@app.post("/api/v1/error/report")
+async def report_error(request: ErrorReportRequest):
+    """
+    오류 신고
+    
+    - 크롤링 결과와 리포트 내용의 불일치를 신고합니다
+    - 신고된 항목은 우선적으로 크롤링됩니다
+    """
+    try:
+        # 분석 결과 조회
+        if request.analysis_id not in analysis_store:
+            raise HTTPException(
+                status_code=404,
+                detail="Analysis not found"
+            )
+        
+        analysis = analysis_store[request.analysis_id]
+        if analysis["status"] != "completed":
+            raise HTTPException(
+                status_code=400,
+                detail="Analysis is not completed yet"
+            )
+        
+        result = analysis.get("result", {})
+        product_data = result.get("product_data", {})
+        page_structure = product_data.get("page_structure", {})
+        
+        # 페이지 구조 Chunk 추출
+        page_structure_chunk = None
+        if page_structure:
+            field_structure = page_structure.get(request.field_name, {})
+            if field_structure:
+                page_structure_chunk = {
+                    "related_classes": field_structure.get("related_classes", []),
+                    "element_present": field_structure.get("element_present", False),
+                    "class_frequency": field_structure.get("class_frequency", {})
+                }
+        
+        # 오류 신고 저장
+        report_result = error_reporting_service.report_error(
+            analysis_id=request.analysis_id,
+            url=analysis["url"],
+            field_name=request.field_name,
+            issue_type=request.issue_type,
+            severity=request.severity,
+            user_description=request.user_description,
+            crawler_value=request.crawler_value,
+            report_value=request.report_value,
+            page_structure_chunk=page_structure_chunk
+        )
+        
+        return {
+            "status": "success",
+            "message": "오류 신고가 저장되었습니다.",
+            "error_report_id": report_result["error_report_id"]
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error reporting failed: {str(e)}"
+        )
+
+
+@app.get("/api/v1/error/reports")
+async def get_error_reports(
+    field_name: Optional[str] = None,
+    status: str = "pending",
+    limit: int = 50
+):
+    """
+    오류 신고 목록 조회
+    
+    - field_name: 특정 필드의 오류 신고만 조회 (선택사항)
+    - status: 신고 상태 (pending, resolved)
+    """
+    try:
+        if field_name:
+            reports = error_reporting_service.db.get_error_reports_by_field(field_name, status)
+        else:
+            # 모든 오류 신고 조회
+            from services.database import CrawlerDatabase
+            db = CrawlerDatabase()
+            with db.get_connection() as conn:
+                cursor = conn.cursor()
+                if db.use_postgres:
+                    cursor.execute("""
+                        SELECT * FROM error_reports
+                        WHERE status = %s
+                        ORDER BY created_at DESC
+                        LIMIT %s
+                    """, (status, limit))
+                else:
+                    cursor.execute("""
+                        SELECT * FROM error_reports
+                        WHERE status = ?
+                        ORDER BY created_at DESC
+                        LIMIT ?
+                    """, (status, limit))
+                rows = cursor.fetchall()
+                reports = [dict(row) for row in rows]
+        
+        return {
+            "status": "success",
+            "reports": reports,
+            "count": len(reports)
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get error reports: {str(e)}"
+        )
+
+
+@app.get("/api/v1/error/priority-fields")
+async def get_priority_fields():
+    """
+    우선 크롤링해야 할 필드 목록 조회
+    
+    - 오류 신고가 많은 필드들을 우선순위로 반환
+    """
+    try:
+        priority_fields = error_reporting_service.get_priority_fields_for_crawling()
+        return {
+            "status": "success",
+            "priority_fields": priority_fields
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get priority fields: {str(e)}"
+        )
+
+
+@app.get("/api/v1/error/chunks/{field_name}")
+async def get_chunks_for_field(field_name: str):
+    """
+    특정 필드에 대한 Chunk 목록 조회
+    
+    - 유사한 사이트 구조 크롤링 시 참고용
+    """
+    try:
+        chunks = error_reporting_service.get_chunks_for_field(field_name)
+        return {
+            "status": "success",
+            "field_name": field_name,
+            "chunks": chunks,
+            "count": len(chunks)
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get chunks: {str(e)}"
+        )
+
+
+@app.post("/api/v1/error/resolve/{error_report_id}")
+async def resolve_error(error_report_id: int):
+    """
+    오류 신고를 해결됨으로 표시
+    """
+    try:
+        success = error_reporting_service.mark_error_resolved(error_report_id)
+        if success:
+            return {
+                "status": "success",
+                "message": "오류 신고가 해결됨으로 표시되었습니다."
+            }
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail="Error report not found"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to resolve error: {str(e)}"
+        )
+
+
 @app.get("/api/v1/admin/statistics/score")
 async def get_score_statistics(days: int = 30):
     """점수 통계 조회"""
     return admin_service.get_score_statistics(days=days)
+
+
+# ========== 파이프라인 모니터링 API ==========
+
+@app.get("/api/v1/admin/pipeline/success-rates")
+async def get_pipeline_success_rates(
+    period_type: str = "day",
+    days: int = 7
+):
+    """
+    파이프라인 성공률 조회
+    
+    - period_type: 집계 기간 타입 (hour/day/week/month)
+    - days: 조회할 일수 (day 타입일 때만 사용)
+    """
+    try:
+        if period_type not in ["hour", "day", "week", "month"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid period_type. Use 'hour', 'day', 'week', or 'month'"
+            )
+        
+        stats = pipeline_monitor.get_success_rates(period_type=period_type, days=days)
+        return {
+            "status": "success",
+            "data": stats
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get pipeline success rates: {str(e)}"
+        )
+
+
+@app.get("/api/v1/admin/pipeline/stage-details/{stage}")
+async def get_pipeline_stage_details(
+    stage: str,
+    limit: int = 100
+):
+    """
+    특정 파이프라인 단계의 상세 기록 조회
+    
+    - stage: 파이프라인 단계 (crawling, analyzing, generating_recommendations, evaluating_checklist, validating, finalizing)
+    - limit: 조회할 레코드 수
+    """
+    try:
+        if stage not in pipeline_monitor.STAGES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid stage. Use one of: {', '.join(pipeline_monitor.STAGES)}"
+            )
+        
+        details = pipeline_monitor.get_stage_details(stage=stage, limit=limit)
+        return {
+            "status": "success",
+            "stage": stage,
+            "data": details,
+            "count": len(details)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get stage details: {str(e)}"
+        )
 
 
 @app.get("/api/v1/admin/statistics/analysis")
@@ -1397,6 +1839,74 @@ async def get_analysis_results_list(
 async def get_ai_insight_report(days: int = 30):
     """AI 분석 리포트 생성"""
     return admin_service.generate_ai_insight_report(days=days)
+
+
+# ========== 파이프라인 모니터링 API ==========
+
+@app.get("/api/v1/admin/pipeline/success-rates")
+async def get_pipeline_success_rates(
+    period_type: str = "day",
+    days: int = 7
+):
+    """
+    파이프라인 성공률 조회
+    
+    - period_type: 집계 기간 타입 (hour/day/week/month)
+    - days: 조회할 일수 (day 타입일 때만 사용)
+    """
+    try:
+        if period_type not in ["hour", "day", "week", "month"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid period_type. Use 'hour', 'day', 'week', or 'month'"
+            )
+        
+        stats = pipeline_monitor.get_success_rates(period_type=period_type, days=days)
+        return {
+            "status": "success",
+            "data": stats
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get pipeline success rates: {str(e)}"
+        )
+
+
+@app.get("/api/v1/admin/pipeline/stage-details/{stage}")
+async def get_pipeline_stage_details(
+    stage: str,
+    limit: int = 100
+):
+    """
+    특정 파이프라인 단계의 상세 기록 조회
+    
+    - stage: 파이프라인 단계 (crawling, analyzing, generating_recommendations, evaluating_checklist, validating, finalizing)
+    - limit: 조회할 레코드 수
+    """
+    try:
+        if stage not in pipeline_monitor.STAGES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid stage. Use one of: {', '.join(pipeline_monitor.STAGES)}"
+            )
+        
+        details = pipeline_monitor.get_stage_details(stage=stage, limit=limit)
+        return {
+            "status": "success",
+            "stage": stage,
+            "data": details,
+            "count": len(details)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get stage details: {str(e)}"
+        )
 
 
 if __name__ == "__main__":

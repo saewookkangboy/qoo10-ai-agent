@@ -127,6 +127,105 @@ class CrawlerDatabase:
                         is_active BOOLEAN DEFAULT TRUE
                     )
                 """)
+                
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS error_reports (
+                        id SERIAL PRIMARY KEY,
+                        analysis_id TEXT NOT NULL,
+                        url TEXT NOT NULL,
+                        field_name TEXT NOT NULL,
+                        issue_type TEXT NOT NULL,
+                        severity TEXT NOT NULL,
+                        user_description TEXT,
+                        crawler_value TEXT,
+                        report_value TEXT,
+                        page_structure_chunk TEXT,
+                        status TEXT DEFAULT 'pending',
+                        resolved_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS error_report_chunks (
+                        id SERIAL PRIMARY KEY,
+                        error_report_id INTEGER NOT NULL REFERENCES error_reports(id) ON DELETE CASCADE,
+                        chunk_type TEXT NOT NULL,
+                        chunk_data TEXT NOT NULL,
+                        selector_pattern TEXT,
+                        extraction_method TEXT,
+                        success_count INTEGER DEFAULT 0,
+                        failure_count INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                # 텍스트 임베딩 테이블 (한국어-일본어 임베딩 저장)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS text_embeddings (
+                        id SERIAL PRIMARY KEY,
+                        text TEXT NOT NULL,
+                        text_type TEXT NOT NULL,
+                        source_lang TEXT,
+                        lang_confidence REAL DEFAULT 0.0,
+                        embedding JSONB NOT NULL,
+                        embedding_dimension INTEGER NOT NULL,
+                        model_name TEXT NOT NULL,
+                        metadata JSONB,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                # 인덱스 생성 (검색 성능 향상)
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_text_embeddings_text_type 
+                    ON text_embeddings(text_type)
+                """)
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_text_embeddings_source_lang 
+                    ON text_embeddings(source_lang)
+                """)
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_text_embeddings_model_name 
+                    ON text_embeddings(model_name)
+                """)
+                
+                # 데이터 파이프라인 모니터링 테이블
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS pipeline_monitoring (
+                        id SERIAL PRIMARY KEY,
+                        analysis_id TEXT NOT NULL,
+                        url TEXT NOT NULL,
+                        url_type TEXT NOT NULL,
+                        stage TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        error_message TEXT,
+                        duration_ms INTEGER,
+                        metadata JSONB,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                # 파이프라인 성공률 집계 테이블 (시간별, 일별, 주별, 월별)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS pipeline_success_rates (
+                        id SERIAL PRIMARY KEY,
+                        period_type TEXT NOT NULL,
+                        period_start TIMESTAMP NOT NULL,
+                        stage TEXT NOT NULL,
+                        total_count INTEGER DEFAULT 0,
+                        success_count INTEGER DEFAULT 0,
+                        failure_count INTEGER DEFAULT 0,
+                        success_rate REAL DEFAULT 0.0,
+                        avg_duration_ms REAL DEFAULT 0.0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(period_type, period_start, stage)
+                    )
+                """)
             else:
                 # SQLite 테이블 생성
                 cursor.execute("""
@@ -202,6 +301,91 @@ class CrawlerDatabase:
                         is_active BOOLEAN DEFAULT 1
                     )
                 """)
+                
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS error_reports (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        analysis_id TEXT NOT NULL,
+                        url TEXT NOT NULL,
+                        field_name TEXT NOT NULL,
+                        issue_type TEXT NOT NULL,
+                        severity TEXT NOT NULL,
+                        user_description TEXT,
+                        crawler_value TEXT,
+                        report_value TEXT,
+                        page_structure_chunk TEXT,
+                        status TEXT DEFAULT 'pending',
+                        resolved_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS error_report_chunks (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        error_report_id INTEGER NOT NULL REFERENCES error_reports(id) ON DELETE CASCADE,
+                        chunk_type TEXT NOT NULL,
+                        chunk_data TEXT NOT NULL,
+                        selector_pattern TEXT,
+                        extraction_method TEXT,
+                        success_count INTEGER DEFAULT 0,
+                        failure_count INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                # 텍스트 임베딩 테이블 (한국어-일본어 임베딩 저장)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS text_embeddings (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        text TEXT NOT NULL,
+                        text_type TEXT NOT NULL,
+                        source_lang TEXT,
+                        lang_confidence REAL DEFAULT 0.0,
+                        embedding TEXT NOT NULL,
+                        embedding_dimension INTEGER NOT NULL,
+                        model_name TEXT NOT NULL,
+                        metadata TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                # 데이터 파이프라인 모니터링 테이블
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS pipeline_monitoring (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        analysis_id TEXT NOT NULL,
+                        url TEXT NOT NULL,
+                        url_type TEXT NOT NULL,
+                        stage TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        error_message TEXT,
+                        duration_ms INTEGER,
+                        metadata TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                # 파이프라인 성공률 집계 테이블 (시간별, 일별, 주별, 월별)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS pipeline_success_rates (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        period_type TEXT NOT NULL,
+                        period_start TIMESTAMP NOT NULL,
+                        stage TEXT NOT NULL,
+                        total_count INTEGER DEFAULT 0,
+                        success_count INTEGER DEFAULT 0,
+                        failure_count INTEGER DEFAULT 0,
+                        success_rate REAL DEFAULT 0.0,
+                        avg_duration_ms REAL DEFAULT 0.0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(period_type, period_start, stage)
+                    )
+                """)
             
             # 인덱스 생성
             try:
@@ -210,6 +394,13 @@ class CrawlerDatabase:
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_performance_url ON crawling_performance(url)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_performance_success ON crawling_performance(success)")
                 cursor.execute("CREATE INDEX IF NOT EXISTS idx_selector_type ON selector_performance(selector_type)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_error_reports_url ON error_reports(url)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_error_reports_field ON error_reports(field_name)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_error_reports_status ON error_reports(status)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_error_report_chunks_report_id ON error_report_chunks(error_report_id)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_text_embeddings_text_type ON text_embeddings(text_type)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_text_embeddings_source_lang ON text_embeddings(source_lang)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_text_embeddings_model_name ON text_embeddings(model_name)")
             except Exception:
                 # 인덱스가 이미 존재하는 경우 무시
                 pass

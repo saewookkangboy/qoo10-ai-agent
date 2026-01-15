@@ -18,32 +18,19 @@ import random
 import time
 from datetime import datetime
 import os
+import logging
+from pathlib import Path
 from dotenv import load_dotenv
 import json
 
 from services.database import CrawlerDatabase
+from .crawler_shop import ShopCrawlerMixin
 
 load_dotenv()
 
-# 디버그 로깅 설정
-LOG_PATH = "/Users/chunghyo/qoo10-ai-agent/.cursor/debug.log"
+_logger = logging.getLogger(__name__)
 
-def _log_debug(session_id: str, run_id: str, hypothesis_id: str, location: str, message: str, data: Dict[str, Any] = None):
-    """디버그 로그 작성"""
-    try:
-        log_entry = {
-            "sessionId": session_id,
-            "runId": run_id,
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data or {},
-            "timestamp": int(datetime.now().timestamp() * 1000)
-        }
-        with open(LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-    except Exception:
-        pass  # 로깅 실패해도 크롤링은 계속 진행
+from services.logging_utils import log_debug as _log_debug
 
 # Playwright 임포트 (선택적)
 try:
@@ -53,8 +40,23 @@ except ImportError:
     PLAYWRIGHT_AVAILABLE = False
 
 
-class Qoo10Crawler:
-    """Qoo10 페이지 크롤러 (AI 강화 학습 및 방화벽 우회 기능 포함)"""
+# httpx 버전별 proxies 지원 여부 (모듈 로드 시 1회 판별)
+try:
+    import inspect as _inspect
+
+    _HTTPX_SUPPORTS_PROXIES_PARAM = "proxies" in _inspect.signature(httpx.AsyncClient.__init__).parameters
+except Exception:
+    _HTTPX_SUPPORTS_PROXIES_PARAM = True  # 보수적으로 기본값 True
+
+
+class Qoo10Crawler(ShopCrawlerMixin):
+    """Qoo10 페이지 크롤러 (AI 강화 학습 및 방화벽 우회 기능 포함)
+
+    주의: 인스턴스는 **단일 작업/단일 코루틴**에서 사용하는 것을 전제로 설계되었습니다.
+    동일한 인스턴스를 여러 코루틴에서 동시에 사용하면 User-Agent, 프록시, 세션 쿠키
+    상태가 공유되어 예기치 않은 동작이 발생할 수 있습니다. 동시에 여러 URL을
+    크롤링해야 한다면 `Qoo10Crawler` 인스턴스를 URL/작업별로 분리해서 생성하세요.
+    """
     
     # 일본어-한국어 텍스트 매핑 딕셔너리
     JP_KR_MAPPING = {
@@ -171,12 +173,13 @@ class Qoo10Crawler:
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     ]
     
-    def __init__(self, db: Optional[CrawlerDatabase] = None):
+    def __init__(self, db: Optional[CrawlerDatabase] = None, error_reporting_service=None):
         """
         크롤러 초기화
         
         Args:
             db: 데이터베이스 인스턴스 (없으면 자동 생성)
+            error_reporting_service: 오류 신고 서비스 (우선 크롤링용)
         """
         self.base_url = "https://www.qoo10.jp"
         self.timeout = 15.0  # 타임아웃 단축: 30초 -> 15초
@@ -185,6 +188,9 @@ class Qoo10Crawler:
         
         # 데이터베이스 초기화
         self.db = db or CrawlerDatabase()
+        
+        # 오류 신고 서비스 (우선 크롤링용)
+        self.error_reporting_service = error_reporting_service
         
         # 프록시 설정 (환경 변수에서 읽기)
         self.proxies = self._load_proxies()
@@ -202,6 +208,10 @@ class Qoo10Crawler:
         # Playwright 브라우저 인스턴스 (필요시 초기화)
         self._playwright_browser = None
         self._playwright_context = None
+        
+        # 우선 크롤링 필드 목록 (오류 신고된 필드)
+        self._priority_fields = None
+        self._priority_chunks = {}  # 필드별 Chunk 정보
     
     def _load_proxies(self) -> List[str]:
         """환경 변수에서 프록시 목록 로드"""
@@ -381,10 +391,8 @@ class Qoo10Crawler:
             
             # 프록시가 있는 경우에만 추가 (None이 아닐 때만)
             if proxy_config is not None and proxy_config:
-                # httpx 버전에 따라 proxies 지원 여부 확인
-                import inspect
-                sig = inspect.signature(httpx.AsyncClient.__init__)
-                if 'proxies' in sig.parameters:
+                # httpx 버전에 따라 proxies 지원 여부 확인 (모듈 로드 시 1회 판별)
+                if _HTTPX_SUPPORTS_PROXIES_PARAM:
                     # httpx 0.25.2 이하: proxies 인자 지원
                     client_kwargs["proxies"] = proxy_config
                 else:
@@ -462,33 +470,6 @@ class Qoo10Crawler:
             
             raise
     
-    async def _init_playwright(self) -> Optional[Browser]:
-        """Playwright 브라우저 초기화"""
-        if not PLAYWRIGHT_AVAILABLE:
-            return None
-        
-        try:
-            playwright = await async_playwright().start()
-            browser = await playwright.chromium.launch(
-                headless=True,
-                args=['--no-sandbox', '--disable-setuid-sandbox']
-            )
-            self._playwright_browser = browser
-            return browser
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"Failed to initialize Playwright: {str(e)}")
-            return None
-    
-    async def _close_playwright(self):
-        """Playwright 브라우저 종료"""
-        if self._playwright_browser:
-            try:
-                await self._playwright_browser.close()
-                self._playwright_browser = None
-            except:
-                pass
     
     async def crawl_product_with_playwright(self, url: str) -> Dict[str, Any]:
         """
@@ -732,7 +713,7 @@ class Qoo10Crawler:
                         if (ratingMatch) {
                             data.rating = parseFloat(ratingMatch[1]);
                             if (!data.review_count) {
-                                data.review_count = parseInt(ratingMatch[2]);
+                            data.review_count = parseInt(ratingMatch[2]);
                             }
                         }
                         
@@ -785,6 +766,26 @@ class Qoo10Crawler:
                     product_data.setdefault('qpoint_info', {})['review_points'] = js_data['review_points']
                 if js_data.get('max_points'):
                     product_data.setdefault('qpoint_info', {})['max_points'] = js_data['max_points']
+                
+                # Shop 정보 추출 (상품 페이지에서 가능한 정보만)
+                shop_js_data = await page.evaluate("""
+                    () => {
+                        const data = {};
+                        
+                        // 팔로워 수
+                        const followerMatch = document.body.textContent.match(/フォロワー[_\s]*(\d{1,3}(?:,\d{3})*)/);
+                        if (followerMatch) {
+                            data.follower_count = parseInt(followerMatch[1].replace(/,/g, ''));
+                        }
+                        
+                        return data;
+                    }
+                """)
+                
+                if shop_js_data.get('follower_count'):
+                    if not product_data.get("seller_info"):
+                        product_data["seller_info"] = {}
+                    product_data["seller_info"]["follower_count"] = shop_js_data['follower_count']
                     
             except Exception as e:
                 logger.warning(f"Failed to extract JS data: {str(e)}")
@@ -796,6 +797,16 @@ class Qoo10Crawler:
                 self.db.save_crawled_product(product_data)
             except Exception as e:
                 logger.warning(f"Failed to save to database: {str(e)}")
+            
+            # 임베딩 저장 (자동 학습)
+            try:
+                auto_learn = os.getenv("EMBEDDING_AUTO_LEARN", "1").lower() in {"1", "true", "yes"}
+                if auto_learn:
+                    from .embedding_integration import EmbeddingIntegration
+                    embedding_integration = EmbeddingIntegration(db=self.db)
+                    embedding_integration.save_crawled_texts(product_data, normalized_url, auto_learn=True)
+            except Exception as e:
+                logger.warning(f"Failed to save embeddings: {str(e)}")
             
             return product_data
         
@@ -838,6 +849,20 @@ class Qoo10Crawler:
         """
         import logging
         logger = logging.getLogger(__name__)
+        
+        # 우선 크롤링 필드 로드 (오류 신고된 필드)
+        if self.error_reporting_service:
+            try:
+                self._priority_fields = self.error_reporting_service.get_priority_fields_for_crawling()
+                # 각 우선 필드에 대한 Chunk 정보 로드
+                for field_name in self._priority_fields:
+                    chunks = self.error_reporting_service.get_chunks_for_field(field_name)
+                    if chunks:
+                        self._priority_chunks[field_name] = chunks
+                logger.info(f"Priority fields loaded: {self._priority_fields}")
+            except Exception as e:
+                logger.warning(f"Failed to load priority fields: {str(e)}")
+                self._priority_fields = []
         
         # Playwright 사용 요청 시
         if use_playwright:
@@ -974,6 +999,16 @@ class Qoo10Crawler:
             except Exception as e:
                 logger.warning(f"Failed to save to database: {str(e)}")
                 pass  # 저장 실패해도 무시
+            
+            # 임베딩 저장 (자동 학습)
+            try:
+                auto_learn = os.getenv("EMBEDDING_AUTO_LEARN", "1").lower() in {"1", "true", "yes"}
+                if auto_learn:
+                    from .embedding_integration import EmbeddingIntegration
+                    embedding_integration = EmbeddingIntegration(db=self.db)
+                    embedding_integration.save_crawled_texts(product_data, url, auto_learn=True)
+            except Exception as e:
+                logger.warning(f"Failed to save embeddings: {str(e)}")
             
             return product_data
         
@@ -1138,14 +1173,14 @@ class Qoo10Crawler:
         # #region agent log
         _log_debug("debug-session", "run1", "A", "crawler.py:_extract_product_name", "상품명 추출 시작", {})
         # #endregion
-        
+
         # 제외할 텍스트 패턴 (가격 안내, 일반적인 텍스트 등)
         exclude_patterns = [
             r'全割引適用後の価格案内',  # 가격 안내 텍스트
             r'価格案内',  # 가격 안내
             r'割引.*適用',  # 할인 적용 관련
             r'クーポン.*割引',  # 쿠폰 할인
-            r'Qポイント',  # Qポイント 관련
+            r'Qポイント',  # Q포인트 관련
             r'返品.*案内',  # 반품 안내
             r'配送.*案内',  # 배송 안내
             r'Qoo10',  # 사이트명
@@ -1156,7 +1191,7 @@ class Qoo10Crawler:
             r'商品名',  # 상품명 (레이블)
             r'商品詳細',  # 상품 상세
         ]
-        
+
         default_selectors = [
             'h1.product-name',
             'h1[itemprop="name"]',
@@ -1166,10 +1201,11 @@ class Qoo10Crawler:
             '[data-product-name]',  # data 속성에서 추출
             '.goods_title',  # Qoo10 특정 클래스
             'h1',  # h1 태그 (하지만 제외 패턴 확인)
-            'title'  # fallback으로 title 태그도 확인
+            'title',  # fallback으로 title 태그도 확인
         ]
-        
-        def extract_func(soup_obj, selector):
+
+        def extract_func(soup_obj: BeautifulSoup, selector: Optional[str]) -> str:
+            # selector가 있는 경우 우선 시도
             if selector:
                 if selector == 'title':
                     # title 태그에서 상품명 추출 (Qoo10 형식: "상품명 | Qoo10")
@@ -1183,10 +1219,10 @@ class Qoo10Crawler:
                             name = title_text.split('｜')[0].strip()
                         else:
                             name = title_text
-                        
+
                         # "Qoo10" 제거
                         name = name.replace('Qoo10', '').replace('[Qoo10]', '').strip()
-                        
+
                         # 제외 패턴 확인
                         if name and len(name) > 3:
                             excluded = False
@@ -1194,79 +1230,73 @@ class Qoo10Crawler:
                                 if re.search(pattern, name):
                                     excluded = True
                                     break
-                            if not excluded and name and len(name) > 3:
+                            if not excluded:
                                 return name
+
                 elif selector == '[data-product-name]':
                     # data 속성에서 추출
                     elem = soup_obj.select_one(selector)
                     if elem:
                         name = elem.get('data-product-name') or elem.get_text(strip=True)
                         if name and len(name) > 3:
-                            # 제외 패턴 확인
                             excluded = False
                             for pattern in exclude_patterns:
                                 if re.search(pattern, name):
                                     excluded = True
                                     break
-                            if not excluded and name and len(name) > 3:
+                            if not excluded:
                                 return name
+
                 else:
                     elem = soup_obj.select_one(selector)
                     if elem:
                         text = elem.get_text(strip=True)
                         # 의미있는 텍스트인지 확인 (너무 짧거나 일반적인 텍스트 제외)
-                        if text and text != "" and len(text) > 3:
-                            # 제외 패턴 확인
+                        if text and len(text) > 3:
                             excluded = False
                             for pattern in exclude_patterns:
                                 if re.search(pattern, text):
                                     excluded = True
                                     break
-                            
                             if not excluded and text not in ['Qoo10', 'ホーム', 'Home', 'トップ', 'Top', '商品名']:
-                                # 상품명은 보통 10자 이상 (하지만 3자 이상도 허용)
-                                if len(text) >= 3:
-                                    return text
-            
-            # 추가 시도: 페이지 내에서 가장 큰 h1 태그 찾기 (제외 패턴 확인)
+                                return text
+
+            # selector 기반으로 찾지 못한 경우: 페이지 내 h1 태그에서 추출
             h1_tags = soup_obj.find_all('h1')
             for h1 in h1_tags:
                 text = h1.get_text(strip=True)
-                # 상품명은 보통 10자 이상이고, 일반적인 텍스트가 아님
                 if text and len(text) > 10:
-                    # 제외 패턴 확인
                     excluded = False
                     for pattern in exclude_patterns:
                         if re.search(pattern, text):
                             excluded = True
                             break
-                    
                     if not excluded and text not in ['Qoo10', 'ホーム', 'Home', 'トップ', 'Top', '商品名', '商品詳細']:
                         return text
-            
+
             return "상품명 없음"
-        
+
         result = self._extract_with_learning(
             "product_name",
             soup,
             default_selectors,
-            extract_func
+            extract_func,
         )
-        
+
         # 결과 검증 및 정제
         if result and result != "상품명 없음":
             # 불필요한 공백 제거
             result = ' '.join(result.split())
             # 특수 문자 정제 (필요시)
             result = result.strip()
-        
+
         # #region agent log
         _log_debug("debug-session", "run1", "A", "crawler.py:_extract_product_name", "상품명 추출 완료", {
             "result": result[:100] if result else "",
-            "is_empty": result == "상품명 없음" or not result
+            "is_empty": result == "상품명 없음" or not result,
         })
         # #endregion
-        
+
         return result
     
     def _extract_category(self, soup: BeautifulSoup) -> Optional[str]:
@@ -1914,15 +1944,15 @@ class Qoo10Crawler:
         # #region agent log
         _log_debug("debug-session", "run1", "F", "crawler.py:_extract_shipping_info", "배송 정보 추출 시작", {})
         # #endregion
-        
-        shipping_info = {
+
+        shipping_info: Dict[str, Any] = {
             "shipping_fee": None,
             "shipping_method": None,
             "estimated_delivery": None,
             "free_shipping": False,  # 무료배송 여부
-            "return_policy": None  # 반품 정책 정보
+            "return_policy": None,  # 반품 정책 정보
         }
-        
+
         # 배송비 정보 찾기 (다양한 패턴 시도)
         shipping_patterns = [
             r'送料[：:]\s*(\d+)円',
@@ -1930,9 +1960,9 @@ class Qoo10Crawler:
             r'送料[：:]\s*FREE',
             r'配送料[：:]\s*(\d+)円',
             r'배송비[：:]\s*(\d+)円',
-            r'Shipping[：:]\s*(\d+)円'
+            r'Shipping[：:]\s*(\d+)円',
         ]
-        
+
         # 배송 관련 텍스트 찾기 (일본어-한국어 모두 지원)
         shipping_pattern = self._create_jp_kr_regex("送料", "배송비")
         delivery_pattern = self._create_jp_kr_regex("配送", "배송")
@@ -1941,85 +1971,95 @@ class Qoo10Crawler:
             parent = shipping_elem.find_parent()
             if parent:
                 shipping_text = parent.get_text(strip=True)
-                
+
                 # 무료배송 확인 (일본어-한국어 모두)
                 free_shipping_pattern = self._create_jp_kr_regex("送料無料", "무료배송")
-                if re.search(free_shipping_pattern, shipping_text) or 'FREE' in shipping_text.upper() or '無料' in shipping_text or '무료' in shipping_text:
+                if (
+                    re.search(free_shipping_pattern, shipping_text)
+                    or 'FREE' in shipping_text.upper()
+                    or '無料' in shipping_text
+                    or '무료' in shipping_text
+                ):
                     shipping_info["free_shipping"] = True
                     shipping_info["shipping_fee"] = 0
                 else:
                     # 숫자 추출
                     for pattern in shipping_patterns:
-                        match = re.search(pattern, shipping_text)
-                        if match:
-                            if match.group(1):
-                                shipping_info["shipping_fee"] = int(match.group(1))
+                        m = re.search(pattern, shipping_text)
+                        if m and m.group(1):
+                            shipping_info["shipping_fee"] = int(m.group(1))
                             break
-                    
+
                     # 패턴 매칭 실패 시 숫자만 추출
-                    if not shipping_info["shipping_fee"]:
+                    if shipping_info["shipping_fee"] is None:
                         numbers = re.findall(r'\d+', shipping_text)
                         if numbers:
                             shipping_info["shipping_fee"] = int(numbers[0])
-        
+
         # 반품 정책 정보 추출 (일본어-한국어 모두 지원) - 강화된 추출
         return_pattern = self._create_jp_kr_regex("返品", "반품")
         return_elem = soup.find(string=re.compile(f'{return_pattern}|返却|Return', re.I))
-        
+
         # 반품 정보가 있는 섹션 찾기 (더 넓은 범위)
         return_section = None
         if return_elem:
             return_section = return_elem.find_parent()
-            # 부모의 부모까지 확인
             if return_section:
                 parent = return_section.find_parent()
-                if parent:
+                if parent is not None:
                     return_section = parent
-        
+
         # 반품 관련 선택자로도 시도
-        if not return_section:
+        if return_section is None:
             return_selectors = [
                 'div[class*="返品"]',
                 'div[class*="반품"]',
                 'div[class*="return"]',
                 '[id*="返品"]',
                 '[id*="반품"]',
-                '[id*="return"]'
+                '[id*="return"]',
             ]
             for selector in return_selectors:
                 return_section = soup.select_one(selector)
                 if return_section:
                     break
-        
-        if return_section:
+
+        if return_section is not None:
             return_text = return_section.get_text()
-            
             # "返品無料" 또는 "무료반품" 또는 "返品無料サービス" 확인
             free_return_pattern = self._create_jp_kr_regex("返品無料", "무료반품")
-            if re.search(free_return_pattern, return_text) or '無料返品' in return_text or '返品無料サービス' in return_text:
+            if (
+                re.search(free_return_pattern, return_text)
+                or '無料返品' in return_text
+                or '返品無料サービス' in return_text
+            ):
                 shipping_info["return_policy"] = "free_return"
             elif re.search(return_pattern, return_text):
                 shipping_info["return_policy"] = "return_available"
-        
+
         # 추가 시도: 페이지 전체 텍스트에서 반품 정보 찾기
         if not shipping_info["return_policy"]:
             all_text = soup.get_text()
             free_return_pattern = self._create_jp_kr_regex("返品無料", "무료반품")
-            if re.search(free_return_pattern, all_text) or '無料返品' in all_text or '返品無料サービス' in all_text:
+            if (
+                re.search(free_return_pattern, all_text)
+                or '無料返品' in all_text
+                or '返品無料サービス' in all_text
+            ):
                 shipping_info["return_policy"] = "free_return"
             elif re.search(return_pattern, all_text):
                 shipping_info["return_policy"] = "return_available"
-        
+
         # #region agent log
         _log_debug("debug-session", "run1", "F", "crawler.py:_extract_shipping_info", "배송 정보 추출 완료", {
             "shipping_fee": shipping_info.get("shipping_fee"),
             "free_shipping": shipping_info.get("free_shipping"),
             "shipping_method": shipping_info.get("shipping_method"),
             "estimated_delivery": shipping_info.get("estimated_delivery"),
-            "is_empty": not shipping_info.get("shipping_fee") and not shipping_info.get("free_shipping")
+            "is_empty": not shipping_info.get("shipping_fee") and not shipping_info.get("free_shipping"),
         })
         # #endregion
-        
+
         return shipping_info
     
     def _extract_move_product(self, soup: BeautifulSoup) -> bool:
@@ -2047,20 +2087,19 @@ class Qoo10Crawler:
             return True
         
         return False
-    
     def _extract_qpoint_info(self, soup: BeautifulSoup) -> Dict[str, Any]:
         """Qポイント 정보 상세 추출 - 실제 Qoo10 페이지 구조에 맞게 개선"""
         # #region agent log
         _log_debug("debug-session", "run1", "I", "crawler.py:_extract_qpoint_info", "Qポイント 정보 추출 시작", {})
         # #endregion
-        
-        qpoint_info = {
+
+        qpoint_info: Dict[str, Any] = {
             "max_points": None,
             "receive_confirmation_points": None,
             "review_points": None,
-            "auto_points": None
+            "auto_points": None,
         }
-        
+
         # Qポイント 섹션 찾기 (다양한 선택자 시도)
         qpoint_selectors = [
             'div[class*="qpoint"]',
@@ -2070,106 +2109,122 @@ class Qoo10Crawler:
             '.qpoint-info',
             '#qpoint-info',
             '[id*="qpoint"]',
-            '[id*="ポイント"]'
+            '[id*="ポイント"]',
         ]
-        
+
         qpoint_section = None
         for selector in qpoint_selectors:
             qpoint_section = soup.select_one(selector)
             if qpoint_section:
                 break
-        
+
         # 텍스트 기반 검색 (일본어-한국어 모두 지원)
-        if not qpoint_section:
+        if qpoint_section is None:
             qpoint_method_pattern = self._create_jp_kr_regex("Qポイント獲得方法", "Q포인트획득방법")
             qpoint_get_pattern = self._create_jp_kr_regex("Qポイント獲得", "Q포인트획득")
             qpoint_pattern = self._create_jp_kr_regex("Qポイント", "Q포인트")
-            qpoint_text_elem = soup.find(string=re.compile(f'{qpoint_method_pattern}|{qpoint_get_pattern}|{qpoint_pattern}', re.I))
+            qpoint_text_elem = soup.find(
+                string=re.compile(f'{qpoint_method_pattern}|{qpoint_get_pattern}|{qpoint_pattern}', re.I)
+            )
             if qpoint_text_elem:
                 qpoint_section = qpoint_text_elem.find_parent()
-                # 더 넓은 범위로 검색 (부모의 부모까지)
                 if qpoint_section:
                     parent = qpoint_section.find_parent()
-                    if parent:
+                    if parent is not None:
                         qpoint_section = parent
-        
-        if qpoint_section:
+
+        if qpoint_section is not None:
             # 섹션의 모든 텍스트 추출
             qpoint_text = qpoint_section.get_text()
-            
+
             # "受取確認: 最大1P" 또는 "수령확인: 최대1P" 패턴 찾기 (더 유연한 패턴)
             receive_pattern = self._create_jp_kr_regex("受取確認", "수령확인")
             max_pattern = self._create_jp_kr_regex("最大", "최대")
-            
+
             # 패턴 1: "受取確認: 最大1P"
-            receive_match = re.search(f'{receive_pattern}[：:\s]*{max_pattern}?\s*(\d+)P', qpoint_text, re.I)
+            receive_match = re.search(
+                f'{receive_pattern}[：:\s]*{max_pattern}?\s*(\d+)P', qpoint_text, re.I
+            )
             if receive_match:
                 qpoint_info["receive_confirmation_points"] = int(receive_match.group(1))
-            
+
             # 패턴 2: "受取確認.*(\d+)P" (더 유연한 패턴)
             if not qpoint_info["receive_confirmation_points"]:
-                receive_match2 = re.search(f'{receive_pattern}.*?(\d+)P', qpoint_text, re.I)
+                receive_match2 = re.search(
+                    f'{receive_pattern}.*?(\d+)P', qpoint_text, re.I
+                )
                 if receive_match2:
                     qpoint_info["receive_confirmation_points"] = int(receive_match2.group(1))
-            
+
             # "レビュー作成: 最大20P" 또는 "리뷰작성: 최대20P" 패턴 찾기
             review_create_pattern = self._create_jp_kr_regex("レビュー作成", "리뷰작성")
-            
+
             # 패턴 1: "レビュー作成: 最大20P"
-            review_match = re.search(f'{review_create_pattern}[：:\s]*{max_pattern}?\s*(\d+)P', qpoint_text, re.I)
+            review_match = re.search(
+                f'{review_create_pattern}[：:\s]*{max_pattern}?\s*(\d+)P',
+                qpoint_text,
+                re.I,
+            )
             if review_match:
                 qpoint_info["review_points"] = int(review_match.group(1))
-            
+
             # 패턴 2: "レビュー作成.*(\d+)P" (더 유연한 패턴)
             if not qpoint_info["review_points"]:
-                review_match2 = re.search(f'{review_create_pattern}.*?(\d+)P', qpoint_text, re.I)
+                review_match2 = re.search(
+                    f'{review_create_pattern}.*?(\d+)P', qpoint_text, re.I
+                )
                 if review_match2:
                     qpoint_info["review_points"] = int(review_match2.group(1))
-            
+
             # "最大(\d+)P" 또는 "최대(\d+)P" 패턴 찾기 (전체 최대 포인트)
             max_match = re.search(f'{max_pattern}\s*(\d+)P', qpoint_text, re.I)
             if max_match:
                 qpoint_info["max_points"] = int(max_match.group(1))
-            
+
             # "配送完了.*自動.*(\d+)P" 또는 "배송완료.*자동.*(\d+)P" 패턴 찾기 (자동 포인트)
             delivery_complete_pattern = self._create_jp_kr_regex("配送完了", "배송완료")
             auto_pattern = self._create_jp_kr_regex("自動", "자동")
-            auto_match = re.search(f'{delivery_complete_pattern}.*?{auto_pattern}.*?(\d+)P', qpoint_text, re.I | re.DOTALL)
+            auto_match = re.search(
+                f'{delivery_complete_pattern}.*?{auto_pattern}.*?(\d+)P',
+                qpoint_text,
+                re.I | re.DOTALL,
+            )
             if auto_match:
                 qpoint_info["auto_points"] = int(auto_match.group(1))
-        
+
         # 추가 시도: 페이지 전체 텍스트에서 Qポイント 정보 찾기
         if not any(qpoint_info.values()):
             all_text = soup.get_text()
             receive_pattern = self._create_jp_kr_regex("受取確認", "수령확인")
             review_create_pattern = self._create_jp_kr_regex("レビュー作成", "리뷰작성")
             max_pattern = self._create_jp_kr_regex("最大", "최대")
-            
-            # "受取確認.*(\d+)P" 패턴
-            receive_match = re.search(f'{receive_pattern}.*?(\d+)P', all_text, re.I)
+
+            receive_match = re.search(
+                f'{receive_pattern}.*?(\d+)P', all_text, re.I
+            )
             if receive_match:
                 qpoint_info["receive_confirmation_points"] = int(receive_match.group(1))
-            
-            # "レビュー作成.*(\d+)P" 패턴
-            review_match = re.search(f'{review_create_pattern}.*?(\d+)P', all_text, re.I)
+
+            review_match = re.search(
+                f'{review_create_pattern}.*?(\d+)P', all_text, re.I
+            )
             if review_match:
                 qpoint_info["review_points"] = int(review_match.group(1))
-            
-            # "最大(\d+)P" 패턴
+
             max_match = re.search(f'{max_pattern}\s*(\d+)P', all_text, re.I)
             if max_match:
                 qpoint_info["max_points"] = int(max_match.group(1))
-        
+
         # #region agent log
         _log_debug("debug-session", "run1", "I", "crawler.py:_extract_qpoint_info", "Qポイント 정보 추출 완료", {
             "max_points": qpoint_info.get("max_points"),
             "receive_confirmation_points": qpoint_info.get("receive_confirmation_points"),
             "review_points": qpoint_info.get("review_points"),
             "auto_points": qpoint_info.get("auto_points"),
-            "is_empty": not any(qpoint_info.values())
+            "is_empty": not any(qpoint_info.values()),
         })
         # #endregion
-        
+
         return qpoint_info
     
     def _extract_coupon_info(self, soup: BeautifulSoup) -> Dict[str, Any]:
@@ -2340,661 +2395,18 @@ class Qoo10Crawler:
         
         return structure
     
-    async def crawl_shop_with_playwright(self, url: str) -> Dict[str, Any]:
-        """
-        Playwright를 사용한 Shop 페이지 크롤링 (JavaScript 실행 환경)
-        
-        Args:
-            url: Qoo10 Shop URL
-            
-        Returns:
-            Shop 데이터 딕셔너리
-        """
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        if not PLAYWRIGHT_AVAILABLE:
-            raise Exception("Playwright is not available. Please install it: pip install playwright && playwright install")
-        
-        browser = None
-        page = None
-        playwright = None
-        
-        try:
-            logger.info(f"Playwright crawling shop - URL: {url}")
-            
-            # Playwright 브라우저 초기화
-            playwright = await async_playwright().start()
-            browser = await playwright.chromium.launch(
-                headless=True,
-                args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled']
-            )
-            
-            # 새 컨텍스트 생성
-            context = await browser.new_context(
-                viewport={'width': 1920, 'height': 1080},
-                user_agent=self._get_user_agent(),
-                locale='ja-JP',
-                timezone_id='Asia/Tokyo'
-            )
-            
-            page = await context.new_page()
-            
-            # 페이지 로드
-            logger.debug(f"Loading shop page: {url}")
-            await page.goto(url, wait_until='networkidle', timeout=30000)
-            
-            # 추가 대기 (동적 콘텐츠 로딩)
-            await asyncio.sleep(2)
-            
-            # 스크롤하여 지연 로딩된 콘텐츠 로드
-            await page.evaluate("""
-                async () => {
-                    await new Promise((resolve) => {
-                        let totalHeight = 0;
-                        const distance = 100;
-                        const timer = setInterval(() => {
-                            const scrollHeight = document.body.scrollHeight;
-                            window.scrollBy(0, distance);
-                            totalHeight += distance;
-                            
-                            if(totalHeight >= scrollHeight || totalHeight > 10000){
-                                clearInterval(timer);
-                                resolve();
-                            }
-                        }, 100);
-                    });
-                }
-            """)
-            
-            # 추가 대기
-            await asyncio.sleep(1)
-            
-            # HTML 가져오기
-            html_content = await page.content()
-            soup = BeautifulSoup(html_content, 'lxml')
-            
-            # Shop 데이터 추출 (기존 메서드 재사용)
-            shop_data = {
-                "url": url,
-                "shop_id": self._extract_shop_id(url),
-                "shop_name": self._extract_shop_name(soup),
-                "shop_level": self._extract_shop_level(soup),
-                "follower_count": self._extract_follower_count(soup),
-                "product_count": self._extract_product_count(soup),
-                "categories": self._extract_shop_categories(soup),
-                "products": self._extract_shop_products(soup),
-                "coupons": self._extract_shop_coupons(soup),
-                "crawled_with": "playwright"  # 크롤링 방법 표시
-            }
-            
-            # JavaScript로 동적 로드된 데이터 직접 추출 시도
-            try:
-                js_data = await page.evaluate("""
-                    () => {
-                        const data = {};
-                        
-                        // Shop 이름
-                        const shopName = document.querySelector('h1') || document.querySelector('.shop-name');
-                        if (shopName) data.shop_name = shopName.textContent.trim();
-                        
-                        // 팔로워 수
-                        const followerMatch = document.body.textContent.match(/フォロワー[_\s]*(\d{1,3}(?:,\d{3})*)/);
-                        if (followerMatch) {
-                            data.follower_count = parseInt(followerMatch[1].replace(/,/g, ''));
-                        }
-                        
-                        // 상품 수
-                        const productMatch = document.body.textContent.match(/全ての商品[_\s]*\((\d+)\)/);
-                        if (productMatch) {
-                            data.product_count = parseInt(productMatch[1]);
-                        }
-                        
-                        // POWER 레벨
-                        const powerMatch = document.body.textContent.match(/POWER[_\s]*(\d+)%/);
-                        if (powerMatch) {
-                            data.power_level = parseInt(powerMatch[1]);
-                        }
-                        
-                        // 상품 목록 (간단한 정보)
-                        const productItems = document.querySelectorAll('.item, .product-item, div[class*="item"]');
-                        data.product_items_count = productItems.length;
-                        
-                        return data;
-                    }
-                """)
-                
-                # JavaScript에서 추출한 데이터 병합
-                if js_data.get('shop_name') and not shop_data.get('shop_name'):
-                    shop_data['shop_name'] = js_data['shop_name']
-                
-                if js_data.get('follower_count') and not shop_data.get('follower_count'):
-                    shop_data['follower_count'] = js_data['follower_count']
-                
-                if js_data.get('product_count') and not shop_data.get('product_count'):
-                    shop_data['product_count'] = js_data['product_count']
-                
-                if js_data.get('power_level'):
-                    if js_data['power_level'] >= 90:
-                        shop_data['shop_level'] = 'power'
-                    elif js_data['power_level'] >= 70:
-                        shop_data['shop_level'] = 'excellent'
-                
-            except Exception as e:
-                logger.warning(f"Failed to extract JS data: {str(e)}")
-            
-            logger.info(f"Playwright shop crawling completed - Shop: {shop_data.get('shop_name', 'Unknown')}, ID: {shop_data.get('shop_id', 'N/A')}")
-            
-            # 데이터베이스 저장
-            if hasattr(self.db, 'save_crawled_shop'):
-                try:
-                    self.db.save_crawled_shop(shop_data)
-                except Exception as e:
-                    logger.warning(f"Failed to save to database: {str(e)}")
-            
-            return shop_data
-        
-        except PlaywrightTimeoutError as e:
-            error_msg = f"Playwright timeout error: {str(e)}"
-            logger.error(error_msg)
-            raise Exception(error_msg)
-        except Exception as e:
-            error_msg = f"Error in Playwright shop crawling: {str(e)}"
-            logger.error(error_msg, exc_info=True)
-            raise Exception(error_msg)
-        finally:
-            # 리소스 정리
-            if page:
-                try:
-                    await page.close()
-                except:
-                    pass
-            if browser:
-                try:
-                    await browser.close()
-                except:
-                    pass
-            if playwright:
-                try:
-                    await playwright.stop()
-                except:
-                    pass
-    
-    async def crawl_shop(self, url: str, use_playwright: bool = False) -> Dict[str, Any]:
-        """
-        Shop 페이지 크롤링
-        
-        Args:
-            url: Qoo10 Shop URL
-            use_playwright: True이면 Playwright 사용, False이면 기본 HTTP 크롤링 (기본값: False)
-            
-        Returns:
-            Shop 데이터 딕셔너리
-        """
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        # Playwright 사용 요청 시
-        if use_playwright:
-            if PLAYWRIGHT_AVAILABLE:
-                return await self.crawl_shop_with_playwright(url)
-            else:
-                logger.warning("Playwright not available, falling back to HTTP crawling")
-        
-        try:
-            # HTTP 요청
-            response = await self._make_request(url)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.text, 'lxml')
-            
-            # Shop 기본 정보 추출
-            shop_data = {
-                "url": url,
-                "shop_id": self._extract_shop_id(url),
-                "shop_name": self._extract_shop_name(soup),
-                "shop_level": self._extract_shop_level(soup),
-                "follower_count": self._extract_follower_count(soup),
-                "product_count": self._extract_product_count(soup),
-                "categories": self._extract_shop_categories(soup),
-                "products": self._extract_shop_products(soup),
-                "coupons": self._extract_shop_coupons(soup),
-                "crawled_with": "httpx"  # 크롤링 방법 표시
-            }
-            
-            # 데이터베이스에 저장 (메서드가 있는 경우만)
-            if hasattr(self.db, 'save_crawled_shop'):
-                try:
-                    self.db.save_crawled_shop(shop_data)
-                except:
-                    pass  # 데이터베이스 저장 실패해도 계속 진행
-            
-            return shop_data
-        
-        except httpx.HTTPError as e:
-            raise Exception(f"HTTP error while crawling shop: {str(e)}")
-        except Exception as e:
-            raise Exception(f"Error crawling shop: {str(e)}")
-    
-    def _extract_shop_id(self, url: str) -> Optional[str]:
-        """Shop ID 추출"""
-        match = re.search(r'/shop/([^/?]+)', url)
-        if match:
-            return match.group(1)
-        return None
-    
-    def _extract_shop_name(self, soup: BeautifulSoup) -> str:
-        """Shop 이름 추출 - 실제 Qoo10 Shop 페이지 구조에 맞게 개선"""
-        # 여러 가능한 선택자 시도
-        selectors = [
-            'h1.shop-name',
-            'h1',
-            '.shop-title',
-            '[itemprop="name"]',
-            '#shop_name',
-            '.shop_name',
-            'title'  # fallback으로 title 태그도 확인
-        ]
-        
-        for selector in selectors:
-            if selector == 'title':
-                # title 태그에서 Shop 이름 추출 (Qoo10 형식: "Shop 이름 | Qoo10")
-                title_elem = soup.find('title')
-                if title_elem:
-                    title_text = title_elem.get_text(strip=True)
-                    # "|" 또는 "｜"로 분리하여 첫 번째 부분 추출
-                    if '|' in title_text:
-                        return title_text.split('|')[0].strip()
-                    elif '｜' in title_text:
-                        return title_text.split('｜')[0].strip()
-                    # "Qoo10"이 포함된 경우 제거
-                    if 'Qoo10' in title_text:
-                        return title_text.replace('Qoo10', '').strip()
-                    return title_text
-            else:
-                elem = soup.select_one(selector)
-                if elem:
-                    text = elem.get_text(strip=True)
-                    if text and len(text) > 0 and text != "Shop 이름 없음":
-                        # 의미있는 텍스트인지 확인 (너무 짧거나 일반적인 텍스트 제외)
-                        if len(text) > 2 and text not in ['ホーム', 'Home', 'トップ', 'Top', 'Qoo10']:
-                            return text
-        
-        return "Shop 이름 없음"
-    
-    def _extract_shop_level(self, soup: BeautifulSoup) -> Optional[str]:
-        """Shop 레벨 추출 - 실제 Qoo10 Shop 페이지 구조에 맞게 개선 (일본어-한국어 모두 지원)"""
-        # POWER 95% 같은 패턴 찾기 (우선 확인)
-        power_pattern = self._create_jp_kr_regex("POWER", "파워")
-        power_jp_pattern = self._create_jp_kr_regex("パワー", "파워")
-        power_patterns = [
-            f'{power_pattern}\\s*(\\d+)%',
-            f'{power_jp_pattern}\\s*(\\d+)%',
-            f'{power_pattern}\\s*(\\d+)',
-            f'{power_jp_pattern}\\s*(\\d+)'
-        ]
-        
-        for pattern in power_patterns:
-            power_elem = soup.find(string=re.compile(pattern, re.I))
-            if power_elem:
-                # POWER 퍼센트 추출
-                match = re.search(pattern, str(power_elem), re.I)
-                if match:
-                    power_percent = int(match.group(1))
-                    if power_percent >= 90:
-                        return "power"
-                    elif power_percent >= 70:
-                        return "excellent"
-        
-        # POWER, 우수 셀러, 일반 셀러 등 텍스트 찾기 (일본어-한국어 모두 지원)
-        excellent_pattern = self._create_jp_kr_regex("우수", "우수")
-        normal_pattern = self._create_jp_kr_regex("일반", "일반")
-        level_pattern = f'{power_pattern}|{power_jp_pattern}|{excellent_pattern}|{normal_pattern}|excellent|normal|power'
-        level_text = soup.find(string=re.compile(level_pattern, re.I))
-        if level_text:
-            text = str(level_text).lower()
-            power_kr = self._translate_jp_to_kr("パワー").lower()
-            if 'power' in text or 'パワー' in text or power_kr in text:
-                return "power"
-            elif 'excellent' in text or '우수' in text:
-                return "excellent"
-            elif 'normal' in text or '일반' in text:
-                return "normal"
-        
-        # "byPower grade" 같은 패턴 찾기
-        bypower_pattern = self._create_jp_kr_regex("byPower", "바이파워")
-        power_grade = soup.find(string=re.compile(f'{bypower_pattern}\\s*grade|Power\\s*grade', re.I))
-        if power_grade:
-            return "power"
-        
-        return "unknown"
-    
-    def _extract_follower_count(self, soup: BeautifulSoup) -> int:
-        """팔로워 수 추출 - 실제 Qoo10 Shop 페이지 구조에 맞게 개선"""
-        # 팔로워 텍스트 찾기 (다양한 패턴 시도) - 일본어-한국어 모두 지원
-        follower_pattern = self._create_jp_kr_regex("フォロワー", "팔로워")
-        follower_patterns = [
-            f'{follower_pattern}[_\\s]*(\\d{{1,3}}(?:,\\d{{3}})*)',
-            f'{follower_pattern}[_\\s]*(\\d+)',
-            r'follower[_\s]*(\d{1,3}(?:,\d{3})*)',
-            r'follower[_\s]*(\d+)'
-        ]
-        
-        # 패턴 매칭 시도
-        for pattern in follower_patterns:
-            follower_elem = soup.find(string=re.compile(pattern, re.I))
-            if follower_elem:
-                match = re.search(pattern, str(follower_elem), re.I)
-                if match:
-                    try:
-                        # 쉼표 제거 후 숫자 변환
-                        count_str = match.group(1).replace(',', '').replace('_', '')
-                        return int(count_str)
-                    except:
-                        pass
-        
-        # 기본 방법: 팔로워 텍스트 찾기 (일본어-한국어 모두 지원)
-        follower_pattern = self._create_jp_kr_regex("フォロワー", "팔로워")
-        follower_text = soup.find(string=re.compile(f'{follower_pattern}|follower', re.I))
-        if follower_text:
-            parent = follower_text.find_parent()
-            if parent:
-                text = parent.get_text(strip=True)
-                # "フォロワー_50,357_" 같은 형식에서 숫자 추출
-                numbers = re.findall(r'[\d,]+', text.replace(',', '').replace('_', ''))
-                if numbers:
-                    try:
-                        return int(numbers[0])
-                    except:
-                        pass
-        
-        return 0
-    
-    def _extract_product_count(self, soup: BeautifulSoup) -> int:
-        """상품 수 추출 - 실제 Qoo10 Shop 페이지 구조에 맞게 개선"""
-        # "全ての商品 (16)" 또는 "전체상품 (16)" 같은 패턴 찾기 (일본어-한국어 모두 지원)
-        all_product_pattern = self._create_jp_kr_regex("全ての商品", "전체상품")
-        product_pattern = self._create_jp_kr_regex("商品", "상품")
-        product_count_pattern = self._create_jp_kr_regex("商品数", "상품수")
-        product_patterns = [
-            f'{all_product_pattern}\\s*\\((\\d+)\\)',
-            f'{product_pattern}.*\\((\\d+)\\)',
-            f'{all_product_pattern}[：:]\\s*(\\d+)',
-            f'{product_count_pattern}[：:]\\s*(\\d+)'
-        ]
-        
-        for pattern in product_patterns:
-            product_text = soup.find(string=re.compile(pattern, re.I))
-            if product_text:
-                match = re.search(pattern, str(product_text), re.I)
-                if match:
-                    try:
-                        return int(match.group(1))
-                    except:
-                        pass
-        
-        # 상품 리스트에서 개수 세기 (다양한 선택자 시도)
-        product_selectors = [
-            '.product-item',
-            '.goods-item',
-            '[data-goods-code]',
-            'div[class*="product"]',
-            'div[class*="goods"]',
-            'div[class*="item"]',
-            'li[class*="product"]',
-            'li[class*="goods"]'
-        ]
-        
-        seen_products = set()
-        for selector in product_selectors:
-            product_items = soup.select(selector)
-            for item in product_items:
-                # 상품명이나 가격이 있는지 확인하여 실제 상품인지 판단
-                name = item.select_one('.product-name, .goods-name, h3, h4, [title]')
-                price = item.select_one('.price, .goods-price, [class*="price"]')
-                if name or price:
-                    # 중복 제거를 위한 식별자 생성
-                    item_id = item.get('data-goods-code') or item.get('id') or str(item)
-                    if item_id not in seen_products:
-                        seen_products.add(item_id)
-        
-        return len(seen_products) if seen_products else 0
-    
-    def _extract_shop_categories(self, soup: BeautifulSoup) -> Dict[str, int]:
-        """Shop 카테고리 분포 추출 (개선 버전)"""
-        categories = {}
-        
-        # 상품 카테고리 정보 추출
-        category_links = soup.select('a[href*="/category/"], a[href*="/cat/"], .category-link, [class*="category"]')
-        for link in category_links:
-            category_name = link.get_text(strip=True)
-            if category_name and len(category_name) > 0:
-                categories[category_name] = categories.get(category_name, 0) + 1
-        
-        # 상품 목록에서 카테고리 추출
-        products = self._extract_shop_products(soup)
-        for product in products:
-            if product.get("category"):
-                categories[product["category"]] = categories.get(product["category"], 0) + 1
-            if product.get("product_type"):
-                categories[product["product_type"]] = categories.get(product["product_type"], 0) + 1
-        
-        return categories
-    
-    def _extract_shop_products(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
-        """Shop 상품 목록 추출 (실제 Qoo10 Shop 페이지 구조에 맞게 개선)"""
-        products = []
-        
-        # 실제 Qoo10 Shop 페이지 구조: <div class="item">
-        # 우선순위 1: .item 클래스 (가장 정확한 선택자)
-        product_items = soup.select('div.item')
-        
-        # 우선순위 2: 다른 패턴 시도
-        if not product_items:
-            product_items = soup.select(
-                '.product-item, .goods-item, [data-goods-code], '
-                '.item_list li, .goods_list li, .product-list-item, '
-                'div[class*="item"]'
-            )
-        
-        # 우선순위 3: 리스트 형태의 상품 찾기
-        if not product_items:
-            product_items = soup.find_all('div', class_=re.compile(r'^item$|item\s', re.I))
-        
-        for item in product_items[:50]:  # 최대 50개까지
-            product = {
-                "product_name": "",
-                "product_url": None,
-                "thumbnail": None,
-                "brand": None,
-                "price": {"sale_price": None, "original_price": None, "discount_rate": 0},
-                "shipping_info": {"shipping_fee": None, "free_shipping_threshold": None},
-                "rating": 0.0,
-                "review_count": 0,
-                "product_type": None,
-                "category": None,
-                "keywords": []
-            }
-            
-            # 1. 상품명 추출 - <a class="tt"> (실제 Qoo10 구조)
-            name_elem = item.select_one('a.tt')
-            if name_elem:
-                product["product_name"] = name_elem.get_text(strip=True) or name_elem.get('title', '')
-                product["product_url"] = name_elem.get('href', '')
-                # 상대 URL을 절대 URL로 변환
-                if product["product_url"] and product["product_url"].startswith('/'):
-                    product["product_url"] = 'https://www.qoo10.jp' + product["product_url"]
-            
-            # 2. 썸네일 이미지 추출 - <a class="thmb"> <img>
-            if not product["product_name"]:
-                # fallback: 다른 선택자 시도
-                name_selectors = [
-                    '.product-name', '.goods-name', 'h3', 'h4', 
-                    '.item-name', '.title', 'a[title]', '[title]',
-                    '.name', '.product-title'
-                ]
-                for selector in name_selectors:
-                    name_elem = item.select_one(selector)
-                    if name_elem:
-                        product["product_name"] = name_elem.get_text(strip=True) or name_elem.get('title', '')
-                        if product["product_name"]:
-                            break
-            
-            # 썸네일 이미지 추출
-            thumb_elem = item.select_one('a.thmb img, .thmb img, a[class*="thmb"] img')
-            if thumb_elem:
-                thumbnail = thumb_elem.get('src') or thumb_elem.get('data-src') or thumb_elem.get('data-original')
-                if thumbnail:
-                    if thumbnail.startswith('//'):
-                        thumbnail = 'https:' + thumbnail
-                    elif thumbnail.startswith('/'):
-                        thumbnail = 'https://www.qoo10.jp' + thumbnail
-                    product["thumbnail"] = thumbnail
-            
-            # 3. 브랜드 정보 추출 - <div class="brand_official"> (일본어-한국어 번역 지원)
-            brand_elem = item.select_one('.brand_official, .brand_official button, .brand_official .txt_brand')
-            if brand_elem:
-                brand_text = brand_elem.get_text(strip=True)
-                if brand_text:
-                    # 일본어 텍스트를 한국어로 번역
-                    product["brand"] = self._translate_jp_to_kr(brand_text)
-            
-            # 4. 가격 정보 추출 - <div class="prc"> <del>정가</del> <strong>판매가</strong>
-            prc_elem = item.select_one('.prc, div[class*="prc"]')
-            if prc_elem:
-                # 정가 추출 (<del> 태그)
-                del_elem = prc_elem.select_one('del')
-                if del_elem:
-                    original_text = del_elem.get_text(strip=True)
-                    original_price = self._parse_price(original_text)
-                    if original_price:
-                        product["price"]["original_price"] = original_price
-                
-                # 판매가 추출 (<strong> 태그)
-                strong_elem = prc_elem.select_one('strong')
-                if strong_elem:
-                    sale_text = strong_elem.get_text(strip=True)
-                    sale_price = self._parse_price(sale_text)
-                    if sale_price:
-                        product["price"]["sale_price"] = sale_price
-                
-                # 할인율 계산
-                if product["price"]["original_price"] and product["price"]["sale_price"]:
-                    if product["price"]["original_price"] > product["price"]["sale_price"]:
-                        discount = product["price"]["original_price"] - product["price"]["sale_price"]
-                        product["price"]["discount_rate"] = int((discount / product["price"]["original_price"]) * 100)
-            
-            # 5. 배송 정보 추출 - <span class="ship_area"> <span class="ship"> (일본어-한국어 모두 지원)
-            ship_elem = item.select_one('.ship_area .ship, .ship_area, span[class*="ship"]')
-            if ship_elem:
-                ship_text = ship_elem.get_text()
-                # "Shipping rate 400엔" 또는 "送料 400엔" 또는 "배송비 400엔" 패턴 찾기
-                shipping_pattern = self._create_jp_kr_regex("送料", "배송비")
-                shipping_match = re.search(f'Shipping\\s*rate[：:]\\s*(\\d{{1,3}}(?:,\\d{{3}})*)円|{shipping_pattern}[：:]\\s*(\\d{{1,3}}(?:,\\d{{3}})*)円|(\\d{{1,3}}(?:,\\d{{3}})*)円', ship_text)
-                if shipping_match:
-                    # 그룹 중 None이 아닌 첫 번째 값 사용
-                    shipping_fee_text = None
-                    for i in range(1, 4):
-                        group_value = shipping_match.group(i)
-                        if group_value:
-                            shipping_fee_text = group_value
-                            break
-                    if shipping_fee_text:
-                        shipping_fee = self._parse_price(shipping_fee_text)
-                        if shipping_fee:
-                            product["shipping_info"]["shipping_fee"] = shipping_fee
-                
-                # 무료배송 조건 추출 (예: "1,500円以上購入の際 送料無料" 또는 "1,500엔 이상구매시 무료배송")
-                free_shipping_pattern = self._create_jp_kr_regex("送料無料", "무료배송")
-                above_pattern = self._create_jp_kr_regex("以上購入", "이상구매")
-                free_shipping_match = re.search(f'(\\d{{1,3}}(?:,\\d{{3}})*)円\\s*{above_pattern}.*{free_shipping_pattern}|(\\d{{1,3}}(?:,\\d{{3}})*)円.*無料', ship_text)
-                if free_shipping_match:
-                    threshold = self._parse_price(free_shipping_match.group(1) or free_shipping_match.group(2))
-                    if threshold:
-                        product["shipping_info"]["free_shipping_threshold"] = threshold
-            
-            # 6. 리뷰 정보 추출 (있는 경우) - 일본어-한국어 모두 지원
-            review_pattern = self._create_jp_kr_regex("レビュー", "리뷰")
-            review_elem = item.find(string=re.compile(f'{review_pattern}.*\\((\d+)\\)', re.I))
-            if review_elem:
-                review_match = re.search(r'\((\d+)\)', str(review_elem))
-                if review_match:
-                    product["review_count"] = int(review_match.group(1))
-            
-            # 상품명이 없으면 텍스트에서 추출 (최후의 수단)
-            if not product["product_name"]:
-                text = item.get_text(strip=True)
-                lines = [line.strip() for line in text.split('\n') if line.strip()]
-                if lines:
-                    # 첫 번째 의미있는 텍스트를 상품명으로 사용
-                    for line in lines:
-                        if len(line) > 10 and line not in ['ホーム', 'Home', 'トップ', 'Top']:
-                            product["product_name"] = line[:100]
-                            break
-            
-            # 상품 종류 파악 (상품명 기반)
-            if product["product_name"]:
-                product["product_type"] = self._detect_product_type(product["product_name"])
-                product["keywords"] = self._extract_product_keywords(product["product_name"])
-            
-            # 상품명이 있는 경우에만 추가 (유효한 상품인지 확인)
-            if product["product_name"] and len(product["product_name"].strip()) > 3:
-                products.append(product)
-        
-        return products
-    
-    def _detect_product_type(self, product_name: str) -> Optional[str]:
-        """상품명에서 상품 종류 감지"""
-        product_name_lower = product_name.lower()
-        
-        # 스킨케어 제품 타입 키워드
-        product_types = {
-            "크림": ["크림", "クリーム", "cream"],
-            "클렌저": ["클렌저", "クレンザー", "cleanser", "クレンジング"],
-            "마스크팩": ["마스크", "マスク", "mask", "パック"],
-            "세럼": ["세럼", "セラム", "serum"],
-            "로션": ["로션", "ローション", "lotion"],
-            "토너": ["토너", "トナー", "toner"],
-            "에센스": ["에센스", "エッセンス", "essence"],
-            "스크럽": ["스크럽", "スクラブ", "scrub"],
-            "보디케어": ["보디", "ボディ", "body"],
-            "샴푸": ["샴푸", "シャンプー", "shampoo"],
-            "트리트먼트": ["트리트먼트", "トリートメント", "treatment"],
-            "선크림": ["선크림", "日焼け止め", "sunscreen", "spf"],
-            "립밤": ["립밤", "リップ", "lip"],
-            "아이크림": ["아이크림", "アイクリーム", "eye cream"],
-            "미스트": ["미스트", "ミスト", "mist"],
-            "오일": ["오일", "オイル", "oil"],
-            "젤": ["젤", "ジェル", "gel"],
-            "폼": ["폼", "フォーム", "foam"],
-            "세트": ["세트", "セット", "set", "キット"],
-            "기타": []
-        }
-        
-        for product_type, keywords in product_types.items():
-            if product_type == "기타":
-                continue
-            for keyword in keywords:
-                if keyword in product_name_lower:
-                    return product_type
-        
-        return "기타"
-    
     def _extract_product_keywords(self, product_name: str) -> List[str]:
-        """상품명에서 키워드 추출"""
+        """상품명에서 키워드 추출 (간단 버전)
+
+        - 대소문자/한글/일본어 단어를 모두 포함하는 토큰을 기준으로 추출
+        - 향후 형태소 분석 라이브러리를 붙일 수 있도록 최소한의 구현만 유지
+        """
         keywords = []
         
-        # 주요 키워드 패턴
-        keyword_patterns = [
-            r'[A-Z][a-z]+',  # 대문자로 시작하는 단어 (브랜드명 등)
-            r'[가-힣]+',  # 한글 단어
-            r'[ひらがなカタカナ]+',  # 일본어
-        ]
-        
-        # 상품명에서 의미있는 단어 추출
-        words = re.findall(r'\b\w+\b', product_name, re.UNICODE)
+        # 상품명에서 의미있는 단어 추출 (2자 이상 토큰)
+        words = re.findall(r"\b\w+\b", product_name, re.UNICODE)
         for word in words:
-            if len(word) >= 2:  # 최소 2자 이상
+            if len(word) >= 2:
                 keywords.append(word)
         
         return keywords[:10]  # 최대 10개

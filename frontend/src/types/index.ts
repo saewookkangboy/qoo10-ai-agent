@@ -26,8 +26,27 @@ export interface AnalysisResult {
     competitor_analysis?: CompetitorAnalysis
     product_data?: ProductData
     shop_data?: any
+    validation?: ValidationResult
   }
   error?: string
+}
+
+export interface ValidationResult {
+  is_valid: boolean
+  mismatches: Array<{
+    field: string
+    crawler_value: any
+    report_value: any
+    severity: 'high' | 'medium' | 'low'
+  }>
+  missing_items: Array<{
+    field: string
+    crawler_has_data: boolean
+    checklist_item_id: string
+    severity: 'high' | 'medium' | 'low'
+  }>
+  validation_score: number
+  timestamp: string
 }
 
 export interface ChecklistResult {

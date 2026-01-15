@@ -1,7 +1,7 @@
 fastapi>=0.109.1
 uvicorn[standard]==0.24.0
 pydantic==2.5.0
-python-multipart==0.0.6
+python-multipart>=0.0.18
 httpx==0.25.2
 beautifulsoup4==4.12.2
 lxml==4.9.3
@@ -18,6 +18,126 @@ psycopg2-binary>=2.9.11
 sqlalchemy==2.0.23
 reportlab==4.4.7
 openpyxl==3.1.5
-defusedxml==0.7.1
 pandas==2.1.3
 python-docx==1.1.0
+# 한국어-일본어 임베딩 관련 패키지
+sentence-transformers>=2.2.2
+torch>=2.0.0
+langdetect>=1.0.9
+scikit-learn>=1.3.0
+
+# ============================================================================
+# 환경 변수 설정 가이드
+# ============================================================================
+# 아래 환경 변수들을 .env 파일에 설정하거나 시스템 환경 변수로 설정하세요.
+# .env 파일은 프로젝트 루트 디렉토리에 생성하세요.
+#
+# 예시: .env 파일 생성
+#   cp .env.example .env
+#   # 또는 직접 생성: touch .env
+#
+# ============================================================================
+# 필수 환경 변수
+# ============================================================================
+#
+# DATABASE_URL (필수)
+#   데이터베이스 연결 URL
+#   PostgreSQL: postgresql://user:password@host:port/database
+#   SQLite: sqlite:///crawler_data.db (기본값, 파일 경로)
+#   예시: DATABASE_URL=postgresql://user:pass@localhost:5432/qoo10_db
+#
+# ============================================================================
+# 서버 설정
+# ============================================================================
+#
+# PORT (선택)
+#   API 서버 포트 번호
+#   기본값: 8080
+#   예시: PORT=8080
+#
+# ALLOWED_ORIGINS (선택)
+#   CORS 허용 오리진 목록 (쉼표로 구분)
+#   기본값: * (모든 오리진 허용)
+#   예시: ALLOWED_ORIGINS=http://localhost:3000,https://example.com
+#
+# ============================================================================
+# 임베딩 서비스 설정
+# ============================================================================
+#
+# EMBEDDING_MODEL (선택)
+#   사용할 임베딩 모델 이름
+#   옵션: bge-m3, multilingual-e5-base, multilingual-e5-small, paraphrase-multilingual
+#   기본값: bge-m3
+#   예시: EMBEDDING_MODEL=bge-m3
+#
+# EMBEDDING_ENSEMBLE (선택)
+#   앙상블 모드 활성화 여부 (BGE-M3 + Multilingual-E5-Base)
+#   옵션: 1, 0, true, false, yes, no
+#   기본값: 1 (활성화)
+#   예시: EMBEDDING_ENSEMBLE=1
+#   참고: EMBEDDING_MODEL=bge-m3일 때만 보완 모델(Multilingual-E5-Base)이 로드됩니다.
+#
+# EMBEDDING_AUTO_LEARN (선택)
+#   자동 학습 기능 활성화 여부 (크롤링 시 자동으로 임베딩 저장)
+#   옵션: 1, 0, true, false, yes, no
+#   기본값: 1 (활성화)
+#   예시: EMBEDDING_AUTO_LEARN=1
+#
+# ============================================================================
+# 크롤러 설정
+# ============================================================================
+#
+# PROXY_LIST (선택)
+#   프록시 서버 목록 (쉼표로 구분)
+#   형식: http://proxy1:port,http://proxy2:port
+#   예시: PROXY_LIST=http://proxy1.example.com:8080,http://proxy2.example.com:8080
+#
+# CRAWLER_DEBUG_LOG (선택)
+#   크롤러 디버그 로그 활성화 여부
+#   옵션: 1, 0, true, false, yes, no
+#   기본값: 0 (비활성화)
+#   예시: CRAWLER_DEBUG_LOG=1
+#
+# CRAWLER_DEBUG_LOG_PATH (선택)
+#   크롤러 디버그 로그 파일 경로
+#   기본값: 프로젝트 루트/.cursor/debug.log
+#   예시: CRAWLER_DEBUG_LOG_PATH=/path/to/debug.log
+#
+# ============================================================================
+# AI 서비스 API 키 (선택)
+# ============================================================================
+#
+# OPENAI_API_KEY (선택)
+#   OpenAI API 키 (OpenAI 서비스 사용 시)
+#   예시: OPENAI_API_KEY=sk-...
+#
+# ANTHROPIC_API_KEY (선택)
+#   Anthropic API 키 (Claude 서비스 사용 시)
+#   예시: ANTHROPIC_API_KEY=sk-ant-...
+#
+# ============================================================================
+# 환경 변수 설정 예시 (.env 파일)
+# ============================================================================
+#
+# # 데이터베이스
+# DATABASE_URL=postgresql://user:password@localhost:5432/qoo10_db
+#
+# # 서버
+# PORT=8080
+# ALLOWED_ORIGINS=http://localhost:3000,https://example.com
+#
+# # 임베딩 서비스
+# EMBEDDING_MODEL=bge-m3
+# EMBEDDING_ENSEMBLE=1
+# EMBEDDING_AUTO_LEARN=1
+#
+# # 크롤러
+# PROXY_LIST=http://proxy1:8080,http://proxy2:8080
+# CRAWLER_DEBUG_LOG=0
+# CRAWLER_DEBUG_LOG_PATH=.cursor/debug.log
+#
+# # AI 서비스 (필요시)
+# OPENAI_API_KEY=sk-...
+# ANTHROPIC_API_KEY=sk-ant-...
+#
+# ============================================================================

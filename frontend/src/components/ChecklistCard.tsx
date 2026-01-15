@@ -40,7 +40,9 @@ function ChecklistCard({ checklist }: ChecklistCardProps) {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* 전체 완성도 헤더 */}
-      <div className={`bg-gradient-to-br ${overallColors.bg} rounded-xl shadow-sm border-2 ${overallColors.border} p-4 sm:p-6 hover:shadow-md transition-all duration-200`}>
+      <div className={`bg-gradient-to-br ${overallColors.bg} backdrop-blur-xl rounded-2xl shadow-lg border-2 ${overallColors.border} p-4 sm:p-6 glass-transition relative overflow-hidden`}>
+        <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent dark:from-white/10 pointer-events-none"></div>
+        <div className="relative z-10">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-2">
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
@@ -53,10 +55,11 @@ function ChecklistCard({ checklist }: ChecklistCardProps) {
               <div className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">전체 완성도</div>
               <div className={`text-3xl sm:text-4xl font-bold ${overallColors.text}`}>{overallCompletion}%</div>
             </div>
-            <div className={`px-4 py-2 rounded-lg ${overallColors.badge} font-semibold text-sm sm:text-base`}>
+            <div className={`px-4 py-2 rounded-lg ${overallColors.badge} font-semibold text-sm sm:text-base shadow-md backdrop-blur-sm`}>
               {overallCompletion >= 80 ? '양호' : overallCompletion >= 60 ? '개선 필요' : '긴급 개선'}
             </div>
           </div>
+        </div>
         </div>
       </div>
 
@@ -68,8 +71,10 @@ function ChecklistCard({ checklist }: ChecklistCardProps) {
           return (
             <div 
               key={idx} 
-              className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4 sm:p-6 hover:shadow-md transition-all duration-200"
+              className="glass-elevated dark:glass-elevated-dark rounded-2xl p-4 sm:p-6 glass-transition relative overflow-hidden"
             >
+              <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent dark:from-white/5 pointer-events-none"></div>
+              <div className="relative z-10">
               {/* 카테고리 헤더 */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
                 <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100">
@@ -82,10 +87,11 @@ function ChecklistCard({ checklist }: ChecklistCardProps) {
                       {category.completion_rate}%
                     </div>
                   </div>
-                  <div className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg ${categoryColors.badge}`}>
+                  <div className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-lg ${categoryColors.badge} shadow-md backdrop-blur-sm`}>
                     {category.completion_rate >= 80 ? '완료' : category.completion_rate >= 60 ? '진행중' : '미완료'}
                   </div>
                 </div>
+              </div>
               </div>
 
               {/* 체크리스트 항목 */}
@@ -96,21 +102,24 @@ function ChecklistCard({ checklist }: ChecklistCardProps) {
                   return (
                     <div
                       key={item.id}
-                      className={`border-l-4 rounded-xl p-4 sm:p-5 transition-all duration-200 ${
+                      className={`border-l-4 rounded-2xl p-4 sm:p-5 glass-transition backdrop-blur-xl relative overflow-hidden ${
                         isCompleted
-                          ? 'bg-green-50 dark:bg-green-900/20 border-l-green-500 dark:border-l-green-400 border border-green-200 dark:border-green-800'
-                          : 'bg-gray-50 dark:bg-gray-800 border-l-gray-300 dark:border-l-gray-600 border border-gray-200 dark:border-gray-700 hover:border-l-gray-400 dark:hover:border-l-gray-500'
+                          ? 'bg-green-50/80 dark:bg-green-900/30 border-l-green-500 dark:border-l-green-400 border border-green-200/50 dark:border-green-800/50'
+                          : 'glass-card dark:glass-card-dark border-l-gray-300 dark:border-l-gray-600 border border-gray-200/50 dark:border-gray-700/50 hover:border-l-gray-400 dark:hover:border-l-gray-500'
                       }`}
                     >
+                      <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent dark:from-white/5 pointer-events-none"></div>
+                      <div className="relative z-10">
                       <div className="flex items-start gap-3 sm:gap-4">
                         {/* 체크 아이콘 */}
                         <div className="flex-shrink-0 mt-0.5">
                           {isCompleted ? (
-                            <div className="w-6 h-6 rounded-full bg-green-500 dark:bg-green-400 flex items-center justify-center">
-                              <span className="text-white text-sm font-bold">✓</span>
+                            <div className="w-6 h-6 rounded-full bg-green-500 dark:bg-green-400 flex items-center justify-center shadow-md backdrop-blur-sm relative overflow-hidden">
+                              <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent"></div>
+                              <span className="text-white text-sm font-bold relative z-10">✓</span>
                             </div>
                           ) : (
-                            <div className="w-6 h-6 rounded-full border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"></div>
+                            <div className="w-6 h-6 rounded-full border-2 border-gray-300 dark:border-gray-600 glass-card dark:glass-card-dark"></div>
                           )}
                         </div>
                         
@@ -159,9 +168,11 @@ function ChecklistCard({ checklist }: ChecklistCardProps) {
                           )}
                         </div>
                       </div>
+                      </div>
                     </div>
                   )
                 })}
+              </div>
               </div>
             </div>
           )
