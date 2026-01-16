@@ -235,10 +235,9 @@ class Qoo10Crawler(ShopCrawlerMixin):
             try:
                 self.api_service = Qoo10APIService()
                 if self.api_service.certification_key:
-                    logger.info("Qoo10 API 서비스가 활성화되었습니다.")
+                    _logger.info("Qoo10 API 서비스가 활성화되었습니다.")
             except Exception as e:
-                logger.warning(f"Qoo10 API 서비스 초기화 실패: {str(e)}")
-    
+                _logger.warning(f"Qoo10 API 서비스 초기화 실패: {e!s}")
     def _load_proxies(self) -> List[str]:
         """환경 변수에서 프록시 목록 로드"""
         proxy_list = os.getenv("PROXY_LIST", "")
