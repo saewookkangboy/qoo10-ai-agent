@@ -148,65 +148,147 @@ async def start_analysis(
     - 분석은 백그라운드에서 비동기로 진행됩니다
     - analysis_id를 반환하여 결과 조회에 사용합니다
     """
+    analysis_id = None
     try:
-        url_str = str(request.url)
-        
-        # URL 검증
-        if not is_valid_qoo10_url(url_str):
+        # 1단계: URL 문자열 변환
+        try:
+            url_str = str(request.url)
+            logger.debug(f"Received URL: {url_str}")
+        except Exception as e:
+            logger.error(f"Failed to convert URL to string: {str(e)}", exc_info=True)
             raise HTTPException(
                 status_code=400,
-                detail="Invalid Qoo10 URL. Please provide a valid Qoo10 product or shop URL."
+                detail="URL 형식이 올바르지 않습니다."
             )
         
-        # URL 타입 결정
-        url_type = request.url_type or detect_url_type(url_str)
+        # 2단계: URL 검증
+        try:
+            if not is_valid_qoo10_url(url_str):
+                logger.warning(f"Invalid Qoo10 URL: {url_str}")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid Qoo10 URL. Please provide a valid Qoo10 product or shop URL."
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"URL validation error: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=400,
+                detail=f"URL 검증 중 오류가 발생했습니다: {str(e)}"
+            )
+        
+        # 3단계: URL 타입 결정
+        try:
+            url_type = request.url_type or detect_url_type(url_str)
+            logger.debug(f"Detected URL type: {url_type}")
+        except Exception as e:
+            logger.error(f"URL type detection error: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=400,
+                detail=f"URL 타입 감지 중 오류가 발생했습니다: {str(e)}"
+            )
         
         if url_type == "unknown":
+            logger.warning(f"Unknown URL type for: {url_str}")
             raise HTTPException(
                 status_code=400,
                 detail="Unable to detect URL type. Please specify product or shop URL."
             )
         
-        # 분석 ID 생성
-        analysis_id = str(uuid.uuid4())
+        # 4단계: 분석 ID 생성
+        try:
+            analysis_id = str(uuid.uuid4())
+            logger.debug(f"Generated analysis_id: {analysis_id}")
+        except Exception as e:
+            logger.error(f"Failed to generate analysis_id: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail="분석 ID 생성에 실패했습니다."
+            )
         
-        # 초기 상태 저장
-        analysis_store[analysis_id] = {
-            "analysis_id": analysis_id,
-            "url": url_str,
-            "url_type": url_type,
-            "status": "processing",
-            "created_at": datetime.now().isoformat(),
-            "progress": {
-                "stage": "initializing",
-                "percentage": 0,
-                "message": "분석을 초기화하는 중..."
-            },
-            "result": None
-        }
+        # 5단계: 초기 상태 저장
+        try:
+            analysis_store[analysis_id] = {
+                "analysis_id": analysis_id,
+                "url": url_str,
+                "url_type": url_type,
+                "status": "processing",
+                "created_at": datetime.now().isoformat(),
+                "progress": {
+                    "stage": "initializing",
+                    "percentage": 0,
+                    "message": "분석을 초기화하는 중..."
+                },
+                "result": None
+            }
+            logger.debug(f"Analysis store entry created for: {analysis_id}")
+        except Exception as e:
+            logger.error(f"Failed to create analysis store entry: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"분석 상태 저장에 실패했습니다: {str(e)}"
+            )
         
-        # 분석 작업 시작 (백그라운드)
-        background_tasks.add_task(
-            perform_analysis,
-            analysis_id,
-            url_str,
-            url_type
-        )
+        # 6단계: 분석 작업 시작 (백그라운드)
+        try:
+            background_tasks.add_task(
+                perform_analysis,
+                analysis_id,
+                url_str,
+                url_type
+            )
+            logger.debug(f"Background task added for: {analysis_id}")
+        except Exception as e:
+            logger.error(f"Failed to add background task: {str(e)}", exc_info=True)
+            # 분석 store에서 제거
+            if analysis_id and analysis_id in analysis_store:
+                try:
+                    analysis_store[analysis_id]["status"] = "failed"
+                    analysis_store[analysis_id]["error"] = f"백그라운드 작업 시작 실패: {str(e)}"
+                except:
+                    pass
+            raise HTTPException(
+                status_code=500,
+                detail=f"분석 작업 시작에 실패했습니다: {str(e)}"
+            )
         
-        logger.info(f"Analysis started: {analysis_id}, URL: {url_str}, Type: {url_type}")
-        
-        return AnalyzeResponse(
-            analysis_id=analysis_id,
-            status="processing",
-            url_type=url_type,
-            estimated_time=30
-        )
+        # 7단계: 응답 생성
+        try:
+            logger.info(f"✅ Analysis started successfully: {analysis_id}, URL: {url_str}, Type: {url_type}")
+            return AnalyzeResponse(
+                analysis_id=analysis_id,
+                status="processing",
+                url_type=url_type,
+                estimated_time=30
+            )
+        except Exception as e:
+            logger.error(f"Failed to create response: {str(e)}", exc_info=True)
+            # 분석은 시작되었으므로 계속 진행
+            if analysis_id and analysis_id in analysis_store:
+                try:
+                    analysis_store[analysis_id]["status"] = "processing"
+                except:
+                    pass
+            raise HTTPException(
+                status_code=500,
+                detail=f"응답 생성에 실패했습니다: {str(e)}"
+            )
     
     except HTTPException:
         raise
     except Exception as e:
+        error_type = type(e).__name__
         error_detail = str(e)
-        logger.error(f"Failed to start analysis: {error_detail}", exc_info=True)
+        logger.error(f"❌ Failed to start analysis: {error_type} - {error_detail}", exc_info=True)
+        
+        # 분석 store 정리 (실패한 경우)
+        if analysis_id and analysis_id in analysis_store:
+            try:
+                analysis_store[analysis_id]["status"] = "failed"
+                analysis_store[analysis_id]["error"] = error_detail
+            except:
+                pass
         
         # 사용자 친화적인 에러 메시지 생성
         if "URL" in error_detail or "url" in error_detail.lower():
@@ -369,8 +451,26 @@ async def download_report(
 
 def is_valid_qoo10_url(url: str) -> bool:
     """Qoo10 URL 유효성 검증"""
-    valid_domains = ["qoo10.jp", "qoo10.com", "www.qoo10.jp", "www.qoo10.com"]
-    return any(domain in url for domain in valid_domains)
+    try:
+        if not url or not isinstance(url, str):
+            return False
+        
+        url_lower = url.lower()
+        valid_domains = ["qoo10.jp", "qoo10.com", "www.qoo10.jp", "www.qoo10.com"]
+        
+        # 도메인 확인
+        is_valid = any(domain in url_lower for domain in valid_domains)
+        
+        # 추가 검증: http:// 또는 https://로 시작하는지 확인
+        if is_valid:
+            if not (url_lower.startswith("http://") or url_lower.startswith("https://")):
+                logger.warning(f"URL이 http:// 또는 https://로 시작하지 않습니다: {url}")
+                return False
+        
+        return is_valid
+    except Exception as e:
+        logger.error(f"URL 검증 중 오류 발생: {str(e)}", exc_info=True)
+        return False
 
 
 def normalize_qoo10_url(url: str) -> str:

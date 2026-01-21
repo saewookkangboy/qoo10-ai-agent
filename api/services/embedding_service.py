@@ -97,6 +97,7 @@ class EmbeddingService:
         self.model_name = model_name
         self.model_config = self.SUPPORTED_MODELS[model_name]
         self.model = None
+        self._model_loaded = False  # 모델 로딩 상태 추적
         
         # 보완 모델 설정 (앙상블 모드)
         self.complementary_model = None
@@ -114,7 +115,8 @@ class EmbeddingService:
             else:
                 self.use_ensemble = False
         
-        self._load_model()
+        # 지연 로딩: 모델은 실제 사용 시점에 로드 (서버 시작 시 블로킹 방지)
+        # self._load_model()  # 주석 처리하여 지연 로딩으로 변경
         
         # 언어 감지 초기화
         if LANGDETECT_AVAILABLE:
@@ -123,6 +125,42 @@ class EmbeddingService:
                 langdetect.DetectorFactory.seed = 0
             except Exception as e:
                 logger.warning(f"언어 감지 초기화 실패: {e}")
+    
+    def _ensure_model_loaded(self):
+        """모델이 로드되지 않았으면 로드 (지연 로딩, 스레드 안전)"""
+        if not self._model_loaded or self.model is None:
+            import threading
+            if not hasattr(self, '_loading_lock'):
+                self._loading_lock = threading.Lock()
+            
+            # 이미 다른 스레드에서 로딩 중인지 확인
+            if hasattr(self, '_loading_in_progress') and self._loading_in_progress:
+                # 로딩 완료까지 대기 (최대 60초)
+                import time
+                wait_count = 0
+                while wait_count < 60 and (not self._model_loaded or self.model is None):
+                    time.sleep(1)
+                    wait_count += 1
+                if not self._model_loaded or self.model is None:
+                    logger.warning("임베딩 모델 로딩 대기 시간 초과")
+                    raise RuntimeError("임베딩 모델 로딩 시간 초과")
+                return
+            
+            with self._loading_lock:
+                # 이중 체크 (다른 스레드에서 이미 로딩 중일 수 있음)
+                if not self._model_loaded or self.model is None:
+                    self._loading_in_progress = True
+                    logger.info("임베딩 모델 지연 로딩 시작...")
+                    try:
+                        self._load_model()
+                        self._model_loaded = True
+                        logger.info("임베딩 모델 로딩 완료")
+                    except Exception as e:
+                        logger.error(f"임베딩 모델 로딩 실패: {str(e)}", exc_info=True)
+                        self._model_loaded = False
+                        raise
+                    finally:
+                        self._loading_in_progress = False
     
     def _load_model(self):
         """모델 로드 (기본 모델 + 보완 모델)"""
@@ -203,6 +241,7 @@ class EmbeddingService:
         Returns:
             임베딩 벡터 배열 (n_samples, dimension)
         """
+        self._ensure_model_loaded()  # 지연 로딩
         if self.model is None:
             raise RuntimeError("모델이 로드되지 않았습니다")
         

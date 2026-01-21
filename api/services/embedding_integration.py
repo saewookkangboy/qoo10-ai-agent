@@ -58,6 +58,43 @@ class EmbeddingIntegration:
         if not self.embedding_available or not self.embedding_service:
             return saved_embeddings
         
+        # 임베딩 저장 (타임아웃 보호)
+        try:
+            import signal
+            
+            # 타임아웃 핸들러 (Unix 시스템에서만 작동)
+            def timeout_handler(signum, frame):
+                raise TimeoutError("임베딩 저장 타임아웃")
+            
+            # 타임아웃 설정 (30초)
+            try:
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(30)
+            except (AttributeError, ValueError):
+                # Windows에서는 signal.alarm이 없으므로 타임아웃 없이 진행
+                pass
+            
+            try:
+                saved_embeddings = self._save_embeddings_sync(product_data, url)
+            finally:
+                try:
+                    signal.alarm(0)  # 타임아웃 취소
+                except (AttributeError, ValueError):
+                    pass
+                    
+        except TimeoutError:
+            logger.warning("임베딩 저장 타임아웃 (30초), 건너뜁니다")
+            return {}
+        except Exception as e:
+            logger.warning(f"임베딩 저장 실패 (계속 진행): {str(e)}")
+            return {}
+        
+        return saved_embeddings
+    
+    def _save_embeddings_sync(self, product_data: Dict[str, Any], url: str) -> Dict[str, Any]:
+        """동기 방식으로 임베딩 저장"""
+        saved_embeddings = {}
+        
         try:
             # 상품명 저장
             if product_data.get("product_name"):
