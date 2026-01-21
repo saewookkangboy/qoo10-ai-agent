@@ -2,11 +2,23 @@
 매출 강화 아이디어 제안 서비스
 메뉴얼 기반의 실전적인 매출 강화 아이디어를 생성합니다.
 페이지 구조(div class) 정보를 활용하여 더 정확한 추천을 제공합니다.
+Gemini API를 사용하여 AI 기반 추천을 생성할 수 있습니다.
 """
 from typing import Dict, Any, List, Optional
 import json
 import os
 import re
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Gemini 서비스 임포트
+try:
+    from .gemini_service import GeminiService
+    GEMINI_SERVICE_AVAILABLE = True
+except ImportError:
+    GEMINI_SERVICE_AVAILABLE = False
+    GeminiService = None
 
 
 class SalesEnhancementRecommender:
@@ -15,6 +27,16 @@ class SalesEnhancementRecommender:
     def __init__(self):
         # 메뉴얼 기반 지식 (큐텐 대학 메뉴얼에서 추출)
         self.manual_knowledge = self._load_manual_knowledge()
+        
+        # Gemini 서비스 초기화 (선택적)
+        self.gemini_service = None
+        if GEMINI_SERVICE_AVAILABLE and GeminiService:
+            try:
+                self.gemini_service = GeminiService()
+                if self.gemini_service.model:
+                    logger.info("Gemini 서비스가 추천 생성에 활성화되었습니다.")
+            except Exception as e:
+                logger.warning(f"Gemini 서비스 초기화 실패: {str(e)}")
     
     def _load_manual_knowledge(self) -> Dict[str, Any]:
         """메뉴얼 지식 로드"""
@@ -69,6 +91,20 @@ class SalesEnhancementRecommender:
         """
         recommendations = []
         
+        # Gemini를 사용한 AI 추천 생성 (우선순위)
+        if self.gemini_service and self.gemini_service.model:
+            try:
+                ai_recommendations = await self.gemini_service.generate_recommendations_with_ai(
+                    product_data=product_data,
+                    analysis_result=analysis_result
+                )
+                if ai_recommendations:
+                    recommendations.extend(ai_recommendations)
+                    logger.info(f"Gemini로 {len(ai_recommendations)}개의 AI 추천 생성됨")
+            except Exception as e:
+                logger.warning(f"Gemini 추천 생성 실패, 기본 추천 사용: {str(e)}")
+        
+        # 기본 추천 생성 (메뉴얼 기반)
         # SEO 최적화 제안 (페이지 구조 기반)
         recommendations.extend(
             self._generate_seo_recommendations(product_data, analysis_result, page_structure)
@@ -89,14 +125,23 @@ class SalesEnhancementRecommender:
             self._generate_page_improvement_recommendations(analysis_result, page_structure)
         )
         
+        # 중복 제거 (제목 기준)
+        seen_titles = set()
+        unique_recommendations = []
+        for rec in recommendations:
+            title = rec.get("title", "")
+            if title and title not in seen_titles:
+                seen_titles.add(title)
+                unique_recommendations.append(rec)
+        
         # 우선순위 정렬
-        recommendations = sorted(
-            recommendations,
-            key=lambda x: {"high": 3, "medium": 2, "low": 1}[x["priority"]],
+        unique_recommendations = sorted(
+            unique_recommendations,
+            key=lambda x: {"high": 3, "medium": 2, "low": 1}[x.get("priority", "medium")],
             reverse=True
         )
         
-        return recommendations
+        return unique_recommendations
     
     def _generate_seo_recommendations(
         self,

@@ -1,0 +1,91 @@
+{
+  "url": "https://www.qoo10.jp/g/1093098159",
+  "stages": {
+    "crawling": {
+      "success": true,
+      "data_source": "playwright",
+      "fields_count": 19,
+      "missing_fields": []
+    },
+    "analysis": {
+      "success": true,
+      "overall_score": 63,
+      "has_product_analysis": true,
+      "image_score": 100,
+      "review_score": 60
+    },
+    "checklist": {
+      "success": true,
+      "overall_completion": 84,
+      "categories_count": 4,
+      "completed_items": 16,
+      "total_items": 31
+    },
+    "report": {
+      "success": true,
+      "report_length": 2026,
+      "has_product_info": true,
+      "has_analysis": true,
+      "has_checklist": true
+    }
+  },
+  "consistency": {
+    "crawler_vs_analysis": {
+      "consistent": true,
+      "mismatches": [],
+      "total_fields_checked": 3
+    },
+    "crawler_vs_checklist": {
+      "consistent": true,
+      "mismatches": [],
+      "total_fields_checked": 2
+    },
+    "crawler_vs_report": {
+      "consistent": true,
+      "mismatches": [],
+      "total_fields_checked": 2
+    },
+    "analysis_vs_report": {
+      "consistent": true,
+      "mismatches": [],
+      "total_fields_checked": 1
+    },
+    "checklist_vs_report": {
+      "consistent": true,
+      "mismatches": [],
+      "total_fields_checked": 0,
+      "note": "리포트에서 체크리스트 정보 추출 필요"
+    },
+    "all_consistent": true,
+    "inconsistencies": []
+  },
+  "validation": {
+    "is_valid": true,
+    "mismatches": [],
+    "missing_items": [],
+    "validation_score": 100.0,
+    "timestamp": "2026-01-21T16:26:07.247678",
+    "corrected_fields": [],
+    "data_source": "playwright",
+    "has_api_data": false,
+    "structure_comparison": {
+      "missing_fields": [],
+      "extra_fields": [],
+      "type_mismatches": [],
+      "value_mismatches": [
+        {
+          "field": "ImageUrlList",
+          "expected": 0,
+          "actual": 20
+        }
+      ],
+      "structure_match": true
+    }
+  },
+  "summary": {
+    "all_stages_success": true,
+    "validation_passed": true,
+    "consistency_passed": true,
+    "overall_success": true
+  }
+}

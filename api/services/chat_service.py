@@ -16,18 +16,38 @@ except ImportError:
     OPENAI_AVAILABLE = False
     logger.warning("OpenAI library not available. Chat service will use fallback responses.")
 
+# Gemini 서비스 임포트
+try:
+    from .gemini_service import GeminiService
+    GEMINI_SERVICE_AVAILABLE = True
+except ImportError:
+    GEMINI_SERVICE_AVAILABLE = False
+    GeminiService = None
+
 
 class ChatService:
     """챗봇 서비스 클래스"""
     
     def __init__(self):
         self.openai_client = None
+        self.gemini_service = None
+        
+        # OpenAI 초기화
         if OPENAI_AVAILABLE:
             api_key = os.getenv("OPENAI_API_KEY")
             if api_key:
                 self.openai_client = OpenAI(api_key=api_key)
             else:
                 logger.warning("OPENAI_API_KEY not set. Chat service will use fallback responses.")
+        
+        # Gemini 초기화
+        if GEMINI_SERVICE_AVAILABLE and GeminiService:
+            try:
+                self.gemini_service = GeminiService()
+                if self.gemini_service.model:
+                    logger.info("Gemini 서비스가 활성화되었습니다.")
+            except Exception as e:
+                logger.warning(f"Gemini 서비스 초기화 실패: {str(e)}")
     
     async def generate_response(
         self,
@@ -46,7 +66,10 @@ class ChatService:
         Returns:
             AI 응답 메시지
         """
-        if self.openai_client and analysis_result:
+        # 우선순위: Gemini > OpenAI > Fallback
+        if self.gemini_service and self.gemini_service.model and analysis_result:
+            return await self._generate_gemini_response(message, analysis_result)
+        elif self.openai_client and analysis_result:
             return await self._generate_openai_response(message, analysis_result)
         else:
             return self._generate_fallback_response(message, analysis_result)
@@ -95,6 +118,57 @@ class ChatService:
             
         except Exception as e:
             logger.error(f"Error generating OpenAI response: {str(e)}")
+            return self._generate_fallback_response(message, analysis_result)
+    
+    async def _generate_gemini_response(
+        self,
+        message: str,
+        analysis_result: Dict[str, Any]
+    ) -> str:
+        """Gemini를 사용한 응답 생성"""
+        try:
+            context = self._build_context(analysis_result)
+            
+            system_prompt = """당신은 Qoo10 상품 분석 리포트 전문가입니다. 
+사용자가 리포트에 대해 질문하면, 리포트 내용을 바탕으로 명확하고 실용적인 답변을 제공하세요.
+
+답변 시 다음을 고려하세요:
+1. 리포트의 구체적인 데이터와 점수를 참고하여 답변
+2. 실제로 적용 가능한 구체적인 액션 아이템 제시
+3. 우선순위가 높은 개선 사항부터 설명
+4. 한국어로 친절하고 전문적으로 답변
+5. 필요시 리포트의 특정 섹션을 언급
+
+답변은 대화 형식으로 자연스럽게 작성하세요."""
+            
+            user_prompt = f"""다음은 분석 리포트의 요약입니다:
+
+{context}
+
+사용자 질문: {message}
+
+위 리포트 내용을 바탕으로 질문에 답변해주세요."""
+            
+            response = await self.gemini_service.generate_text(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                temperature=0.7,
+                max_tokens=1000
+            )
+            
+            if response:
+                return response.strip()
+            else:
+                # Gemini 실패 시 OpenAI로 폴백
+                if self.openai_client:
+                    return await self._generate_openai_response(message, analysis_result)
+                return self._generate_fallback_response(message, analysis_result)
+            
+        except Exception as e:
+            logger.error(f"Error generating Gemini response: {str(e)}")
+            # Gemini 실패 시 OpenAI로 폴백
+            if self.openai_client:
+                return await self._generate_openai_response(message, analysis_result)
             return self._generate_fallback_response(message, analysis_result)
     
     def _build_context(self, analysis_result: Dict[str, Any]) -> str:

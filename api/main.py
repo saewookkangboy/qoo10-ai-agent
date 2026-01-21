@@ -664,7 +664,29 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                 logger.debug(f"[{analysis_id}] Product data summary - Name: {product_data.get('product_name', 'N/A')}, Price: {product_data.get('price', {}).get('sale_price', 'N/A')}")
                 
                 analyzer = ProductAnalyzer()
-                analysis_result = await analyzer.analyze(product_data)
+                raw_analysis_result = await analyzer.analyze(product_data)
+                
+                # Gemini를 사용한 AI 분석 강화 (선택적)
+                try:
+                    from services.gemini_service import GeminiService
+                    gemini_service = GeminiService()
+                    if gemini_service.model:
+                        logger.info(f"[{analysis_id}] Enhancing analysis with Gemini AI...")
+                        enhanced_result = await gemini_service.enhance_analysis_with_ai(
+                            product_data=product_data,
+                            analysis_result={"product_analysis": raw_analysis_result}
+                        )
+                        # product_analysis 구조 유지
+                        if "product_analysis" in enhanced_result:
+                            analysis_result = enhanced_result
+                        else:
+                            analysis_result = {"product_analysis": raw_analysis_result}
+                    else:
+                        analysis_result = {"product_analysis": raw_analysis_result}
+                except Exception as e:
+                    logger.warning(f"[{analysis_id}] Gemini AI enhancement skipped: {str(e)}")
+                    # Gemini 실패해도 기본 분석 결과 사용
+                    analysis_result = {"product_analysis": raw_analysis_result}
                 
                 # 분석 결과 검증 (더 유연하게)
                 if not analysis_result:

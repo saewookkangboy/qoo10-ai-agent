@@ -161,9 +161,27 @@ Response: File
 
 프로젝트 배포 가이드는 [DEPLOYMENT.md](./DEPLOYMENT.md)를 참조하세요.
 
-- **프론트엔드**: Vercel
-- **백엔드**: Railway
+### 배포 플랫폼
+
+- **프론트엔드**: Vercel (React + Vite)
+- **백엔드**: Railway (FastAPI + Python)
 - **데이터베이스**: PostgreSQL (Railway)
+
+### 빠른 시작
+
+1. **Railway 백엔드 배포**
+   - [Railway 배포 가이드](./api/RAILWAY_DEPLOYMENT.md) 참조
+   - GitHub 저장소 연결 → Root Directory: `api`
+   - 환경 변수 설정 (`DATABASE_URL`, `ALLOWED_ORIGINS`)
+
+2. **Vercel 프론트엔드 배포**
+   - [Vercel 배포 가이드](./frontend/VERCEL_DEPLOYMENT.md) 참조
+   - GitHub 저장소 연결 → Root Directory: `frontend`
+   - 환경 변수 설정 (`VITE_API_URL`)
+
+3. **배포 확인**
+   - Railway: `https://your-app.railway.app/health`
+   - Vercel: 배포된 URL 접속하여 기능 테스트
 
 ## 참고 문서
 

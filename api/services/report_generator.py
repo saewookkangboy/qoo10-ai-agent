@@ -924,6 +924,45 @@ class ReportGenerator:
             if "customized_insights" in shop_analysis:
                 self._add_markdown_customized_insights(lines, shop_analysis.get("customized_insights", {}))
         
+        # AI 인사이트 (Gemini 생성)
+        product_analysis = analysis_result.get("product_analysis", {})
+        ai_insights = product_analysis.get("ai_insights")
+        if ai_insights:
+            lines.append("## 🤖 AI 인사이트 (Gemini)")
+            lines.append("")
+            
+            strengths = ai_insights.get("strengths", [])
+            if strengths:
+                lines.append("### 강점")
+                for strength in strengths:
+                    lines.append(f"- ✅ {strength}")
+                lines.append("")
+            
+            weaknesses = ai_insights.get("weaknesses", [])
+            if weaknesses:
+                lines.append("### 개선 필요 사항")
+                for weakness in weaknesses:
+                    lines.append(f"- ⚠️ {weakness}")
+                lines.append("")
+            
+            action_items = ai_insights.get("action_items", [])
+            if action_items:
+                lines.append("### 우선순위 액션 아이템")
+                for i, item in enumerate(action_items[:5], 1):  # 상위 5개만
+                    priority = item.get("priority", "medium").upper()
+                    priority_emoji = {"HIGH": "🔴", "MEDIUM": "🟡", "LOW": "🟢"}.get(priority, "⚪")
+                    lines.append(f"{i}. {priority_emoji} **{item.get('title', 'N/A')}**")
+                    lines.append(f"   - {item.get('description', 'N/A')}")
+                    if item.get("expected_impact"):
+                        lines.append(f"   - 예상 효과: {item.get('expected_impact')}")
+                    lines.append("")
+            
+            insights = ai_insights.get("insights")
+            if insights:
+                lines.append("### 종합 인사이트")
+                lines.append(insights)
+                lines.append("")
+        
         # 추천 아이디어
         recommendations = analysis_result.get("recommendations", [])
         if recommendations:
