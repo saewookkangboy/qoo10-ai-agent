@@ -12,6 +12,9 @@ import re
 from PIL import Image
 import httpx
 import asyncio
+import json
+import os
+from datetime import datetime
 
 
 class ProductAnalyzer:
@@ -331,6 +334,29 @@ class ProductAnalyzer:
         페이지 구조 분석
         모든 div class를 분석하여 페이지의 구조적 완성도를 평가
         """
+        # #region agent log - H2, H4 가설 검증
+        log_path = "/Users/chunghyo/qoo10-ai-agent/.cursor/debug.log"
+        try:
+            # 디렉토리가 없으면 생성
+            import os
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "id": f"log_{int(datetime.now().timestamp() * 1000)}_analyze_start",
+                    "timestamp": int(datetime.now().timestamp() * 1000),
+                    "location": "analyzer.py:_analyze_page_structure",
+                    "message": "페이지 구조 분석 시작",
+                    "data": {
+                        "page_structure_is_none": page_structure is None,
+                        "page_structure_keys": list(page_structure.keys()) if page_structure else []
+                    },
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "H2,H4"
+                }, ensure_ascii=False) + "\n")
+        except: pass
+        # #endregion
+        
         analysis = {
             "score": 0,
             "total_classes": 0,
@@ -341,6 +367,45 @@ class ProductAnalyzer:
         
         if not page_structure:
             analysis["recommendations"].append("페이지 구조 정보를 추출할 수 없습니다")
+            # #region agent log - H4 가설 검증
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "id": f"log_{int(datetime.now().timestamp() * 1000)}_page_structure_none",
+                        "timestamp": int(datetime.now().timestamp() * 1000),
+                        "location": "analyzer.py:_analyze_page_structure",
+                        "message": "페이지 구조 정보 없음",
+                        "data": {},
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "H4"
+                    }, ensure_ascii=False) + "\n")
+            except: pass
+            # #endregion
+            return analysis
+        
+        # 에러 페이지인 경우 특별 처리
+        if page_structure.get("is_error_page", False):
+            analysis["recommendations"].append("에러 페이지가 감지되었습니다. 크롤러가 페이지를 제대로 로드하지 못했을 수 있습니다.")
+            analysis["is_error_page"] = True
+            analysis["error_indicators"] = page_structure.get("error_indicators", [])
+            # #region agent log - H1 가설 검증
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "id": f"log_{int(datetime.now().timestamp() * 1000)}_error_page_detected",
+                        "timestamp": int(datetime.now().timestamp() * 1000),
+                        "location": "analyzer.py:_analyze_page_structure",
+                        "message": "에러 페이지 감지됨",
+                        "data": {
+                            "error_indicators": page_structure.get("error_indicators", [])
+                        },
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "H1"
+                    }, ensure_ascii=False) + "\n")
+            except: pass
+            # #endregion
             return analysis
         
         # 전체 class 수
@@ -361,44 +426,179 @@ class ProductAnalyzer:
         key_elements = page_structure.get("key_elements", {})
         semantic_structure = page_structure.get("semantic_structure", {})
         
-        # 필수 요소 체크
-        essential_elements = {
-            "product_info": "상품 정보",
-            "price_info": "가격 정보",
-            "image_info": "이미지 정보",
-            "description_elements": "상품 설명"
+        # #region agent log - H2, H3 가설 검증
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "id": f"log_{int(datetime.now().timestamp() * 1000)}_before_essential_check",
+                    "timestamp": int(datetime.now().timestamp() * 1000),
+                    "location": "analyzer.py:_analyze_page_structure",
+                    "message": "필수 요소 체크 전 상태",
+                    "data": {
+                        "key_elements_keys": list(key_elements.keys()),
+                        "semantic_structure_keys": list(semantic_structure.keys()),
+                        "score_before": analysis["score"]
+                    },
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "H2,H3"
+                }, ensure_ascii=False) + "\n")
+        except: pass
+        # #endregion
+        
+        # 필수 요소 체크 (key_elements와 semantic_structure 모두 고려)
+        # key_elements 매핑: product_info, price_info, image_info 등
+        # semantic_structure 매핑: product_name_elements, price_elements, image_elements, description_elements 등
+        essential_elements_mapping = {
+            "product_info": {
+                "key_elements_key": "product_info",
+                "semantic_structure_key": "product_name_elements",
+                "name": "상품 정보"
+            },
+            "price_info": {
+                "key_elements_key": "price_info",
+                "semantic_structure_key": "price_elements",
+                "name": "가격 정보"
+            },
+            "image_info": {
+                "key_elements_key": "image_info",
+                "semantic_structure_key": "image_elements",
+                "name": "이미지 정보"
+            },
+            "description_info": {
+                "key_elements_key": "description_info",  # key_elements에는 없을 수 있음
+                "semantic_structure_key": "description_elements",
+                "name": "상품 설명"
+            }
         }
         
-        for element_key, element_name in essential_elements.items():
+        for element_key, mapping in essential_elements_mapping.items():
+            element_name = mapping["name"]
+            found = False
+            
             # key_elements에서 확인
-            if element_key in key_elements and key_elements[element_key]:
-                analysis["key_elements_present"][element_key] = True
-                analysis["score"] += 15
-            # semantic_structure에서 확인
-            elif element_key in semantic_structure and semantic_structure[element_key]:
+            key_elements_key = mapping["key_elements_key"]
+            if key_elements_key in key_elements and key_elements[key_elements_key]:
+                found = True
+                # #region agent log - H2, H3 가설 검증
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({
+                            "id": f"log_{int(datetime.now().timestamp() * 1000)}_element_found_key",
+                            "timestamp": int(datetime.now().timestamp() * 1000),
+                            "location": "analyzer.py:_analyze_page_structure",
+                            "message": f"요소 발견 (key_elements): {element_key}",
+                            "data": {"element_key": element_key, "key_used": key_elements_key, "score_before": analysis["score"]},
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "H2,H3"
+                        }, ensure_ascii=False) + "\n")
+                except: pass
+                # #endregion
+            
+            # semantic_structure에서 확인 (key_elements에서 찾지 못한 경우)
+            if not found:
+                semantic_key = mapping["semantic_structure_key"]
+                semantic_value = semantic_structure.get(semantic_key, [])
+                # 빈 배열이 아닌 경우에만 발견으로 간주
+                if semantic_key in semantic_structure and semantic_value and len(semantic_value) > 0:
+                    found = True
+                    # #region agent log - H2, H3 가설 검증
+                    try:
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({
+                                "id": f"log_{int(datetime.now().timestamp() * 1000)}_element_found_semantic",
+                                "timestamp": int(datetime.now().timestamp() * 1000),
+                                "location": "analyzer.py:_analyze_page_structure",
+                                "message": f"요소 발견 (semantic_structure): {element_key}",
+                                "data": {
+                                    "element_key": element_key,
+                                    "semantic_key_used": semantic_key,
+                                    "semantic_value_length": len(semantic_value),
+                                    "score_before": analysis["score"]
+                                },
+                                "sessionId": "debug-session",
+                                "runId": "run1",
+                                "hypothesisId": "H2,H3"
+                            }, ensure_ascii=False) + "\n")
+                    except: pass
+                    # #endregion
+            
+            if found:
                 analysis["key_elements_present"][element_key] = True
                 analysis["score"] += 15
             else:
                 analysis["key_elements_present"][element_key] = False
                 analysis["recommendations"].append(f"{element_name} 요소가 페이지에서 확인되지 않습니다")
+                # #region agent log - H2, H3 가설 검증
+                try:
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps({
+                            "id": f"log_{int(datetime.now().timestamp() * 1000)}_element_not_found",
+                            "timestamp": int(datetime.now().timestamp() * 1000),
+                            "location": "analyzer.py:_analyze_page_structure",
+                            "message": f"요소 미발견: {element_key}",
+                            "data": {
+                                "element_key": element_key,
+                                "key_elements_key": key_elements_key,
+                                "semantic_structure_key": mapping["semantic_structure_key"],
+                                "in_key_elements": key_elements_key in key_elements,
+                                "in_semantic_structure": mapping["semantic_structure_key"] in semantic_structure,
+                                "semantic_value_length": len(semantic_structure.get(mapping["semantic_structure_key"], []))
+                            },
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "H2,H3"
+                        }, ensure_ascii=False) + "\n")
+                except: pass
+                # #endregion
         
-        # 선택적 요소 체크
-        optional_elements = {
-            "review_info": "리뷰 정보",
-            "seller_info": "판매자 정보",
-            "shipping_info": "배송 정보",
-            "coupon_info": "쿠폰 정보",
-            "qpoint_info": "Qポイント 정보"
+        # 선택적 요소 체크 (key_elements와 semantic_structure 모두 고려)
+        optional_elements_mapping = {
+            "review_info": {
+                "key_elements_key": "review_info",
+                "semantic_structure_key": "review_elements",
+                "name": "리뷰 정보"
+            },
+            "seller_info": {
+                "key_elements_key": "seller_info",
+                "semantic_structure_key": "seller_elements",
+                "name": "판매자 정보"
+            },
+            "shipping_info": {
+                "key_elements_key": "shipping_info",
+                "semantic_structure_key": "shipping_elements",
+                "name": "배송 정보"
+            },
+            "coupon_info": {
+                "key_elements_key": "coupon_info",
+                "semantic_structure_key": "coupon_elements",
+                "name": "쿠폰 정보"
+            },
+            "qpoint_info": {
+                "key_elements_key": "qpoint_info",
+                "semantic_structure_key": "qpoint_elements",
+                "name": "Qポイント 정보"
+            }
         }
         
         optional_count = 0
-        for element_key, element_name in optional_elements.items():
+        for element_key, mapping in optional_elements_mapping.items():
+            found = False
+            
             # key_elements에서 확인
-            if element_key in key_elements and key_elements[element_key]:
-                analysis["key_elements_present"][element_key] = True
-                optional_count += 1
-            # semantic_structure에서 확인
-            elif element_key in semantic_structure and semantic_structure[element_key]:
+            key_elements_key = mapping["key_elements_key"]
+            if key_elements_key in key_elements and key_elements[key_elements_key]:
+                found = True
+            
+            # semantic_structure에서 확인 (key_elements에서 찾지 못한 경우)
+            if not found:
+                semantic_key = mapping["semantic_structure_key"]
+                semantic_value = semantic_structure.get(semantic_key, [])
+                if semantic_key in semantic_structure and semantic_value and len(semantic_value) > 0:
+                    found = True
+            
+            if found:
                 analysis["key_elements_present"][element_key] = True
                 optional_count += 1
             else:
@@ -444,6 +644,26 @@ class ProductAnalyzer:
         
         # class 빈도 분석 (자주 사용되는 class는 중요한 요소일 가능성이 높음)
         class_frequency = page_structure.get("class_frequency", {})
+        # #region agent log - H5 가설 검증
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "id": f"log_{int(datetime.now().timestamp() * 1000)}_before_frequency",
+                    "timestamp": int(datetime.now().timestamp() * 1000),
+                    "location": "analyzer.py:_analyze_page_structure",
+                    "message": "class 빈도 분석 전",
+                    "data": {
+                        "class_frequency_exists": bool(class_frequency),
+                        "class_frequency_count": len(class_frequency) if class_frequency else 0,
+                        "score_before": analysis["score"]
+                    },
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "H5"
+                }, ensure_ascii=False) + "\n")
+        except: pass
+        # #endregion
+        
         if class_frequency:
             # 가장 많이 사용되는 class 상위 10개
             top_classes = sorted(class_frequency.items(), key=lambda x: x[1], reverse=True)[:10]
@@ -453,6 +673,26 @@ class ProductAnalyzer:
             important_keywords = ["product", "goods", "price", "image", "detail", "description"]
             important_class_count = sum(1 for cls, _ in top_classes if any(kw in cls.lower() for kw in important_keywords))
             
+            # #region agent log - H5 가설 검증
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "id": f"log_{int(datetime.now().timestamp() * 1000)}_frequency_calc",
+                        "timestamp": int(datetime.now().timestamp() * 1000),
+                        "location": "analyzer.py:_analyze_page_structure",
+                        "message": "class 빈도 계산 결과",
+                        "data": {
+                            "top_classes_count": len(top_classes),
+                            "important_class_count": important_class_count,
+                            "score_before_frequency": analysis["score"]
+                        },
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "H5"
+                    }, ensure_ascii=False) + "\n")
+            except: pass
+            # #endregion
+            
             if important_class_count >= 5:
                 analysis["score"] += 10
             elif important_class_count >= 3:
@@ -460,6 +700,27 @@ class ProductAnalyzer:
         
         # 점수 정규화 (0-100)
         analysis["score"] = min(100, max(0, analysis["score"]))
+        
+        # #region agent log - H2 가설 검증
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "id": f"log_{int(datetime.now().timestamp() * 1000)}_analyze_end",
+                    "timestamp": int(datetime.now().timestamp() * 1000),
+                    "location": "analyzer.py:_analyze_page_structure",
+                    "message": "페이지 구조 분석 완료",
+                    "data": {
+                        "final_score": analysis["score"],
+                        "total_classes": analysis["total_classes"],
+                        "key_elements_present": analysis["key_elements_present"],
+                        "recommendations_count": len(analysis["recommendations"])
+                    },
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "H2"
+                }, ensure_ascii=False) + "\n")
+        except: pass
+        # #endregion
         
         return analysis
     

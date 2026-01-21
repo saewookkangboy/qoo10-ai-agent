@@ -7,7 +7,8 @@ import CompetitorComparisonCard from './CompetitorComparisonCard'
 import DownloadButton from './DownloadButton'
 import HelpTooltip from './HelpTooltip'
 import ThemeToggle from './ThemeToggle'
-import ErrorReportButton from './ErrorReportButton'
+import ValidationModal from './ValidationModal'
+import ChatBot from './ChatBot'
 
 interface AnalysisReportProps {
   result: {
@@ -27,6 +28,7 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
   const { product_analysis, shop_analysis, recommendations, checklist, competitor_analysis, product_data, shop_data, validation } = result
   const overallScore = product_analysis?.overall_score || shop_analysis?.overall_score || 0
   const [activeTab, setActiveTab] = useState<'recommendations' | 'checklist'>('recommendations')
+  const [isValidationModalOpen, setIsValidationModalOpen] = useState(false)
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return {
@@ -82,73 +84,69 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              {validation && !validation.is_valid && (
-                <div className="px-3 py-1.5 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md text-xs text-yellow-800 dark:text-yellow-200">
-                  ⚠️ 데이터 불일치 감지
-                </div>
+              {validation && (
+                <button
+                  onClick={() => setIsValidationModalOpen(true)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
+                    validation.is_valid
+                      ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/30'
+                      : 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200 hover:bg-yellow-100 dark:hover:bg-yellow-900/30'
+                  }`}
+                >
+                  {validation.is_valid ? '✅ 검증 통과' : `⚠️ 검증 실패 (${validation.validation_score.toFixed(0)}%)`}
+                </button>
               )}
               <ThemeToggle />
             </div>
           </div>
           
-          {/* 데이터 검증 결과 표시 */}
-          {validation && !validation.is_valid && (
-            <div className="mb-4 sm:mb-6 p-4 bg-yellow-50/80 dark:bg-yellow-900/30 backdrop-blur-xl border border-yellow-200/50 dark:border-yellow-800/50 rounded-xl shadow-lg">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <h4 className="text-sm font-semibold text-yellow-800 dark:text-yellow-200 mb-2">
-                    데이터 검증 결과
-                  </h4>
-                  <p className="text-xs text-yellow-700 dark:text-yellow-300 mb-2">
-                    검증 점수: {validation.validation_score.toFixed(1)}%
-                  </p>
-                  {validation.mismatches && validation.mismatches.length > 0 && (
-                    <div className="mt-2">
-                      <p className="text-xs font-medium text-yellow-800 dark:text-yellow-200 mb-1">
-                        불일치 항목 ({validation.mismatches.length}개):
-                      </p>
-                      <ul className="text-xs text-yellow-700 dark:text-yellow-300 space-y-1">
-                        {validation.mismatches.map((mismatch: any, idx: number) => (
-                          <li key={idx} className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium">{mismatch.field}:</span>
-                            <span>크롤러={String(mismatch.crawler_value)}, 리포트={String(mismatch.report_value)}</span>
-                            {analysisId && (
-                              <ErrorReportButton
-                                analysisId={analysisId}
-                                fieldName={mismatch.field}
-                                crawlerValue={mismatch.crawler_value}
-                                reportValue={mismatch.report_value}
-                              />
-                            )}
-                          </li>
-                        ))}
-                      </ul>
+          {/* 데이터 검증 결과 compact 카드 */}
+          {validation && (
+            <button
+              onClick={() => setIsValidationModalOpen(true)}
+              className="w-full mb-4 sm:mb-6 p-4 bg-gradient-to-r from-yellow-50/80 to-orange-50/80 dark:from-yellow-900/30 dark:to-orange-900/30 backdrop-blur-xl border border-yellow-200/50 dark:border-yellow-800/50 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 text-left"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    validation.is_valid
+                      ? 'bg-green-100 dark:bg-green-900/40'
+                      : 'bg-yellow-100 dark:bg-yellow-900/40'
+                  }`}>
+                    {validation.is_valid ? (
+                      <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className="w-6 h-6 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                      데이터 검증 결과
+                    </h4>
+                    <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-gray-400">
+                      <span>검증 점수: <span className="font-semibold">{validation.validation_score.toFixed(1)}%</span></span>
+                      {validation.mismatches && validation.mismatches.length > 0 && (
+                        <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded">
+                          불일치 {validation.mismatches.length}개
+                        </span>
+                      )}
+                      {validation.missing_items && validation.missing_items.length > 0 && (
+                        <span className="px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 rounded">
+                          누락 {validation.missing_items.length}개
+                        </span>
+                      )}
                     </div>
-                  )}
-                  {validation.missing_items && validation.missing_items.length > 0 && (
-                    <div className="mt-2">
-                      <p className="text-xs font-medium text-yellow-800 dark:text-yellow-200 mb-1">
-                        누락 항목 ({validation.missing_items.length}개):
-                      </p>
-                      <ul className="text-xs text-yellow-700 dark:text-yellow-300 space-y-1">
-                        {validation.missing_items.map((missing: any, idx: number) => (
-                          <li key={idx} className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium">{missing.field}:</span>
-                            <span>체크리스트 항목={missing.checklist_item_id}</span>
-                            {analysisId && (
-                              <ErrorReportButton
-                                analysisId={analysisId}
-                                fieldName={missing.field}
-                              />
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                  </div>
                 </div>
+                <svg className="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
               </div>
-            </div>
+            </button>
           )}
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
@@ -363,6 +361,22 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
         </div>
         )}
       </div>
+
+      {/* Validation Modal */}
+      {validation && (
+        <ValidationModal
+          validation={validation}
+          analysisId={analysisId}
+          isOpen={isValidationModalOpen}
+          onClose={() => setIsValidationModalOpen(false)}
+        />
+      )}
+
+      {/* AI 챗봇 */}
+      <ChatBot
+        analysisResult={result}
+        analysisId={analysisId}
+      />
     </div>
   )
 }

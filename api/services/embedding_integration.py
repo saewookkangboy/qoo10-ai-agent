@@ -23,7 +23,14 @@ class EmbeddingIntegration:
             embedding_service: 임베딩 서비스 인스턴스 (None이면 자동 생성)
         """
         self.db = db or CrawlerDatabase()
-        self.embedding_service = embedding_service or EmbeddingService(db=self.db)
+        try:
+            self.embedding_service = embedding_service or EmbeddingService(db=self.db)
+            self.embedding_available = True
+        except ImportError:
+            # sentence-transformers가 설치되지 않은 경우
+            self.embedding_service = None
+            self.embedding_available = False
+            logger.debug("임베딩 서비스를 사용할 수 없습니다 (sentence-transformers 미설치). 크롤링은 계속 진행됩니다.")
     
     def save_crawled_texts(
         self,
@@ -45,6 +52,10 @@ class EmbeddingIntegration:
         saved_embeddings = {}
         
         if not auto_learn:
+            return saved_embeddings
+        
+        # 임베딩 서비스가 사용 불가능한 경우 조용히 반환
+        if not self.embedding_available or not self.embedding_service:
             return saved_embeddings
         
         try:
@@ -144,6 +155,9 @@ class EmbeddingIntegration:
         Returns:
             매칭된 한국어 텍스트 정보 또는 None
         """
+        if not self.embedding_available or not self.embedding_service:
+            return None
+        
         try:
             # 한국어 텍스트만 검색
             results = self.embedding_service.find_similar_in_db(
@@ -179,6 +193,13 @@ class EmbeddingIntegration:
         Returns:
             검증 결과 {"is_valid": bool, "similarity": float, "message": str}
         """
+        if not self.embedding_available or not self.embedding_service:
+            return {
+                "is_valid": False,
+                "similarity": 0.0,
+                "message": "임베딩 서비스를 사용할 수 없습니다"
+            }
+        
         try:
             similarity = self.embedding_service.compute_similarity(
                 japanese_text,
@@ -218,6 +239,9 @@ class EmbeddingIntegration:
         Returns:
             번역 제안 리스트
         """
+        if not self.embedding_available or not self.embedding_service:
+            return []
+        
         try:
             results = self.embedding_service.find_similar_in_db(
                 query_text=japanese_text,

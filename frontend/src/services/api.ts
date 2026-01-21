@@ -184,4 +184,22 @@ export const adminService = {
   },
 }
 
+export const chatService = {
+  /**
+   * 챗봇 메시지 전송
+   */
+  async sendMessage(data: {
+    message: string
+    analysisId?: string
+    analysisResult?: any
+  }) {
+    const response = await api.post('/api/v1/chat', {
+      message: data.message,
+      analysis_id: data.analysisId,
+      analysis_result: data.analysisResult
+    })
+    return response.data
+  },
+}
+
 export default api

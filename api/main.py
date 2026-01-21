@@ -35,6 +35,7 @@ from services.aio_optimizer import AIOOptimizer
 from services.data_validator import DataValidator
 from services.error_reporting_service import ErrorReportingService
 from services.pipeline_monitor import PipelineMonitor
+from services.chat_service import ChatService
 
 load_dotenv()
 
@@ -72,6 +73,7 @@ admin_service = AdminService()
 data_validator = DataValidator()
 error_reporting_service = ErrorReportingService()
 pipeline_monitor = PipelineMonitor()
+chat_service = ChatService()
 
 
 class AnalyzeRequest(BaseModel):
@@ -240,12 +242,22 @@ async def get_analysis_result(analysis_id: str):
     # 기본 응답 구조
     response = {
         "analysis_id": analysis_id,
-        "status": analysis["status"]
+        "status": analysis.get("status", "unknown"),
+        "url": analysis.get("url", ""),
+        "url_type": analysis.get("url_type", "unknown"),
+        "created_at": analysis.get("created_at", "")
     }
     
     # 진행 상태 추가
     if "progress" in analysis:
         response["progress"] = analysis["progress"]
+    else:
+        # progress가 없으면 기본값 설정
+        response["progress"] = {
+            "stage": analysis.get("status", "unknown"),
+            "percentage": 0,
+            "message": "상태 확인 중..."
+        }
     
     if analysis["status"] == "processing":
         response["message"] = "Analysis is still in progress"
@@ -258,8 +270,13 @@ async def get_analysis_result(analysis_id: str):
     # 완료된 경우 결과 반환
     if analysis["status"] == "completed":
         response["result"] = analysis.get("result")
+        # 에러가 있어도 완료로 처리된 경우
+        if "error" in analysis:
+            response["warning"] = analysis.get("error")
         return response
     
+    # 알 수 없는 상태
+    response["message"] = f"Unknown status: {analysis.get('status', 'unknown')}"
     return response
 
 
@@ -604,10 +621,18 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                 logger.info(f"[{analysis_id}] Generating recommendations...")
                 
                 recommender = SalesEnhancementRecommender()
-                recommendations = await recommender.generate_recommendations(
-                    product_data,
-                    analysis_result
-                )
+                # 타임아웃 보호 추가 (최대 30초)
+                try:
+                    recommendations = await asyncio.wait_for(
+                        recommender.generate_recommendations(
+                            product_data,
+                            analysis_result
+                        ),
+                        timeout=30.0
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(f"[{analysis_id}] Recommendations generation timeout (30s), using empty list")
+                    recommendations = []
                 
                 # 추천 검증
                 if not isinstance(recommendations, list):
@@ -627,7 +652,9 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                 logger.info(f"[{analysis_id}] Recommendations generated - Count: {len(recommendations)}")
             except Exception as e:
                 recommendations_duration_ms = int((time.time() - recommendations_start_time) * 1000)
-                logger.warning(f"[{analysis_id}] Recommendations generation failed: {str(e)}")
+                error_type = type(e).__name__
+                error_msg = f"추천 생성 실패: {error_type} - {str(e)}"
+                logger.warning(f"[{analysis_id}] {error_msg}", exc_info=True)
                 pipeline_monitor.record_stage(
                     analysis_id=analysis_id,
                     url=url,
@@ -635,7 +662,7 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                     stage="generating_recommendations",
                     status="failure",
                     duration_ms=recommendations_duration_ms,
-                    error_message=str(e)
+                    error_message=error_msg
                 )
                 recommendations = []  # 추천 실패해도 계속 진행
             
@@ -760,66 +787,141 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
             
             # ========== 6단계: 결과 저장 (100%) ==========
             finalizing_start_time = time.time()
+            logger.info(f"[{analysis_id}] Starting finalization phase...")
+            
+            # 1단계: 진행 상태 업데이트 (최우선)
             try:
                 _update_progress(analysis_id, "finalizing", 90, "결과를 정리하는 중...")
-                logger.info(f"[{analysis_id}] Finalizing results...")
-                
-                # 최종 결과 구성
-                final_result = {
-                    "product_analysis": analysis_result,
-                    "recommendations": recommendations,
-                    "checklist": checklist_result,
-                    "competitor_analysis": None,  # 선택적 기능은 나중에
-                    "product_data": product_data,
-                    "validation": validation_result  # 검증 결과 추가
-                }
+                logger.info(f"[{analysis_id}] Progress updated to finalizing")
+            except Exception as e:
+                logger.warning(f"[{analysis_id}] Failed to update progress: {str(e)}")
+            
+            # 2단계: 최종 결과 구성 (안전하게, 단계별 처리)
+            final_result = {}
+            try:
+                logger.info(f"[{analysis_id}] Constructing final result...")
+                final_result["product_analysis"] = analysis_result if analysis_result else {}
+                logger.debug(f"[{analysis_id}] product_analysis added")
+            except Exception as e:
+                logger.warning(f"[{analysis_id}] Failed to add product_analysis: {str(e)}")
+                final_result["product_analysis"] = {}
+            
+            try:
+                final_result["recommendations"] = recommendations if isinstance(recommendations, list) else []
+                logger.debug(f"[{analysis_id}] recommendations added: {len(final_result['recommendations'])}")
+            except Exception as e:
+                logger.warning(f"[{analysis_id}] Failed to add recommendations: {str(e)}")
+                final_result["recommendations"] = []
+            
+            try:
+                final_result["checklist"] = checklist_result if checklist_result else None
+                logger.debug(f"[{analysis_id}] checklist added")
+            except Exception as e:
+                logger.warning(f"[{analysis_id}] Failed to add checklist: {str(e)}")
+                final_result["checklist"] = None
+            
+            try:
+                final_result["competitor_analysis"] = None
+                final_result["product_data"] = product_data if product_data else {}
+                logger.debug(f"[{analysis_id}] product_data added")
+            except Exception as e:
+                logger.warning(f"[{analysis_id}] Failed to add product_data: {str(e)}")
+                final_result["product_data"] = {}
+            
+            try:
+                final_result["validation"] = validation_result if validation_result else None
+                logger.debug(f"[{analysis_id}] validation added")
+            except Exception as e:
+                logger.warning(f"[{analysis_id}] Failed to add validation: {str(e)}")
+                final_result["validation"] = None
+            
+            logger.info(f"[{analysis_id}] Final result constructed with {len(final_result)} keys")
+            
+            # 3단계: analysis_store에 결과 저장 (최우선, 반드시 성공)
+            store_updated = False
+            try:
+                if analysis_id not in analysis_store:
+                    logger.error(f"[{analysis_id}] Analysis ID not found in store!")
+                    # store에 없으면 새로 생성
+                    analysis_store[analysis_id] = {
+                        "analysis_id": analysis_id,
+                        "url": url,
+                        "url_type": url_type,
+                        "status": "processing",
+                        "created_at": datetime.now().isoformat(),
+                        "progress": {"stage": "finalizing", "percentage": 90, "message": "결과 저장 중..."},
+                        "result": None
+                    }
+                    logger.info(f"[{analysis_id}] Created new store entry")
                 
                 # 결과 저장
                 analysis_store[analysis_id]["result"] = final_result
                 analysis_store[analysis_id]["status"] = "completed"
                 _update_progress(analysis_id, "completed", 100, "분석이 완료되었습니다.")
-                
-                finalizing_duration_ms = int((time.time() - finalizing_start_time) * 1000)
+                store_updated = True
+                logger.info(f"[{analysis_id}] ✅ Results saved to analysis_store - Status: completed")
+            except Exception as e:
+                logger.error(f"[{analysis_id}] ❌ CRITICAL: Failed to save to analysis_store: {str(e)}", exc_info=True)
+                # 최후의 수단: 최소한 상태만이라도 업데이트
+                try:
+                    if analysis_id in analysis_store:
+                        analysis_store[analysis_id]["status"] = "completed"
+                        if "result" not in analysis_store[analysis_id]:
+                            analysis_store[analysis_id]["result"] = final_result
+                        store_updated = True
+                        logger.info(f"[{analysis_id}] Emergency status update succeeded")
+                except Exception as emergency_error:
+                    logger.error(f"[{analysis_id}] ❌ CRITICAL: Even emergency update failed: {str(emergency_error)}")
+            
+            # 4단계: 파이프라인 모니터링 기록 (실패해도 무시)
+            finalizing_duration_ms = int((time.time() - finalizing_start_time) * 1000)
+            try:
                 pipeline_monitor.record_stage(
                     analysis_id=analysis_id,
                     url=url,
                     url_type=url_type,
                     stage="finalizing",
-                    status="success",
+                    status="success" if store_updated else "failure",
                     duration_ms=finalizing_duration_ms
                 )
-                
-                logger.info(f"[{analysis_id}] Analysis completed successfully - Score: {analysis_result.get('overall_score', 0)}")
-                
-                # 히스토리 저장은 비동기로 (실패해도 무시)
-                try:
-                    loop = asyncio.get_running_loop()
-                    loop.create_task(_save_history_and_notify_async(
-                        analysis_id,
-                        url,
-                        url_type,
-                        final_result,
-                        analysis_result.get("overall_score", 0)
-                    ))
-                except Exception as e:
-                    logger.warning(f"[{analysis_id}] Failed to schedule history save: {str(e)}")
-                
+                logger.debug(f"[{analysis_id}] Pipeline monitor recorded")
             except Exception as e:
-                finalizing_duration_ms = int((time.time() - finalizing_start_time) * 1000)
-                error_msg = f"결과 저장 실패: {str(e)}"
-                logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
-                pipeline_monitor.record_stage(
-                    analysis_id=analysis_id,
-                    url=url,
-                    url_type=url_type,
-                    stage="finalizing",
-                    status="failure",
-                    duration_ms=finalizing_duration_ms,
-                    error_message=error_msg
-                )
-                analysis_store[analysis_id]["status"] = "failed"
-                analysis_store[analysis_id]["error"] = error_msg
-                _update_progress(analysis_id, "failed", 0, error_msg)
+                logger.warning(f"[{analysis_id}] Failed to record finalizing stage: {str(e)}")
+            
+            # 5단계: 완료 로그 출력 (반드시 실행)
+            try:
+                score = analysis_result.get('overall_score', 0) if analysis_result else 0
+                logger.info(f"[{analysis_id}] ✅ Analysis completed successfully - Score: {score}, Store updated: {store_updated}")
+            except Exception as e:
+                logger.error(f"[{analysis_id}] Failed to log completion: {str(e)}")
+                logger.info(f"[{analysis_id}] Analysis finalization phase completed (store_updated: {store_updated})")
+            
+            # 6단계: 히스토리 저장 (비동기, 실패해도 무시)
+            try:
+                loop = asyncio.get_running_loop()
+                score = analysis_result.get("overall_score", 0) if analysis_result else 0
+                loop.create_task(_save_history_and_notify_async(
+                    analysis_id,
+                    url,
+                    url_type,
+                    final_result,
+                    score
+                ))
+                logger.debug(f"[{analysis_id}] History save task scheduled")
+            except Exception as e:
+                logger.warning(f"[{analysis_id}] Failed to schedule history save: {str(e)}")
+            
+            # 최종 확인: store가 업데이트되지 않았다면 경고
+            if not store_updated:
+                logger.error(f"[{analysis_id}] ⚠️ WARNING: Store was not updated! Analysis may appear as failed.")
+                # 한 번 더 시도
+                try:
+                    if analysis_id in analysis_store:
+                        analysis_store[analysis_id]["status"] = "completed"
+                        analysis_store[analysis_id]["result"] = final_result
+                        logger.info(f"[{analysis_id}] Retry: Store update succeeded")
+                except:
+                    logger.error(f"[{analysis_id}] ❌ Retry also failed")
         
         elif url_type == "shop":
             # ========== 1단계: Shop 크롤링 (20%) ==========
@@ -930,12 +1032,16 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                 _update_progress(analysis_id, "failed", 0, error_msg)
     
     except Exception as e:
-        error_msg = f"분석 중 예상치 못한 오류 발생: {str(e)}"
+        error_type = type(e).__name__
+        error_msg = f"분석 중 예상치 못한 오류 발생: {error_type} - {str(e)}"
         logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
         if analysis_id in analysis_store:
             analysis_store[analysis_id]["status"] = "failed"
             analysis_store[analysis_id]["error"] = error_msg
             _update_progress(analysis_id, "failed", 0, error_msg)
+        else:
+            # analysis_id가 store에 없는 경우에도 로그 기록
+            logger.error(f"[{analysis_id}] Analysis store entry not found, cannot update status")
 
 
 async def _save_history_and_notify_async(
@@ -1893,6 +1999,53 @@ async def get_analysis_results_list(
 async def get_ai_insight_report(days: int = 30):
     """AI 분석 리포트 생성"""
     return admin_service.generate_ai_insight_report(days=days)
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(..., description="사용자 메시지")
+    analysis_id: Optional[str] = Field(None, description="분석 ID")
+    analysis_result: Optional[Dict[str, Any]] = Field(None, description="분석 결과 데이터")
+
+
+class ChatResponse(BaseModel):
+    message: str
+    timestamp: str
+
+
+@app.post("/api/v1/chat", response_model=ChatResponse)
+async def chat_with_report(request: ChatRequest):
+    """
+    분석 리포트에 대한 AI 챗봇 응답
+    
+    - message: 사용자 질문
+    - analysis_id: 분석 ID (선택사항)
+    - analysis_result: 분석 결과 데이터 (선택사항, 없으면 DB에서 조회)
+    """
+    try:
+        # analysis_result가 없고 analysis_id가 있으면 DB에서 조회
+        analysis_result = request.analysis_result
+        if not analysis_result and request.analysis_id:
+            if request.analysis_id in analysis_store:
+                stored_result = analysis_store[request.analysis_id]
+                if stored_result.get("status") == "completed":
+                    analysis_result = stored_result.get("result")
+        
+        response_text = await chat_service.generate_response(
+            message=request.message,
+            analysis_result=analysis_result,
+            analysis_id=request.analysis_id
+        )
+        
+        return ChatResponse(
+            message=response_text,
+            timestamp=datetime.now().isoformat()
+        )
+    except Exception as e:
+        logger.error(f"Chat error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate chat response: {str(e)}"
+        )
 
 
 if __name__ == "__main__":

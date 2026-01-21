@@ -128,92 +128,113 @@ class PipelineMonitor:
         status: str,
         duration_ms: Optional[int]
     ):
-        """특정 기간의 성공률 업데이트"""
-        with self.db.get_connection() as conn:
-            cursor = conn.cursor()
-            
-            period_start_str = period_start.isoformat()
-            
-            # 기존 레코드 조회
-            if self.db.use_postgres:
-                cursor.execute("""
-                    SELECT total_count, success_count, failure_count, avg_duration_ms
-                    FROM pipeline_success_rates
-                    WHERE period_type = %s AND period_start = %s AND stage = %s
-                """, (period_type, period_start_str, stage))
-            else:
-                cursor.execute("""
-                    SELECT total_count, success_count, failure_count, avg_duration_ms
-                    FROM pipeline_success_rates
-                    WHERE period_type = ? AND period_start = ? AND stage = ?
-                """, (period_type, period_start_str, stage))
-            
-            row = cursor.fetchone()
-            
-            if row:
-                # 기존 레코드 업데이트
-                total_count = row["total_count"] + 1
-                success_count = row["success_count"] + (1 if status == "success" else 0)
-                failure_count = row["failure_count"] + (1 if status == "failure" else 0)
-                success_rate = (success_count / total_count * 100) if total_count > 0 else 0.0
-                
-                # 평균 소요 시간 업데이트
-                current_avg = row["avg_duration_ms"] or 0.0
-                if duration_ms:
-                    new_avg = ((current_avg * (total_count - 1)) + duration_ms) / total_count
+        """특정 기간의 성공률 업데이트 (재시도 로직 포함)"""
+        import time
+        max_retries = 3
+        retry_delay = 0.1  # 100ms
+        
+        for attempt in range(max_retries):
+            try:
+                with self.db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    
+                    period_start_str = period_start.isoformat()
+                    
+                    # 기존 레코드 조회
+                    if self.db.use_postgres:
+                        cursor.execute("""
+                            SELECT total_count, success_count, failure_count, avg_duration_ms
+                            FROM pipeline_success_rates
+                            WHERE period_type = %s AND period_start = %s AND stage = %s
+                        """, (period_type, period_start_str, stage))
+                    else:
+                        cursor.execute("""
+                            SELECT total_count, success_count, failure_count, avg_duration_ms
+                            FROM pipeline_success_rates
+                            WHERE period_type = ? AND period_start = ? AND stage = ?
+                        """, (period_type, period_start_str, stage))
+                    
+                    row = cursor.fetchone()
+                    
+                    if row:
+                        # 기존 레코드 업데이트
+                        total_count = row["total_count"] + 1
+                        success_count = row["success_count"] + (1 if status == "success" else 0)
+                        failure_count = row["failure_count"] + (1 if status == "failure" else 0)
+                        success_rate = (success_count / total_count * 100) if total_count > 0 else 0.0
+                        
+                        # 평균 소요 시간 업데이트
+                        current_avg = row["avg_duration_ms"] or 0.0
+                        if duration_ms:
+                            new_avg = ((current_avg * (total_count - 1)) + duration_ms) / total_count
+                        else:
+                            new_avg = current_avg
+                        
+                        if self.db.use_postgres:
+                            cursor.execute("""
+                                UPDATE pipeline_success_rates
+                                SET total_count = %s, success_count = %s, failure_count = %s,
+                                    success_rate = %s, avg_duration_ms = %s, updated_at = %s
+                                WHERE period_type = %s AND period_start = %s AND stage = %s
+                            """, (
+                                total_count, success_count, failure_count, success_rate,
+                                new_avg, datetime.now().isoformat(),
+                                period_type, period_start_str, stage
+                            ))
+                        else:
+                            cursor.execute("""
+                                UPDATE pipeline_success_rates
+                                SET total_count = ?, success_count = ?, failure_count = ?,
+                                    success_rate = ?, avg_duration_ms = ?, updated_at = ?
+                                WHERE period_type = ? AND period_start = ? AND stage = ?
+                            """, (
+                                total_count, success_count, failure_count, success_rate,
+                                new_avg, datetime.now().isoformat(),
+                                period_type, period_start_str, stage
+                            ))
+                    else:
+                        # 새 레코드 생성
+                        total_count = 1
+                        success_count = 1 if status == "success" else 0
+                        failure_count = 1 if status == "failure" else 0
+                        success_rate = 100.0 if status == "success" else 0.0
+                        avg_duration_ms = duration_ms if duration_ms else None
+                        
+                        if self.db.use_postgres:
+                            cursor.execute("""
+                                INSERT INTO pipeline_success_rates (
+                                    period_type, period_start, stage, total_count,
+                                    success_count, failure_count, success_rate, avg_duration_ms
+                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            """, (
+                                period_type, period_start_str, stage, total_count,
+                                success_count, failure_count, success_rate, avg_duration_ms
+                            ))
+                        else:
+                            cursor.execute("""
+                                INSERT INTO pipeline_success_rates (
+                                    period_type, period_start, stage, total_count,
+                                    success_count, failure_count, success_rate, avg_duration_ms
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (
+                                period_type, period_start_str, stage, total_count,
+                                success_count, failure_count, success_rate, avg_duration_ms
+                            ))
+                    
+                    conn.commit()
+                    return  # 성공 시 종료
+                    
+            except Exception as e:
+                error_msg = str(e).lower()
+                if ("database is locked" in error_msg or "locked" in error_msg) and attempt < max_retries - 1:
+                    # 데이터베이스 잠금 시 재시도
+                    time.sleep(retry_delay * (attempt + 1))
+                    continue
                 else:
-                    new_avg = current_avg
-                
-                if self.db.use_postgres:
-                    cursor.execute("""
-                        UPDATE pipeline_success_rates
-                        SET total_count = %s, success_count = %s, failure_count = %s,
-                            success_rate = %s, avg_duration_ms = %s, updated_at = %s
-                        WHERE period_type = %s AND period_start = %s AND stage = %s
-                    """, (
-                        total_count, success_count, failure_count, success_rate,
-                        new_avg, datetime.now().isoformat(),
-                        period_type, period_start_str, stage
-                    ))
-                else:
-                    cursor.execute("""
-                        UPDATE pipeline_success_rates
-                        SET total_count = ?, success_count = ?, failure_count = ?,
-                            success_rate = ?, avg_duration_ms = ?, updated_at = ?
-                        WHERE period_type = ? AND period_start = ? AND stage = ?
-                    """, (
-                        total_count, success_count, failure_count, success_rate,
-                        new_avg, datetime.now().isoformat(),
-                        period_type, period_start_str, stage
-                    ))
-            else:
-                # 새 레코드 생성
-                total_count = 1
-                success_count = 1 if status == "success" else 0
-                failure_count = 1 if status == "failure" else 0
-                success_rate = 100.0 if status == "success" else 0.0
-                avg_duration_ms = duration_ms if duration_ms else None
-                
-                if self.db.use_postgres:
-                    cursor.execute("""
-                        INSERT INTO pipeline_success_rates (
-                            period_type, period_start, stage, total_count,
-                            success_count, failure_count, success_rate, avg_duration_ms
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (
-                        period_type, period_start_str, stage, total_count,
-                        success_count, failure_count, success_rate, avg_duration_ms
-                    ))
-                else:
-                    cursor.execute("""
-                        INSERT INTO pipeline_success_rates (
-                            period_type, period_start, stage, total_count,
-                            success_count, failure_count, success_rate, avg_duration_ms
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        period_type, period_start_str, stage, total_count,
-                        success_count, failure_count, success_rate, avg_duration_ms
-                    ))
+                    # 최대 재시도 횟수 초과 또는 다른 오류
+                    if attempt == max_retries - 1:
+                        logger.debug(f"Failed to update success rates after {max_retries} attempts: {str(e)}")
+                    return  # 조용히 실패 (모니터링은 선택적 기능)
     
     def get_success_rates(
         self,

@@ -540,30 +540,44 @@ class Qoo10Crawler(ShopCrawlerMixin):
             
             # 페이지 로드
             logger.debug(f"Loading page: {normalized_url}")
-            await page.goto(normalized_url, wait_until='networkidle', timeout=30000)
+            # networkidle 대신 load 사용 (더 안정적이고 빠름)
+            # load: 모든 리소스 로드 완료, domcontentloaded보다 안정적
+            try:
+                await page.goto(normalized_url, wait_until='load', timeout=60000)
+            except PlaywrightTimeoutError:
+                # load 타임아웃 시 domcontentloaded로 재시도 (더 빠름)
+                logger.warning(f"Page load timeout, trying domcontentloaded...")
+                await page.goto(normalized_url, wait_until='domcontentloaded', timeout=30000)
             
             # 추가 대기 (동적 콘텐츠 로딩)
             await asyncio.sleep(2)
             
-            # 스크롤하여 지연 로딩된 콘텐츠 로드
-            await page.evaluate("""
-                async () => {
-                    await new Promise((resolve) => {
-                        let totalHeight = 0;
-                        const distance = 100;
-                        const timer = setInterval(() => {
-                            const scrollHeight = document.body.scrollHeight;
-                            window.scrollBy(0, distance);
-                            totalHeight += distance;
-                            
-                            if(totalHeight >= scrollHeight || totalHeight > 5000){
-                                clearInterval(timer);
-                                resolve();
-                            }
-                        }, 100);
-                    });
-                }
-            """)
+            # 스크롤하여 지연 로딩된 콘텐츠 로드 (타임아웃 보호)
+            try:
+                await asyncio.wait_for(
+                    page.evaluate("""
+                        async () => {
+                            await new Promise((resolve) => {
+                                let totalHeight = 0;
+                                const distance = 100;
+                                const maxHeight = 5000;
+                                const timer = setInterval(() => {
+                                    const scrollHeight = document.body.scrollHeight;
+                                    window.scrollBy(0, distance);
+                                    totalHeight += distance;
+                                    
+                                    if(totalHeight >= scrollHeight || totalHeight > maxHeight){
+                                        clearInterval(timer);
+                                        resolve();
+                                    }
+                                }, 100);
+                            });
+                        }
+                    """),
+                    timeout=10.0  # 스크롤 최대 10초
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Scroll timeout, continuing with current content...")
             
             # 추가 대기
             await asyncio.sleep(1)
@@ -694,8 +708,12 @@ class Qoo10Crawler(ShopCrawlerMixin):
                                 }
                             }
                             if (!excluded && text.length > 10 && text !== 'Qoo10' && text !== 'ホーム') {
-                                data.product_name = text;
-                                break;
+                                // 대괄호 제거
+                                text = text.replace(/^\[.*?\]\s*/, '').replace(/\s*\[.*?\]$/, '').replace(/\[.*?\]/g, '').trim();
+                                if (text.length > 10) {
+                                    data.product_name = text;
+                                    break;
+                                }
                             }
                         }
                         
@@ -708,6 +726,8 @@ class Qoo10Crawler(ShopCrawlerMixin):
                                     titleText = titleText.split('|')[0].trim();
                                 }
                                 titleText = titleText.replace(/Qoo10/g, '').trim();
+                                // 대괄호 제거
+                                titleText = titleText.replace(/^\[.*?\]\s*/, '').replace(/\s*\[.*?\]$/, '').replace(/\[.*?\]/g, '').trim();
                                 if (titleText.length > 3) {
                                     data.product_name = titleText;
                                 }
@@ -780,6 +800,11 @@ class Qoo10Crawler(ShopCrawlerMixin):
                             excluded = True
                             break
                     if not excluded:
+                        # 상품명 정제: 대괄호 제거
+                        product_name = re.sub(r'^\[.*?\]\s*', '', product_name)  # 앞쪽 대괄호 제거
+                        product_name = re.sub(r'\s*\[.*?\]$', '', product_name)  # 뒤쪽 대괄호 제거
+                        product_name = re.sub(r'\[.*?\]', '', product_name)  # 중간 대괄호 제거
+                        product_name = ' '.join(product_name.split())  # 불필요한 공백 제거
                         product_data['product_name'] = product_name
                 
                 if js_data.get('prices'):
@@ -957,13 +982,56 @@ class Qoo10Crawler(ShopCrawlerMixin):
             
             # 상품 기본 정보 추출 (AI 학습 기반 선택자 사용)
             # 페이지 구조 추출은 선택적으로 수행 (성능 최적화)
+            # 에러 페이지 감지를 위해 먼저 페이지 구조 추출
             page_structure = None
+            is_error_page = False
+            error_indicators = []
             try:
                 page_structure = self._extract_page_structure(soup)
+                # 에러 페이지 감지 확인
+                if page_structure and page_structure.get("is_error_page", False):
+                    is_error_page = True
+                    error_indicators = page_structure.get("error_indicators", [])
+                    logger.warning(f"⚠️ 에러 페이지 감지됨 (HTTP 크롤링) - 지표: {error_indicators}")
             except Exception as e:
                 logger.warning(f"Failed to extract page structure: {str(e)}")
                 # 페이지 구조 추출 실패해도 계속 진행
                 pass
+            
+            # 에러 페이지가 감지되고 Playwright가 사용 가능하면 자동 재시도
+            if is_error_page:
+                logger.warning(f"⚠️ 에러 페이지 감지됨 (HTTP 크롤링) - 지표: {error_indicators}")
+                logger.warning(f"⚠️ HTML 길이: {len(response.text)} bytes, Playwright 사용 가능: {PLAYWRIGHT_AVAILABLE}, use_playwright: {use_playwright}")
+                
+                if PLAYWRIGHT_AVAILABLE and not use_playwright:
+                    logger.info("🔄 Playwright가 사용 가능합니다. Playwright로 자동 재시도합니다...")
+                    try:
+                        playwright_result = await self.crawl_product_with_playwright(url)
+                        # Playwright 결과에 재시도 정보 추가
+                        playwright_result["_retry_info"] = {
+                            "original_method": "httpx",
+                            "retry_method": "playwright",
+                            "retry_reason": "error_page_detected",
+                            "error_indicators": error_indicators
+                        }
+                        # Playwright로 성공적으로 크롤링한 경우, 에러 페이지 정보 제거
+                        if playwright_result.get("page_structure"):
+                            playwright_result["page_structure"].pop("is_error_page", None)
+                            playwright_result["page_structure"].pop("error_indicators", None)
+                        extracted_name = playwright_result.get('product_name', 'Unknown')
+                        logger.info(f"✅ Playwright 재시도 성공 - 상품명: {extracted_name}")
+                        if extracted_name and extracted_name != "상품명 없음" and extracted_name != "Unknown":
+                            logger.info(f"✅ 상품명 추출 성공: {extracted_name}")
+                        return playwright_result
+                    except Exception as e:
+                        logger.error(f"❌ Playwright 재시도 실패: {str(e)}", exc_info=True)
+                        logger.warning("HTTP 크롤링 결과를 사용하지만, 에러 페이지이므로 데이터가 불완전할 수 있습니다.")
+                        # Playwright 재시도 실패 시 HTTP 크롤링 결과 계속 사용 (에러 페이지 정보 포함)
+                else:
+                    if not PLAYWRIGHT_AVAILABLE:
+                        logger.warning("⚠️ Playwright가 설치되지 않아 재시도할 수 없습니다. pip install playwright && playwright install 실행 필요")
+                    elif use_playwright:
+                        logger.info("이미 Playwright를 사용 중이므로 재시도하지 않습니다.")
             
             # 각 필드 추출 시도 (실패해도 기본값 사용)
             product_code = None
@@ -1529,6 +1597,10 @@ class Qoo10Crawler(ShopCrawlerMixin):
         if result and result != "상품명 없음":
             # 불필요한 공백 제거
             result = ' '.join(result.split())
+            # 특수 문자 정제: 대괄호 제거
+            result = re.sub(r'^\[.*?\]\s*', '', result)  # 앞쪽 대괄호 제거
+            result = re.sub(r'\s*\[.*?\]$', '', result)  # 뒤쪽 대괄호 제거
+            result = re.sub(r'\[.*?\]', '', result)  # 중간 대괄호 제거
             # 특수 문자 정제 (필요시)
             result = result.strip()
 
@@ -1726,7 +1798,9 @@ class Qoo10Crawler(ShopCrawlerMixin):
                     original_price = self._parse_price(original_text)
                     if original_price and original_price > 0:
                         # 판매가보다 높은지 확인 (정가는 보통 판매가보다 높음)
-                        if not price_data["sale_price"] or original_price > price_data["sale_price"]:
+                        # None 체크를 먼저 수행하여 타입 오류 방지
+                        sale_price = price_data.get("sale_price")
+                        if sale_price is None or original_price > sale_price:
                             price_data["original_price"] = original_price
                             break
         
@@ -1772,29 +1846,34 @@ class Qoo10Crawler(ShopCrawlerMixin):
                     price_data["qpoint_info"] = int(qpoint_match.group(1))
         
         # 할인율 계산 (정확도 향상)
-        if price_data["original_price"] and price_data["sale_price"]:
-            if price_data["original_price"] > price_data["sale_price"]:
-                discount = price_data["original_price"] - price_data["sale_price"]
-                price_data["discount_rate"] = int((discount / price_data["original_price"]) * 100)
-            else:
-                # 정가가 판매가보다 낮으면 잘못된 데이터
-                price_data["original_price"] = None
+        original_price = price_data.get("original_price")
+        sale_price = price_data.get("sale_price")
+        if original_price and sale_price and original_price > sale_price:
+            discount = original_price - sale_price
+            price_data["discount_rate"] = int((discount / original_price) * 100)
+        elif original_price and sale_price:
+            # 정가가 판매가보다 낮으면 잘못된 데이터
+            price_data["original_price"] = None
         
         # 가격 유효성 검증 및 필터링 (비정상적인 값 제거)
-        if price_data["sale_price"]:
+        sale_price = price_data.get("sale_price")
+        if sale_price is not None:
             # 합리적인 가격 범위 확인 (100엔 ~ 1,000,000엔)
-            if not (100 <= price_data["sale_price"] <= 1000000):
+            if not (100 <= sale_price <= 1000000):
                 # 비정상적인 값이면 null로 설정
                 price_data["sale_price"] = None
         
-        if price_data["original_price"]:
+        original_price = price_data.get("original_price")
+        if original_price is not None:
             # 합리적인 가격 범위 확인 (100엔 ~ 1,000,000엔)
-            if not (100 <= price_data["original_price"] <= 1000000):
+            if not (100 <= original_price <= 1000000):
                 # 비정상적인 값이면 null로 설정
                 price_data["original_price"] = None
-            # 정가가 판매가보다 낮으면 잘못된 데이터
-            if price_data["sale_price"] and price_data["original_price"] < price_data["sale_price"]:
-                price_data["original_price"] = None
+            else:
+                # 정가가 판매가보다 낮으면 잘못된 데이터
+                sale_price = price_data.get("sale_price")
+                if sale_price is not None and original_price < sale_price:
+                    price_data["original_price"] = None
         
         # 데이터 검증: 판매가가 없으면 오류
         if not price_data["sale_price"]:
@@ -2884,15 +2963,23 @@ class Qoo10Crawler(ShopCrawlerMixin):
                 f'{receive_pattern}[：:\s]*{max_pattern}?\s*(\d+)P', qpoint_text, re.I
             )
             if receive_match:
-                qpoint_info["receive_confirmation_points"] = int(receive_match.group(1))
+                try:
+                    points = int(receive_match.group(1))
+                    qpoint_info["receive_confirmation_points"] = points
+                except (ValueError, AttributeError):
+                    pass  # 숫자 변환 실패 시 무시
 
-            # 패턴 2: "受取確認.*(\d+)P" (더 유연한 패턴)
+            # 패턴 2: "受取確認.*(\d+)P" (더 유연한 패턴, 숫자만 매칭)
             if not qpoint_info["receive_confirmation_points"]:
                 receive_match2 = re.search(
-                    f'{receive_pattern}.*?(\d+)P', qpoint_text, re.I
+                    f'{receive_pattern}[：:\s]*.*?(\d+)\s*P', qpoint_text, re.I
                 )
                 if receive_match2:
-                    qpoint_info["receive_confirmation_points"] = int(receive_match2.group(1))
+                    try:
+                        points = int(receive_match2.group(1))
+                        qpoint_info["receive_confirmation_points"] = points
+                    except (ValueError, AttributeError):
+                        pass  # 숫자 변환 실패 시 무시
 
             # "レビュー作成: 最大20P" 또는 "리뷰작성: 최대20P" 패턴 찾기
             review_create_pattern = self._create_jp_kr_regex("レビュー作成", "리뷰작성")
@@ -2904,31 +2991,47 @@ class Qoo10Crawler(ShopCrawlerMixin):
                 re.I,
             )
             if review_match:
-                qpoint_info["review_points"] = int(review_match.group(1))
+                try:
+                    points = int(review_match.group(1))
+                    qpoint_info["review_points"] = points
+                except (ValueError, AttributeError):
+                    pass  # 숫자 변환 실패 시 무시
 
-            # 패턴 2: "レビュー作成.*(\d+)P" (더 유연한 패턴)
+            # 패턴 2: "レビュー作成.*(\d+)P" (더 유연한 패턴, 숫자만 매칭)
             if not qpoint_info["review_points"]:
                 review_match2 = re.search(
-                    f'{review_create_pattern}.*?(\d+)P', qpoint_text, re.I
+                    f'{review_create_pattern}[：:\s]*.*?(\d+)\s*P', qpoint_text, re.I
                 )
                 if review_match2:
-                    qpoint_info["review_points"] = int(review_match2.group(1))
+                    try:
+                        points = int(review_match2.group(1))
+                        qpoint_info["review_points"] = points
+                    except (ValueError, AttributeError):
+                        pass  # 숫자 변환 실패 시 무시
 
             # "最大(\d+)P" 또는 "최대(\d+)P" 패턴 찾기 (전체 최대 포인트)
-            max_match = re.search(f'{max_pattern}\s*(\d+)P', qpoint_text, re.I)
+            max_match = re.search(f'{max_pattern}\s*(\d+)\s*P', qpoint_text, re.I)
             if max_match:
-                qpoint_info["max_points"] = int(max_match.group(1))
+                try:
+                    points = int(max_match.group(1))
+                    qpoint_info["max_points"] = points
+                except (ValueError, AttributeError):
+                    pass  # 숫자 변환 실패 시 무시
 
             # "配送完了.*自動.*(\d+)P" 또는 "배송완료.*자동.*(\d+)P" 패턴 찾기 (자동 포인트)
             delivery_complete_pattern = self._create_jp_kr_regex("配送完了", "배송완료")
             auto_pattern = self._create_jp_kr_regex("自動", "자동")
             auto_match = re.search(
-                f'{delivery_complete_pattern}.*?{auto_pattern}.*?(\d+)P',
+                f'{delivery_complete_pattern}.*?{auto_pattern}.*?(\d+)\s*P',
                 qpoint_text,
                 re.I | re.DOTALL,
             )
             if auto_match:
-                qpoint_info["auto_points"] = int(auto_match.group(1))
+                try:
+                    points = int(auto_match.group(1))
+                    qpoint_info["auto_points"] = points
+                except (ValueError, AttributeError):
+                    pass  # 숫자 변환 실패 시 무시
 
         # 추가 시도: 페이지 전체 텍스트에서 Qポイント 정보 찾기
         if not any(qpoint_info.values()):
@@ -2938,20 +3041,32 @@ class Qoo10Crawler(ShopCrawlerMixin):
             max_pattern = self._create_jp_kr_regex("最大", "최대")
 
             receive_match = re.search(
-                f'{receive_pattern}.*?(\d+)P', all_text, re.I
+                f'{receive_pattern}[：:\s]*.*?(\d+)\s*P', all_text, re.I
             )
             if receive_match:
-                qpoint_info["receive_confirmation_points"] = int(receive_match.group(1))
+                try:
+                    points = int(receive_match.group(1))
+                    qpoint_info["receive_confirmation_points"] = points
+                except (ValueError, AttributeError):
+                    pass  # 숫자 변환 실패 시 무시
 
             review_match = re.search(
-                f'{review_create_pattern}.*?(\d+)P', all_text, re.I
+                f'{review_create_pattern}[：:\s]*.*?(\d+)\s*P', all_text, re.I
             )
             if review_match:
-                qpoint_info["review_points"] = int(review_match.group(1))
+                try:
+                    points = int(review_match.group(1))
+                    qpoint_info["review_points"] = points
+                except (ValueError, AttributeError):
+                    pass  # 숫자 변환 실패 시 무시
 
-            max_match = re.search(f'{max_pattern}\s*(\d+)P', all_text, re.I)
+            max_match = re.search(f'{max_pattern}\s*(\d+)\s*P', all_text, re.I)
             if max_match:
-                qpoint_info["max_points"] = int(max_match.group(1))
+                try:
+                    points = int(max_match.group(1))
+                    qpoint_info["max_points"] = points
+                except (ValueError, AttributeError):
+                    pass  # 숫자 변환 실패 시 무시
 
         # #region agent log
         _log_debug("debug-session", "run1", "I", "crawler.py:_extract_qpoint_info", "Qポイント 정보 추출 완료", {
@@ -3026,6 +3141,67 @@ class Qoo10Crawler(ShopCrawlerMixin):
         페이지 구조 및 모든 div class 추출 (최적화 버전)
         Qoo10 페이지의 모든 div class를 분석하여 각 요소의 의미를 파악
         """
+        # 에러 페이지 감지 (로깅 전에 수행)
+        is_error_page = False
+        error_indicators = []
+        if soup:
+            # 에러 페이지 클래스 확인
+            error_classes = soup.find_all(class_=re.compile(r'error|Error|ERROR|section_error'))
+            if error_classes:
+                is_error_page = True
+                error_indicators.append("error_class_found")
+            
+            # 에러 메시지 텍스트 확인
+            page_text = soup.get_text().lower() if soup else ""
+            error_keywords = ["エラー", "error", "ページが見つかりません", "not found", "404", "500", "アクセスできません"]
+            if any(keyword in page_text for keyword in error_keywords):
+                is_error_page = True
+                error_indicators.append("error_text_found")
+            
+            # HTML 길이 확인 (너무 짧으면 에러 페이지일 가능성)
+            html_str = str(soup)
+            if len(html_str) < 5000:  # 5KB 미만이면 의심
+                is_error_page = True
+                error_indicators.append("html_too_short")
+        
+        # #region agent log - H1, H3, H4 가설 검증
+        import json
+        from datetime import datetime
+        log_path = "/Users/chunghyo/qoo10-ai-agent/.cursor/debug.log"
+        try:
+            # 디렉토리가 없으면 생성
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "id": f"log_{int(datetime.now().timestamp() * 1000)}_extract_start",
+                    "timestamp": int(datetime.now().timestamp() * 1000),
+                    "location": "crawler.py:_extract_page_structure",
+                    "message": "페이지 구조 추출 시작",
+                    "data": {
+                        "soup_exists": soup is not None,
+                        "is_error_page": is_error_page,
+                        "error_indicators": error_indicators,
+                        "html_length": len(str(soup)) if soup else 0
+                    },
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "H1,H3,H4"
+                }, ensure_ascii=False) + "\n")
+        except: pass
+        # #endregion
+        
+        # 에러 페이지인 경우 빈 구조 반환
+        if is_error_page:
+            return {
+                "all_div_classes": [],
+                "class_frequency": {},
+                "key_elements": {},
+                "semantic_structure": {},
+                "is_error_page": True,
+                "error_indicators": error_indicators
+            }
+        
         structure = {
             "all_div_classes": [],
             "class_frequency": {},
@@ -3035,6 +3211,46 @@ class Qoo10Crawler(ShopCrawlerMixin):
         
         # 최적화: 한 번의 순회로 모든 정보 수집
         all_divs = soup.find_all('div', limit=1000)  # 최대 1000개로 제한
+        
+        # #region agent log - H1 가설 검증
+        try:
+            # 페이지 전체 구조 확인
+            all_elements = soup.find_all()
+            body_elements = soup.find_all('body')
+            html_length = len(str(soup)) if soup else 0
+            
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "id": f"log_{int(datetime.now().timestamp() * 1000)}_divs_found",
+                    "timestamp": int(datetime.now().timestamp() * 1000),
+                    "location": "crawler.py:_extract_page_structure",
+                    "message": "div 요소 개수 확인",
+                    "data": {
+                        "div_count": len(all_divs),
+                        "total_elements": len(all_elements),
+                        "body_elements": len(body_elements),
+                        "html_length": html_length,
+                        "sample_div_classes": [div.get('class', [])[:3] for div in all_divs[:5]] if all_divs else []
+                    },
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "H1"
+                }, ensure_ascii=False) + "\n")
+        except Exception as e:
+            try:
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({
+                        "id": f"log_{int(datetime.now().timestamp() * 1000)}_divs_found_error",
+                        "timestamp": int(datetime.now().timestamp() * 1000),
+                        "location": "crawler.py:_extract_page_structure",
+                        "message": "div 요소 개수 확인 중 오류",
+                        "data": {"error": str(e)},
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "H1"
+                    }, ensure_ascii=False) + "\n")
+            except: pass
+        # #endregion
         
         # 주요 요소별로 분류할 패턴 정의
         key_patterns = {
@@ -3130,6 +3346,28 @@ class Qoo10Crawler(ShopCrawlerMixin):
         
         # 고유한 class 목록 정리 (최대 500개로 제한)
         structure["all_div_classes"] = sorted(list(set(structure["all_div_classes"])))[:500]
+        
+        # #region agent log - H1, H3, H4 가설 검증
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "id": f"log_{int(datetime.now().timestamp() * 1000)}_extract_end",
+                    "timestamp": int(datetime.now().timestamp() * 1000),
+                    "location": "crawler.py:_extract_page_structure",
+                    "message": "페이지 구조 추출 완료",
+                    "data": {
+                        "total_classes": len(structure["all_div_classes"]),
+                        "key_elements_count": len(structure["key_elements"]),
+                        "semantic_structure_keys": list(structure["semantic_structure"].keys()),
+                        "key_elements_keys": list(structure["key_elements"].keys()),
+                        "semantic_structure_sample": {k: len(v) for k, v in structure["semantic_structure"].items()}
+                    },
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "H1,H3,H4"
+                }, ensure_ascii=False) + "\n")
+        except: pass
+        # #endregion
         
         return structure
     

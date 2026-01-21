@@ -127,7 +127,8 @@ class EmbeddingService:
     def _load_model(self):
         """모델 로드 (기본 모델 + 보완 모델)"""
         if not SENTENCE_TRANSFORMERS_AVAILABLE:
-            logger.error("sentence-transformers가 설치되지 않았습니다. pip install sentence-transformers 실행 필요")
+            logger.warning("sentence-transformers가 설치되지 않았습니다. 임베딩 기능을 사용할 수 없습니다. (선택적 기능)")
+            logger.info("임베딩 기능을 사용하려면: pip install sentence-transformers")
             raise ImportError("sentence-transformers 패키지가 필요합니다")
         
         # 기본 모델 로드

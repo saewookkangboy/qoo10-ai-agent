@@ -415,8 +415,11 @@ class CrawlerDatabase:
             conn.cursor_factory = RealDictCursor
         else:
             db_path = self._get_db_path()
-            conn = sqlite3.connect(db_path)
+            # SQLite 타임아웃 설정 (5초) - 동시 접근 시 대기
+            conn = sqlite3.connect(db_path, timeout=5.0)
             conn.row_factory = sqlite3.Row
+            # WAL 모드 활성화 (동시 읽기 성능 향상)
+            conn.execute("PRAGMA journal_mode=WAL")
         
         try:
             yield conn

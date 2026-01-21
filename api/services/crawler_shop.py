@@ -59,31 +59,44 @@ class ShopCrawlerMixin:
             page = await context.new_page()
 
             logger.debug(f"Loading shop page: {url}")
-            await page.goto(url, wait_until="networkidle", timeout=30000)
+            # networkidle 대신 load 사용 (더 안정적이고 빠름)
+            try:
+                await page.goto(url, wait_until="load", timeout=60000)
+            except PlaywrightTimeoutError:
+                # load 타임아웃 시 domcontentloaded로 재시도 (더 빠름)
+                logger.warning(f"Page load timeout, trying domcontentloaded...")
+                await page.goto(url, wait_until="domcontentloaded", timeout=30000)
 
             await asyncio.sleep(2)
 
-            # 지연 로딩된 콘텐츠까지 스크롤
-            await page.evaluate(
-                """
-                async () => {
-                    await new Promise((resolve) => {
-                        let totalHeight = 0;
-                        const distance = 100;
-                        const timer = setInterval(() => {
-                            const scrollHeight = document.body.scrollHeight;
-                            window.scrollBy(0, distance);
-                            totalHeight += distance;
+            # 지연 로딩된 콘텐츠까지 스크롤 (타임아웃 보호)
+            try:
+                await asyncio.wait_for(
+                    page.evaluate(
+                        """
+                        async () => {
+                            await new Promise((resolve) => {
+                                let totalHeight = 0;
+                                const distance = 100;
+                                const maxHeight = 10000;
+                                const timer = setInterval(() => {
+                                    const scrollHeight = document.body.scrollHeight;
+                                    window.scrollBy(0, distance);
+                                    totalHeight += distance;
 
-                            if (totalHeight >= scrollHeight || totalHeight > 10000) {
-                                clearInterval(timer);
-                                resolve();
-                            }
-                        }, 100);
-                    });
-                }
-                """
-            )
+                                    if (totalHeight >= scrollHeight || totalHeight > maxHeight) {
+                                        clearInterval(timer);
+                                        resolve();
+                                    }
+                                }, 100);
+                            });
+                        }
+                        """
+                    ),
+                    timeout=15.0  # 스크롤 최대 15초
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Scroll timeout, continuing with current content...")
 
             await asyncio.sleep(1)
 
