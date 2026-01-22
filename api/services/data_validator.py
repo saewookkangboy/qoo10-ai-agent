@@ -26,17 +26,20 @@ class DataValidator:
     
     def validate_crawler_vs_report(
         self,
-        product_data: Dict[str, Any],
-        analysis_result: Dict[str, Any],
-        checklist_result: Dict[str, Any],
+        product_data: Optional[Dict[str, Any]] = None,
+        shop_data: Optional[Dict[str, Any]] = None,
+        analysis_result: Dict[str, Any] = None,
+        checklist_result: Dict[str, Any] = None,
         api_data: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         크롤링 결과와 리포트 내용 일치 여부 검증 (강화된 버전)
         API 데이터가 있으면 우선적으로 사용하여 검증
+        product_data 또는 shop_data 중 하나를 제공해야 함
         
         Args:
-            product_data: 크롤러가 수집한 원본 데이터
+            product_data: 크롤러가 수집한 원본 상품 데이터 (선택사항)
+            shop_data: 크롤러가 수집한 원본 Shop 데이터 (선택사항)
             analysis_result: 분석 결과
             checklist_result: 체크리스트 평가 결과
             api_data: Qoo10 API로 조회한 데이터 (선택사항, 우선순위 높음)
@@ -44,20 +47,34 @@ class DataValidator:
         Returns:
             검증 결과 딕셔너리
         """
+        # product_data 또는 shop_data 중 하나는 필수
+        if not product_data and not shop_data:
+            logger.warning("product_data 또는 shop_data가 제공되지 않았습니다. 기본 검증 결과를 반환합니다.")
+            return {
+                "is_valid": False,
+                "validation_score": 0,
+                "mismatches": [],
+                "missing_items": [],
+                "corrected_fields": [],
+                "message": "데이터가 제공되지 않았습니다"
+            }
+        
         # API 데이터가 있으면 우선적으로 사용
-        reference_data = api_data if api_data else product_data
-        data_source = "qoo10_api" if api_data else product_data.get("crawled_with", "crawler")
+        reference_data = api_data if api_data else (product_data or shop_data)
+        data_source = "qoo10_api" if api_data else (product_data or shop_data).get("crawled_with", "crawler")
         
         # API 구조 기반 데이터 정규화 및 구조 검증
         structure_comparison = None
         if API_SCHEMA_AVAILABLE and Qoo10APISchema:
             try:
-                # 예상 구조와 비교
+                # 예상 구조와 비교 (product_data 또는 shop_data 사용)
                 expected_structure = Qoo10APISchema.get_expected_structure()
-                structure_comparison = Qoo10APISchema.compare_structures(
-                    product_data,
-                    expected_structure
-                )
+                data_for_comparison = product_data if product_data else shop_data
+                if data_for_comparison:
+                    structure_comparison = Qoo10APISchema.compare_structures(
+                        data_for_comparison,
+                        expected_structure
+                    )
                 
                 # 정규화된 데이터를 참조 데이터로 사용 (더 정확한 검증)
                 if not api_data:

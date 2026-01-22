@@ -1,6 +1,7 @@
 """
 챗봇 서비스
 분석 리포트에 대한 질문에 답변하는 AI 챗봇
+Gemini API를 사용합니다.
 """
 from typing import Dict, Any, Optional
 import os
@@ -9,13 +10,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-try:
-    from openai import OpenAI
-    OPENAI_AVAILABLE = True
-except ImportError:
-    OPENAI_AVAILABLE = False
-    logger.warning("OpenAI library not available. Chat service will use fallback responses.")
-
 # Gemini 서비스 임포트
 try:
     from .gemini_service import GeminiService
@@ -23,22 +17,14 @@ try:
 except ImportError:
     GEMINI_SERVICE_AVAILABLE = False
     GeminiService = None
+    logger.warning("Gemini service not available. Chat service will use fallback responses.")
 
 
 class ChatService:
     """챗봇 서비스 클래스"""
     
     def __init__(self):
-        self.openai_client = None
         self.gemini_service = None
-        
-        # OpenAI 초기화
-        if OPENAI_AVAILABLE:
-            api_key = os.getenv("OPENAI_API_KEY")
-            if api_key:
-                self.openai_client = OpenAI(api_key=api_key)
-            else:
-                logger.warning("OPENAI_API_KEY not set. Chat service will use fallback responses.")
         
         # Gemini 초기화
         if GEMINI_SERVICE_AVAILABLE and GeminiService:
@@ -46,6 +32,8 @@ class ChatService:
                 self.gemini_service = GeminiService()
                 if self.gemini_service.model:
                     logger.info("Gemini 서비스가 활성화되었습니다.")
+                else:
+                    logger.warning("GEMINI_API_KEY not set. Chat service will use fallback responses.")
             except Exception as e:
                 logger.warning(f"Gemini 서비스 초기화 실패: {str(e)}")
     
@@ -66,58 +54,10 @@ class ChatService:
         Returns:
             AI 응답 메시지
         """
-        # 우선순위: Gemini > OpenAI > Fallback
+        # Gemini 사용, 실패 시 Fallback
         if self.gemini_service and self.gemini_service.model and analysis_result:
             return await self._generate_gemini_response(message, analysis_result)
-        elif self.openai_client and analysis_result:
-            return await self._generate_openai_response(message, analysis_result)
         else:
-            return self._generate_fallback_response(message, analysis_result)
-    
-    async def _generate_openai_response(
-        self,
-        message: str,
-        analysis_result: Dict[str, Any]
-    ) -> str:
-        """OpenAI를 사용한 응답 생성"""
-        try:
-            # 분석 결과를 요약하여 컨텍스트로 사용
-            context = self._build_context(analysis_result)
-            
-            system_prompt = """당신은 Qoo10 상품 분석 리포트 전문가입니다. 
-사용자가 리포트에 대해 질문하면, 리포트 내용을 바탕으로 명확하고 실용적인 답변을 제공하세요.
-
-답변 시 다음을 고려하세요:
-1. 리포트의 구체적인 데이터와 점수를 참고하여 답변
-2. 실제로 적용 가능한 구체적인 액션 아이템 제시
-3. 우선순위가 높은 개선 사항부터 설명
-4. 한국어로 친절하고 전문적으로 답변
-5. 필요시 리포트의 특정 섹션을 언급
-
-답변은 대화 형식으로 자연스럽게 작성하세요."""
-
-            user_prompt = f"""다음은 분석 리포트의 요약입니다:
-
-{context}
-
-사용자 질문: {message}
-
-위 리포트 내용을 바탕으로 질문에 답변해주세요."""
-
-            response = self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",  # 또는 "gpt-3.5-turbo"로 변경 가능
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.7,
-                max_tokens=1000
-            )
-            
-            return response.choices[0].message.content.strip()
-            
-        except Exception as e:
-            logger.error(f"Error generating OpenAI response: {str(e)}")
             return self._generate_fallback_response(message, analysis_result)
     
     async def _generate_gemini_response(
@@ -159,16 +99,10 @@ class ChatService:
             if response:
                 return response.strip()
             else:
-                # Gemini 실패 시 OpenAI로 폴백
-                if self.openai_client:
-                    return await self._generate_openai_response(message, analysis_result)
                 return self._generate_fallback_response(message, analysis_result)
             
         except Exception as e:
             logger.error(f"Error generating Gemini response: {str(e)}")
-            # Gemini 실패 시 OpenAI로 폴백
-            if self.openai_client:
-                return await self._generate_openai_response(message, analysis_result)
             return self._generate_fallback_response(message, analysis_result)
     
     def _build_context(self, analysis_result: Dict[str, Any]) -> str:
@@ -228,7 +162,7 @@ class ChatService:
         message: str,
         analysis_result: Optional[Dict[str, Any]] = None
     ) -> str:
-        """OpenAI를 사용할 수 없을 때의 대체 응답"""
+        """Gemini를 사용할 수 없을 때의 대체 응답"""
         message_lower = message.lower()
         
         # 키워드 기반 응답
@@ -265,4 +199,4 @@ class ChatService:
             return "경쟁사 분석 정보는 리포트의 경쟁사 비교 섹션에서 확인하실 수 있습니다."
         
         else:
-            return "죄송합니다. 더 정확한 답변을 위해 OpenAI API 키가 필요합니다. 현재는 기본 응답만 제공됩니다. 리포트의 각 섹션을 직접 확인하시거나, 구체적인 질문을 해주시면 더 도움을 드릴 수 있습니다."
+            return "죄송합니다. 더 정확한 답변을 위해 Gemini API 키가 필요합니다. 현재는 기본 응답만 제공됩니다. 리포트의 각 섹션을 직접 확인하시거나, 구체적인 질문을 해주시면 더 도움을 드릴 수 있습니다."

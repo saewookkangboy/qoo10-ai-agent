@@ -35,8 +35,9 @@ DATABASE_URL=postgresql://user:password@host:port/database
 ALLOWED_ORIGINS=https://your-vercel-app.vercel.app
 
 # AI 서비스 API 키 (필요시)
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
+GEMINI_API_KEY=AIzaSy...  # 권장: 기본 AI 서비스
+ANTHROPIC_API_KEY=sk-ant-...  # 선택: Claude 서비스 사용 시
+# OPENAI_API_KEY는 더 이상 사용하지 않습니다. Gemini를 사용하세요.
 
 # 임베딩 서비스 설정
 EMBEDDING_MODEL=bge-m3

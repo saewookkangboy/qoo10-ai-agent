@@ -1,4 +1,4 @@
-import { ChecklistResult } from '../types'
+import { ChecklistResult, ShopData } from '../types'
 import HelpTooltip from './HelpTooltip'
 import ErrorReportButton from './ErrorReportButton'
 
@@ -6,11 +6,12 @@ interface ChecklistCardProps {
   checklist: ChecklistResult
   analysisId?: string
   productData?: any
+  shopData?: ShopData
 }
 
 const helpContent = '이 체크리스트는 Qoo10 큐텐 대학의 판매 준비 가이드를 기반으로 합니다.\n\n• 상품 등록: 상품명, 설명, 이미지 등 필수 정보를 확인합니다\n• 가격 설정: 판매가, 할인율, 쿠폰 할인 등을 점검합니다\n• 배송 정보: 배송비, 배송 방법, 통관 정보를 확인합니다\n• 프로모션: 샵 쿠폰, 상품 할인, 광고 활용 여부를 점검합니다\n\n완성도가 높을수록 검색 노출과 전환율이 향상됩니다.'
 
-function ChecklistCard({ checklist, analysisId, productData }: ChecklistCardProps) {
+function ChecklistCard({ checklist, analysisId, productData, shopData }: ChecklistCardProps) {
   const overallCompletion = checklist.overall_completion
 
   const getCompletionColor = (rate: number) => {
@@ -39,6 +40,26 @@ function ChecklistCard({ checklist, analysisId, productData }: ChecklistCardProp
   }
 
   const overallColors = getCompletionColor(overallCompletion)
+
+  // Shop 데이터에서 필드 값을 가져오는 헬퍼 함수
+  const _getFieldValueFromShopData = (itemId: string, shopData: ShopData | undefined): any => {
+    if (!shopData) return undefined
+    
+    const fieldMapping: Record<string, string> = {
+      'item_001': 'shop_name',
+      'item_002': 'shop_level',
+      'item_003': 'follower_count',
+      'item_004': 'product_count',
+      'item_005': 'categories',
+      'item_006': 'coupons',
+    }
+    
+    const fieldPath = fieldMapping[itemId]
+    if (!fieldPath) return undefined
+    
+    // 간단한 필드 접근 (중첩 필드는 나중에 확장 가능)
+    return (shopData as any)[fieldPath]
+  }
 
   // 체크리스트 항목 ID를 필드명으로 매핑하는 헬퍼 함수
   const _getFieldValueFromProductData = (itemId: string, productData: any): any => {
@@ -225,7 +246,13 @@ function ChecklistCard({ checklist, analysisId, productData }: ChecklistCardProp
                                 <ErrorReportButton
                                   analysisId={analysisId}
                                   fieldName={item.id}
-                                  crawlerValue={productData ? _getFieldValueFromProductData(item.id, productData) : undefined}
+                                  crawlerValue={
+                                    productData 
+                                      ? _getFieldValueFromProductData(item.id, productData)
+                                      : shopData
+                                      ? _getFieldValueFromShopData(item.id, shopData)
+                                      : undefined
+                                  }
                                   reportValue={item.status === 'completed' ? 'completed' : 'pending'}
                                 />
                               </div>

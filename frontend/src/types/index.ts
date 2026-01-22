@@ -20,12 +20,12 @@ export interface AnalysisResult {
   }
   result?: {
     product_analysis?: ProductAnalysis
-    shop_analysis?: any
+    shop_analysis?: ShopAnalysis
     recommendations: Recommendation[]
     checklist?: ChecklistResult
     competitor_analysis?: CompetitorAnalysis
     product_data?: ProductData
-    shop_data?: any
+    shop_data?: ShopData
     validation?: ValidationResult
   }
   error?: string
@@ -218,4 +218,96 @@ export interface ProductData {
     shipping_method: string | null
     estimated_delivery: string | null
   }
+}
+
+export interface ShopAnalysis {
+  overall_score: number
+  shop_info: {
+    score: number
+    shop_name: string
+    shop_level: string
+    follower_count: number
+    product_count: number
+    recommendations: string[]
+  }
+  product_analysis: {
+    score: number
+    total_products: number
+    average_price: number | null
+    price_range: {
+      min: number | null
+      max: number | null
+    }
+    recommendations: string[]
+  }
+  category_analysis: {
+    score: number
+    category_count: number
+    categories: string[]
+    recommendations: string[]
+  }
+  competitor_analysis: {
+    score: number
+    market_position: string
+    recommendations: string[]
+  }
+  level_analysis: {
+    score: number
+    current_level: string
+    next_level: string | null
+    requirements: string[]
+    recommendations: string[]
+  }
+  shop_specialty?: {
+    specialty_type: string
+    specialty_score: number
+    characteristics: string[]
+  }
+  product_type_analysis?: {
+    score: number
+    product_types: string[]
+    recommendations: string[]
+  }
+  customized_insights?: {
+    score: number
+    strengths: string[]
+    opportunities: string[]
+    recommendations: string[]
+    competitive_advantages: string[]
+  }
+  checklist_score?: number
+  checklist_contribution?: number
+}
+
+export interface ShopData {
+  url: string
+  shop_id: string
+  shop_name: string
+  shop_level: string
+  follower_count: number
+  product_count: number
+  categories: string[]
+  products: Array<{
+    name: string
+    price: number | null
+    url: string
+  }>
+  coupons?: Array<{
+    title: string
+    discount_rate: number
+    min_purchase: number
+  }>
+  page_structure?: {
+    all_div_classes: string[]
+    key_elements: Record<string, any>
+    semantic_structure: Record<string, any>
+    shop_specific_elements?: {
+      power_level?: string
+      follower_count?: number
+      product_count?: number
+      coupon_count?: number
+      category_count?: number
+    }
+  }
+  crawled_with: string
 }

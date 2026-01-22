@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ProductAnalysis, Recommendation, ChecklistResult, CompetitorAnalysis, ValidationResult } from '../types'
+import { ProductAnalysis, Recommendation, ChecklistResult, CompetitorAnalysis, ValidationResult, ProductData, ShopAnalysis, ShopData } from '../types'
 import ScoreCard from './ScoreCard'
 import RecommendationCard from './RecommendationCard'
 import ChecklistCard from './ChecklistCard'
@@ -13,19 +13,19 @@ import ChatBot from './ChatBot'
 interface AnalysisReportProps {
   result: {
     product_analysis?: ProductAnalysis
-    shop_analysis?: any
+    shop_analysis?: ShopAnalysis
     recommendations: Recommendation[]
     checklist?: ChecklistResult
     competitor_analysis?: CompetitorAnalysis
-    product_data?: any
-    shop_data?: any
+    product_data?: ProductData
+    shop_data?: ShopData
     validation?: ValidationResult
   }
   analysisId?: string
 }
 
 function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
-  const { product_analysis, shop_analysis, recommendations, checklist, competitor_analysis, product_data, shop_data, validation } = result
+  const { product_analysis, shop_analysis, recommendations, checklist, competitor_analysis, validation } = result
   const overallScore = product_analysis?.overall_score || shop_analysis?.overall_score || 0
   const [activeTab, setActiveTab] = useState<'recommendations' | 'checklist'>('recommendations')
   const [isValidationModalOpen, setIsValidationModalOpen] = useState(false)
@@ -80,7 +80,7 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
                 분석 리포트
               </h1>
               <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
-                상품 분석 결과 및 개선 제안
+                {product_analysis ? '상품 분석 결과 및 개선 제안' : shop_analysis ? '샵 분석 결과 및 개선 제안' : '분석 결과 및 개선 제안'}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -210,6 +210,32 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
           </div>
         )}
 
+        {/* Shop 분석 핵심 지표 카드 그리드 */}
+        {shop_analysis && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-4 sm:mb-6">
+            <ScoreCard
+              title="샵 정보"
+              score={shop_analysis.shop_info.score}
+              analysis={shop_analysis.shop_info}
+            />
+            <ScoreCard
+              title="상품 분석"
+              score={shop_analysis.product_analysis.score}
+              analysis={shop_analysis.product_analysis}
+            />
+            <ScoreCard
+              title="카테고리"
+              score={shop_analysis.category_analysis.score}
+              analysis={shop_analysis.category_analysis}
+            />
+            <ScoreCard
+              title="레벨 분석"
+              score={shop_analysis.level_analysis.score}
+              analysis={shop_analysis.level_analysis}
+            />
+          </div>
+        )}
+
         {/* 탭 기반 결과 섹션 */}
         <div className="glass-elevated dark:glass-elevated-dark rounded-2xl p-4 sm:p-6 glass-transition">
           {/* 탭 헤더 */}
@@ -331,6 +357,7 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
                   checklist={checklist} 
                   analysisId={analysisId}
                   productData={result.product_data}
+                  shopData={result.shop_data}
                 />
               </div>
             )}

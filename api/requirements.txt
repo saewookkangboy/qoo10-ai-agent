@@ -12,7 +12,7 @@ python-dotenv==1.0.0
 aiofiles==23.2.1
 defusedxml==0.7.1
 numpy==1.26.2
-openai==1.3.5
+# openai==1.3.5  # OpenAI 대신 Gemini 사용
 anthropic==0.7.7
 google-generativeai>=0.3.0
 psycopg2-binary>=2.9.11
@@ -108,17 +108,17 @@ scikit-learn>=1.3.0
 # AI 서비스 API 키 (선택)
 # ============================================================================
 #
-# OPENAI_API_KEY (선택)
-#   OpenAI API 키 (OpenAI 서비스 사용 시)
-#   예시: OPENAI_API_KEY=sk-...
+# GEMINI_API_KEY (권장)
+#   Google Gemini API 키 (Gemini 서비스 사용 시 필수)
+#   예시: GEMINI_API_KEY=AIzaSy...
+#   참고: OpenAI 대신 Gemini를 기본 AI 서비스로 사용합니다.
 #
 # ANTHROPIC_API_KEY (선택)
 #   Anthropic API 키 (Claude 서비스 사용 시)
 #   예시: ANTHROPIC_API_KEY=sk-ant-...
 #
-# GEMINI_API_KEY (선택)
-#   Google Gemini API 키 (Gemini 서비스 사용 시)
-#   예시: GEMINI_API_KEY=AIzaSy...
+# OPENAI_API_KEY (사용 안 함)
+#   OpenAI API 키는 더 이상 사용하지 않습니다. Gemini를 사용하세요.
 #
 # ============================================================================
 # 환경 변수 설정 예시 (.env 파일)
@@ -142,8 +142,8 @@ scikit-learn>=1.3.0
 # CRAWLER_DEBUG_LOG_PATH=.cursor/debug.log
 #
 # # AI 서비스 (필요시)
-# OPENAI_API_KEY=sk-...
-# ANTHROPIC_API_KEY=sk-ant-...
-# GEMINI_API_KEY=AIzaSy...
+# GEMINI_API_KEY=AIzaSy...  # 권장: 기본 AI 서비스
+# ANTHROPIC_API_KEY=sk-ant-...  # 선택: Claude 서비스 사용 시
+# # OPENAI_API_KEY는 더 이상 사용하지 않습니다.
 #
 # ============================================================================

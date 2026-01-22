@@ -61,11 +61,21 @@ class ShopCrawlerMixin:
             logger.debug(f"Loading shop page: {url}")
             # networkidle 대신 load 사용 (더 안정적이고 빠름)
             try:
-                await page.goto(url, wait_until="load", timeout=60000)
-            except PlaywrightTimeoutError:
+                await asyncio.wait_for(
+                    page.goto(url, wait_until="load", timeout=60000),
+                    timeout=65.0  # 전체 타임아웃을 65초로 설정 (page.goto의 60초보다 약간 길게)
+                )
+            except (PlaywrightTimeoutError, asyncio.TimeoutError):
                 # load 타임아웃 시 domcontentloaded로 재시도 (더 빠름)
                 logger.warning(f"Page load timeout, trying domcontentloaded...")
-                await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                try:
+                    await asyncio.wait_for(
+                        page.goto(url, wait_until="domcontentloaded", timeout=30000),
+                        timeout=35.0  # 전체 타임아웃을 35초로 설정
+                    )
+                except (PlaywrightTimeoutError, asyncio.TimeoutError):
+                    logger.warning(f"domcontentloaded also timeout, continuing with partial content...")
+                    # 타임아웃이 발생해도 부분 콘텐츠로 계속 진행
 
             await asyncio.sleep(2)
 
@@ -103,6 +113,14 @@ class ShopCrawlerMixin:
             html_content = await page.content()
             soup = BeautifulSoup(html_content, "lxml")
 
+            # 페이지 구조 추출 (상세 청킹)
+            page_structure = None
+            try:
+                page_structure = self._extract_shop_page_structure(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract shop page structure: {str(e)}")
+                page_structure = {}
+
             shop_data: Dict[str, Any] = {
                 "url": url,
                 "shop_id": self._extract_shop_id(url),
@@ -113,40 +131,44 @@ class ShopCrawlerMixin:
                 "categories": self._extract_shop_categories(soup),
                 "products": self._extract_shop_products(soup),
                 "coupons": self._extract_shop_coupons(soup),
+                "page_structure": page_structure,  # 페이지 구조 추가
                 "crawled_with": "playwright",
             }
 
-            # JS에서 직접 추출 가능한 데이터 보완
+            # JS에서 직접 추출 가능한 데이터 보완 (타임아웃 보호)
             try:
-                js_data = await page.evaluate(
-                    """
-                    () => {
-                        const data = {};
+                js_data = await asyncio.wait_for(
+                    page.evaluate(
+                        """
+                        () => {
+                            const data = {};
 
-                        const shopName = document.querySelector('h1') || document.querySelector('.shop-name');
-                        if (shopName) data.shop_name = shopName.textContent.trim();
+                            const shopName = document.querySelector('h1') || document.querySelector('.shop-name');
+                            if (shopName) data.shop_name = shopName.textContent.trim();
 
-                        const followerMatch = document.body.textContent.match(/フォロワー[_\s]*(\d{1,3}(?:,\d{3})*)/);
-                        if (followerMatch) {
-                            data.follower_count = parseInt(followerMatch[1].replace(/,/g, ''));
+                            const followerMatch = document.body.textContent.match(/フォロワー[_\s]*(\d{1,3}(?:,\d{3})*)/);
+                            if (followerMatch) {
+                                data.follower_count = parseInt(followerMatch[1].replace(/,/g, ''));
+                            }
+
+                            const productMatch = document.body.textContent.match(/全ての商品[_\s]*\((\d+)\)/);
+                            if (productMatch) {
+                                data.product_count = parseInt(productMatch[1]);
+                            }
+
+                            const powerMatch = document.body.textContent.match(/POWER[_\s]*(\d+)%/);
+                            if (powerMatch) {
+                                data.power_level = parseInt(powerMatch[1]);
+                            }
+
+                            const productItems = document.querySelectorAll('.item, .product-item, div[class*="item"]');
+                            data.product_items_count = productItems.length;
+
+                            return data;
                         }
-
-                        const productMatch = document.body.textContent.match(/全ての商品[_\s]*\((\d+)\)/);
-                        if (productMatch) {
-                            data.product_count = parseInt(productMatch[1]);
-                        }
-
-                        const powerMatch = document.body.textContent.match(/POWER[_\s]*(\d+)%/);
-                        if (powerMatch) {
-                            data.power_level = parseInt(powerMatch[1]);
-                        }
-
-                        const productItems = document.querySelectorAll('.item, .product-item, div[class*="item"]');
-                        data.product_items_count = productItems.length;
-
-                        return data;
-                    }
-                    """
+                        """
+                    ),
+                    timeout=10.0  # JS 실행 최대 10초
                 )
 
                 if js_data.get("shop_name") and not shop_data.get("shop_name"):
@@ -174,11 +196,26 @@ class ShopCrawlerMixin:
                 shop_data.get("shop_id", "N/A"),
             )
 
+            # 데이터베이스 저장 (선택적, 실패해도 크롤링은 계속)
             if hasattr(self.db, "save_crawled_shop"):
                 try:
-                    self.db.save_crawled_shop(shop_data)
+                    # 재시도 로직 추가 (database is locked 오류 방지)
+                    max_retries = 3
+                    retry_delay = 0.1
+                    for attempt in range(max_retries):
+                        try:
+                            self.db.save_crawled_shop(shop_data)
+                            break  # 성공하면 루프 종료
+                        except Exception as db_error:
+                            if "database is locked" in str(db_error).lower() and attempt < max_retries - 1:
+                                logger.debug(f"Database locked, retrying ({attempt + 1}/{max_retries})...")
+                                await asyncio.sleep(retry_delay * (2 ** attempt))  # 지수 백오프
+                                continue
+                            else:
+                                raise  # 다른 오류이거나 재시도 횟수 초과
                 except Exception as e:  # pragma: no cover - DB 오류는 크롤링에 치명적이지 않음
-                    logger.warning(f"Failed to save to database: {str(e)}")
+                    logger.warning(f"Failed to save shop data to database: {str(e)}")
+                    # DB 저장 실패해도 크롤링 결과는 반환
 
             return shop_data
 
@@ -223,25 +260,117 @@ class ShopCrawlerMixin:
             response.raise_for_status()
 
             soup = BeautifulSoup(response.text, "lxml")
+            
+            # 페이지 구조 추출 (상세 청킹)
+            page_structure = None
+            try:
+                page_structure = self._extract_shop_page_structure(soup)
+            except Exception as e:
+                logger.warning(f"Failed to extract shop page structure: {str(e)}")
+                page_structure = {}
+            
+            # 에러 페이지 감지 (제품 페이지와 동일한 로직)
+            is_error_page = False
+            error_indicators = []
+            
+            # HTML 길이 확인
+            if len(response.text) < 5000:
+                is_error_page = True
+                error_indicators.append("html_too_short")
+            
+            # 에러 관련 클래스 확인
+            error_classes = soup.select('.error, .error-page, .not-found, [class*="error"]')
+            if error_classes:
+                is_error_page = True
+                error_indicators.append("error_class_found")
+            
+            # 에러 텍스트 확인
+            error_texts = ["エラー", "エラーページ", "ページが見つかりません", "error", "not found", "404"]
+            page_text = soup.get_text().lower()
+            if any(error_text in page_text for error_text in error_texts):
+                is_error_page = True
+                error_indicators.append("error_text_found")
+            
+            # Shop 이름이 제대로 추출되지 않으면 에러 페이지로 간주
+            shop_name = self._extract_shop_name(soup)
+            if not shop_name or shop_name in ["Shop 이름 없음", "Unknown", "Qoo10"]:
+                is_error_page = True
+                error_indicators.append("shop_name_not_found")
+
+            # 에러 페이지가 감지되고 Playwright가 사용 가능하면 자동 재시도
+            if is_error_page:
+                logger.warning(f"⚠️ 에러 페이지 감지됨 (HTTP 크롤링) - 지표: {error_indicators}")
+                logger.warning(f"⚠️ HTML 길이: {len(response.text)} bytes, Playwright 사용 가능: {PLAYWRIGHT_AVAILABLE}, use_playwright: {use_playwright}")
+                
+                if PLAYWRIGHT_AVAILABLE and not use_playwright:
+                    logger.info("🔄 Playwright가 사용 가능합니다. Playwright로 자동 재시도합니다...")
+                    try:
+                        playwright_result = await self.crawl_shop_with_playwright(url)
+                        # Playwright 결과에 재시도 정보 추가
+                        playwright_result["_retry_info"] = {
+                            "original_method": "httpx",
+                            "retry_method": "playwright",
+                            "retry_reason": "error_page_detected",
+                            "error_indicators": error_indicators
+                        }
+                        extracted_name = playwright_result.get('shop_name', 'Unknown')
+                        logger.info(f"✅ Playwright 재시도 성공 - Shop명: {extracted_name}")
+                        if extracted_name and extracted_name != "Shop 이름 없음" and extracted_name != "Unknown":
+                            logger.info(f"✅ Shop명 추출 성공: {extracted_name}")
+                        return playwright_result
+                    except Exception as e:
+                        logger.error(f"❌ Playwright 재시도 실패: {str(e)}", exc_info=True)
+                        logger.warning("HTTP 크롤링 결과를 사용하지만, 에러 페이지이므로 데이터가 불완전할 수 있습니다.")
+                        # Playwright 재시도 실패 시 HTTP 크롤링 결과 계속 사용
+                else:
+                    if not PLAYWRIGHT_AVAILABLE:
+                        logger.warning("⚠️ Playwright가 설치되지 않아 재시도할 수 없습니다. pip install playwright && playwright install 실행 필요")
+                    elif use_playwright:
+                        logger.info("이미 Playwright를 사용 중이므로 재시도하지 않습니다.")
 
             shop_data: Dict[str, Any] = {
                 "url": url,
                 "shop_id": self._extract_shop_id(url),
-                "shop_name": self._extract_shop_name(soup),
+                "shop_name": shop_name,
                 "shop_level": self._extract_shop_level(soup),
                 "follower_count": self._extract_follower_count(soup),
                 "product_count": self._extract_product_count(soup),
                 "categories": self._extract_shop_categories(soup),
                 "products": self._extract_shop_products(soup),
                 "coupons": self._extract_shop_coupons(soup),
+                "page_structure": page_structure,  # 페이지 구조 추가
                 "crawled_with": "httpx",
             }
 
-            if hasattr(self.db, "save_crawled_shop"):
-                try:
-                    self.db.save_crawled_shop(shop_data)
-                except Exception:
-                    pass
+            # 데이터베이스 저장 (선택적, 실패해도 크롤링은 계속)
+            # 데이터베이스 저장 (선택적, 실패해도 크롤링은 계속)
+            # save_crawled_shop 메서드가 없을 수 있으므로 안전하게 처리
+            try:
+                if hasattr(self.db, "save_crawled_shop"):
+                    save_method = getattr(self.db, "save_crawled_shop", None)
+                    if callable(save_method):
+                        # 재시도 로직 추가 (database is locked 오류 방지)
+                        import time
+                        max_retries = 3
+                        retry_delay = 0.1
+                        for attempt in range(max_retries):
+                            try:
+                                save_method(shop_data)
+                                break  # 성공하면 루프 종료
+                            except Exception as db_error:
+                                error_str = str(db_error).lower()
+                                if ("database is locked" in error_str or "locked" in error_str) and attempt < max_retries - 1:
+                                    logger.debug(f"Database locked, retrying ({attempt + 1}/{max_retries})...")
+                                    time.sleep(retry_delay * (2 ** attempt))  # 지수 백오프
+                                    continue
+                                else:
+                                    raise  # 다른 오류이거나 재시도 횟수 초과
+            except AttributeError:
+                # save_crawled_shop 메서드가 없는 경우 (정상)
+                logger.debug("save_crawled_shop method not available, skipping database save")
+            except Exception as e:
+                logger.warning(f"Failed to save shop data to database: {str(e)}")
+                # DB 저장 실패해도 크롤링 결과는 반환
 
             return shop_data
 
@@ -774,3 +903,129 @@ class ShopCrawlerMixin:
                     )
 
         return coupons
+    
+    def _extract_shop_page_structure(self, soup: BeautifulSoup) -> Dict[str, Any]:
+        """
+        Shop 페이지 구조 상세 추출 (청킹)
+        Shop 페이지의 모든 영역을 분석하여 체크리스트 항목과 매칭 가능하도록 구조화
+        """
+        structure = {
+            "all_div_classes": [],
+            "class_frequency": {},
+            "key_elements": {},
+            "semantic_structure": {},
+            "shop_specific_elements": {}
+        }
+        
+        # Shop 페이지 특화 패턴 정의
+        shop_patterns = {
+            "shop_info": ["shop", "store", "seller", "vendor", "merchant", "ショップ"],
+            "product_list": ["product", "goods", "item", "商品", "item_list"],
+            "category_info": ["category", "cat", "カテゴリ", "カテゴリー"],
+            "follower_info": ["follower", "フォロワー", "follow"],
+            "coupon_info": ["coupon", "割引", "クーポン", "discount", "off"],
+            "power_level": ["power", "パワー", "level", "grade", "レベ"],
+            "shipping_info": ["shipping", "ship", "配送", "送料", "delivery"],
+            "review_info": ["review", "レビュー", "rating", "star", "comment"],
+        }
+        
+        # 의미 있는 구조 요소를 위한 태그 매핑 (Shop 전용)
+        shop_semantic_mapping = {
+            "shop_name_elements": ["shop-name", "shop_name", "shop-title", "h1"],
+            "shop_level_elements": ["power", "level", "grade", "パワー"],
+            "follower_elements": ["follower", "フォロワー"],
+            "product_count_elements": ["product-count", "商品数", "全ての商品"],
+            "category_elements": ["category", "カテゴリ", "cat"],
+            "coupon_elements": ["coupon", "クーポン", "割引", "discount"],
+            "product_item_elements": ["item", "product-item", "goods-item"],
+            "shipping_elements": ["shipping", "ship", "配送", "送料"],
+        }
+        
+        # 모든 div 요소 수집 (최대 2000개)
+        all_divs = soup.find_all('div', limit=2000)
+        
+        semantic_elements = {key: [] for key in shop_semantic_mapping.keys()}
+        seen_classes = set()
+        
+        # Shop 특화 요소 수집
+        shop_specific = {
+            "power_level": None,
+            "follower_count": None,
+            "product_count": None,
+            "coupon_count": 0,
+            "category_count": 0
+        }
+        
+        for div in all_divs:
+            classes = div.get('class', [])
+            if not isinstance(classes, list):
+                continue
+                
+            for cls in classes:
+                if not cls or cls in seen_classes:
+                    continue
+                    
+                seen_classes.add(cls)
+                structure["all_div_classes"].append(cls)
+                structure["class_frequency"][cls] = structure["class_frequency"].get(cls, 0) + 1
+                
+                cls_lower = cls.lower()
+                
+                # Shop 패턴 분류
+                for category, patterns in shop_patterns.items():
+                    if any(pattern in cls_lower for pattern in patterns):
+                        if category not in structure["key_elements"]:
+                            structure["key_elements"][category] = []
+                        structure["key_elements"][category].append({
+                            "class": cls,
+                            "frequency": structure["class_frequency"][cls]
+                        })
+                
+                # 의미 있는 구조 요소 분류
+                for semantic_key, keywords in shop_semantic_mapping.items():
+                    if any(keyword in cls_lower for keyword in keywords):
+                        semantic_elements[semantic_key].append(cls)
+        
+        # Shop 특화 데이터 추출
+        page_text = soup.get_text()
+        
+        # POWER 레벨 추출
+        power_match = re.search(r'POWER\s*(\d+)%', page_text, re.I)
+        if power_match:
+            shop_specific["power_level"] = int(power_match.group(1))
+        
+        # 팔로워 수 추출
+        follower_match = re.search(r'フォロワー[_\s]*(\d{1,3}(?:,\d{3})*)', page_text)
+        if follower_match:
+            shop_specific["follower_count"] = int(follower_match.group(1).replace(',', ''))
+        
+        # 상품 수 추출
+        product_match = re.search(r'全ての商品[_\s]*\((\d+)\)', page_text)
+        if product_match:
+            shop_specific["product_count"] = int(product_match.group(1))
+        
+        # 쿠폰 개수 추출
+        coupon_elements = soup.find_all(string=re.compile(r'割引|クーポン|off', re.I))
+        shop_specific["coupon_count"] = len(coupon_elements)
+        
+        # 카테고리 개수 추출
+        category_elements = soup.find_all(string=re.compile(r'カテゴリ|カテゴリー', re.I))
+        shop_specific["category_count"] = len(category_elements)
+        
+        # 중복 제거 및 빈도 계산
+        for key in semantic_elements:
+            class_counts = {}
+            for cls in semantic_elements[key]:
+                class_counts[cls] = class_counts.get(cls, 0) + 1
+            semantic_elements[key] = [
+                {"class": cls, "frequency": count}
+                for cls, count in sorted(class_counts.items(), key=lambda x: x[1], reverse=True)[:30]
+            ]
+        
+        structure["semantic_structure"] = semantic_elements
+        structure["shop_specific_elements"] = shop_specific
+        
+        # 고유한 class 목록 정리 (최대 1000개로 제한)
+        structure["all_div_classes"] = sorted(list(set(structure["all_div_classes"])))[:1000]
+        
+        return structure

@@ -1047,103 +1047,460 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
         
         elif url_type == "shop":
             # ========== 1단계: Shop 크롤링 (20%) ==========
+            crawl_start_time = time.time()
             try:
                 _update_progress(analysis_id, "crawling", 10, "Shop 페이지를 수집하는 중...")
-                logger.info(f"[{analysis_id}] Starting shop crawl...")
+                logger.info(f"[{analysis_id}] Starting shop crawl - URL: {url}")
+                
+                # URL 정규화 확인 (shop URL은 기본 정규화 사용)
+                normalized_url = normalize_qoo10_url(url)
+                logger.info(f"[{analysis_id}] Normalized URL: {normalized_url}")
+                
+                _update_progress(analysis_id, "crawling", 20, "페이지 데이터를 추출하는 중...")
                 shop_data = await crawler.crawl_shop(url)
                 
-                if not shop_data or not shop_data.get("shop_name"):
-                    raise Exception("Shop 데이터를 추출할 수 없습니다")
+                # 크롤링 데이터 검증 (더 유연하게)
+                if not shop_data:
+                    raise Exception("크롤링된 데이터가 없습니다")
                 
-                logger.info(f"[{analysis_id}] Shop crawl completed - Shop: {shop_data.get('shop_name', 'Unknown')}")
+                # Shop명이 없어도 계속 진행 (다른 필드로 대체 가능)
+                if not shop_data.get("shop_name"):
+                    logger.warning(f"[{analysis_id}] Shop name not found, continuing with other data")
+                
+                crawl_duration_ms = int((time.time() - crawl_start_time) * 1000)
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="crawling",
+                    status="success",
+                    duration_ms=crawl_duration_ms,
+                    metadata={
+                        "shop_name": shop_data.get("shop_name", "Unknown"),
+                        "shop_id": shop_data.get("shop_id", ""),
+                        "product_count": shop_data.get("product_count", 0)
+                    }
+                )
+                
+                logger.info(f"[{analysis_id}] Shop crawl completed - Shop: {shop_data.get('shop_name', 'Unknown')}, Duration: {crawl_duration_ms}ms")
             except Exception as e:
-                error_msg = f"Shop 크롤링 실패: {str(e)}"
+                crawl_duration_ms = int((time.time() - crawl_start_time) * 1000)
+                error_type = type(e).__name__
+                error_msg = f"Shop 크롤링 실패: {error_type} - {str(e)}"
                 logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="crawling",
+                    status="failure",
+                    duration_ms=crawl_duration_ms,
+                    error_message=error_msg
+                )
                 analysis_store[analysis_id]["status"] = "failed"
                 analysis_store[analysis_id]["error"] = error_msg
                 _update_progress(analysis_id, "failed", 0, error_msg)
                 return
             
             # ========== 2단계: Shop 분석 (50%) ==========
+            analysis_start_time = time.time()
             try:
-                _update_progress(analysis_id, "analyzing", 40, "Shop 데이터를 분석하는 중...")
+                _update_progress(analysis_id, "analyzing", 30, "Shop 데이터를 분석하는 중...")
                 logger.info(f"[{analysis_id}] Starting shop analysis...")
+                logger.debug(f"[{analysis_id}] Shop data summary - Name: {shop_data.get('shop_name', 'N/A')}, Level: {shop_data.get('shop_level', 'N/A')}, Products: {shop_data.get('product_count', 0)}")
+                logger.debug(f"[{analysis_id}] Page structure extracted: {bool(shop_data.get('page_structure'))}")
+                
                 shop_analyzer = ShopAnalyzer()
-                analysis_result = await shop_analyzer.analyze(shop_data)
-                logger.info(f"[{analysis_id}] Shop analysis completed")
+                # 초기 분석 (체크리스트 결과는 나중에 반영)
+                raw_analysis_result = await shop_analyzer.analyze(shop_data, checklist_result=None)
+                
+                # Gemini를 사용한 AI 분석 강화 (선택적)
+                try:
+                    from services.gemini_service import GeminiService
+                    gemini_service = GeminiService()
+                    if gemini_service.model:
+                        logger.info(f"[{analysis_id}] Enhancing shop analysis with Gemini AI...")
+                        # shop_data는 product_data 파라미터로 전달
+                        enhanced_result = await gemini_service.enhance_analysis_with_ai(
+                            product_data=shop_data,  # shop_data를 product_data로 전달
+                            analysis_result={"shop_analysis": raw_analysis_result}
+                        )
+                        # shop_analysis 구조 유지
+                        if "shop_analysis" in enhanced_result:
+                            analysis_result = enhanced_result
+                        else:
+                            analysis_result = {"shop_analysis": raw_analysis_result}
+                    else:
+                        analysis_result = {"shop_analysis": raw_analysis_result}
+                except Exception as e:
+                    logger.warning(f"[{analysis_id}] Gemini AI enhancement skipped: {str(e)}")
+                    # Gemini 실패해도 기본 분석 결과 사용
+                    analysis_result = {"shop_analysis": raw_analysis_result}
+                
+                # 분석 결과 검증 (더 유연하게)
+                if not analysis_result:
+                    logger.warning(f"[{analysis_id}] Analysis result is empty, creating default result")
+                    analysis_result = {
+                        "overall_score": 0,
+                        "shop_info": {},
+                        "product_analysis": {},
+                        "category_analysis": {},
+                        "competitor_analysis": {},
+                        "level_analysis": {},
+                        "shop_specialty": {},
+                        "product_type_analysis": {},
+                        "customized_insights": {}
+                    }
+                
+                # overall_score가 없으면 기본값 설정
+                if "overall_score" not in analysis_result:
+                    logger.warning(f"[{analysis_id}] Overall score not found, setting default to 0")
+                    analysis_result["overall_score"] = 0
+                
+                analysis_duration_ms = int((time.time() - analysis_start_time) * 1000)
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="analyzing",
+                    status="success",
+                    duration_ms=analysis_duration_ms,
+                    metadata={"overall_score": analysis_result.get("overall_score", 0)}
+                )
+                
+                logger.info(f"[{analysis_id}] Shop analysis completed - Score: {analysis_result.get('overall_score', 0)}")
             except Exception as e:
+                analysis_duration_ms = int((time.time() - analysis_start_time) * 1000)
                 error_msg = f"Shop 분석 실패: {str(e)}"
                 logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="analyzing",
+                    status="failure",
+                    duration_ms=analysis_duration_ms,
+                    error_message=error_msg
+                )
                 analysis_store[analysis_id]["status"] = "failed"
                 analysis_store[analysis_id]["error"] = error_msg
                 _update_progress(analysis_id, "failed", 0, error_msg)
                 return
             
             # ========== 3단계: 추천 생성 (80%) ==========
+            recommendations_start_time = time.time()
             try:
                 _update_progress(analysis_id, "generating_recommendations", 60, "개선 제안을 생성하는 중...")
                 logger.info(f"[{analysis_id}] Generating shop recommendations...")
+                
                 recommender = SalesEnhancementRecommender()
-                recommendations = await recommender.generate_shop_recommendations(
-                    shop_data,
-                    analysis_result
-                )
+                # 타임아웃 보호 추가 (최대 30초)
+                try:
+                    recommendations = await asyncio.wait_for(
+                        recommender.generate_shop_recommendations(
+                            shop_data,
+                            analysis_result
+                        ),
+                        timeout=30.0
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(f"[{analysis_id}] Shop recommendations generation timeout (30s), using empty list")
+                    recommendations = []
+                
+                # 추천 검증
                 if not isinstance(recommendations, list):
                     recommendations = []
+                
+                recommendations_duration_ms = int((time.time() - recommendations_start_time) * 1000)
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="generating_recommendations",
+                    status="success",
+                    duration_ms=recommendations_duration_ms,
+                    metadata={"recommendations_count": len(recommendations)}
+                )
+                
                 logger.info(f"[{analysis_id}] Shop recommendations generated - Count: {len(recommendations)}")
             except Exception as e:
-                logger.warning(f"[{analysis_id}] Shop recommendations generation failed: {str(e)}")
-                recommendations = []
+                recommendations_duration_ms = int((time.time() - recommendations_start_time) * 1000)
+                error_type = type(e).__name__
+                error_msg = f"추천 생성 실패: {error_type} - {str(e)}"
+                logger.warning(f"[{analysis_id}] {error_msg}", exc_info=True)
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="generating_recommendations",
+                    status="failure",
+                    duration_ms=recommendations_duration_ms,
+                    error_message=error_msg
+                )
+                recommendations = []  # 추천 실패해도 계속 진행
             
-            # ========== 4단계: 체크리스트 평가 (선택적) ==========
+            # ========== 4단계: 체크리스트 평가 (선택적, 빠르게) ==========
             checklist_result = None
+            checklist_start_time = time.time()
             try:
                 _update_progress(analysis_id, "evaluating_checklist", 75, "체크리스트를 평가하는 중...")
                 checklist_evaluator = ChecklistEvaluator()
+                # Shop 페이지 구조를 체크리스트 평가에 전달
+                page_structure = shop_data.get("page_structure")
                 checklist_result = await asyncio.wait_for(
                     checklist_evaluator.evaluate_checklist(
                         shop_data=shop_data,
-                        analysis_result=analysis_result
+                        analysis_result=analysis_result,
+                        page_structure=page_structure  # 페이지 구조 전달
                     ),
-                    timeout=5.0
+                    timeout=5.0  # 최대 5초로 제한
                 )
+                checklist_duration_ms = int((time.time() - checklist_start_time) * 1000)
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="evaluating_checklist",
+                    status="success",
+                    duration_ms=checklist_duration_ms,
+                    metadata={"completion_rate": checklist_result.get("overall_completion", 0) if checklist_result else 0}
+                )
+                logger.info(f"[{analysis_id}] Checklist evaluation completed - Completion: {checklist_result.get('overall_completion', 0) if checklist_result else 0}%")
+                
+                # 체크리스트 결과를 분석 점수에 반영 (재계산)
+                if checklist_result:
+                    logger.info(f"[{analysis_id}] Recalculating overall score with checklist results...")
+                    shop_analyzer = ShopAnalyzer()
+                    # 체크리스트 결과를 포함하여 재분석
+                    updated_analysis = await shop_analyzer.analyze(shop_data, checklist_result=checklist_result)
+                    # shop_analysis 구조 유지 (analysis_result가 이미 shop_analysis로 감싸져 있을 수 있음)
+                    if isinstance(analysis_result, dict) and "shop_analysis" in analysis_result:
+                        # 이미 shop_analysis로 감싸진 경우
+                        analysis_result["shop_analysis"] = updated_analysis
+                    elif isinstance(analysis_result, dict) and "overall_score" in analysis_result:
+                        # shop_analysis가 아닌 직접 분석 결과인 경우
+                        analysis_result = {"shop_analysis": updated_analysis}
+                    else:
+                        # 기본적으로 shop_analysis로 감싸기
+                        analysis_result = {"shop_analysis": updated_analysis}
+                    logger.info(f"[{analysis_id}] Overall score updated: {updated_analysis.get('overall_score', 0)} (checklist contribution: {updated_analysis.get('checklist_contribution', 0)})")
             except (asyncio.TimeoutError, Exception) as e:
+                checklist_duration_ms = int((time.time() - checklist_start_time) * 1000)
                 logger.warning(f"[{analysis_id}] Checklist evaluation skipped: {str(e)}")
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="evaluating_checklist",
+                    status="failure",
+                    duration_ms=checklist_duration_ms,
+                    error_message=str(e)
+                )
                 checklist_result = None
             
-            # ========== 5단계: 결과 저장 (100%) ==========
+            # ========== 5단계: 데이터 검증 및 동기화 (85%) ==========
+            validation_result = None
+            validation_start_time = time.time()
+            try:
+                _update_progress(analysis_id, "validating", 85, "데이터 일치 여부를 검증하고 동기화하는 중...")
+                logger.info(f"[{analysis_id}] Validating and syncing shop data consistency...")
+                
+                # Shop 데이터 검증 (product_data 대신 shop_data 사용)
+                try:
+                    validation_result = data_validator.validate_crawler_vs_report(
+                        shop_data=shop_data,
+                        analysis_result=analysis_result,
+                        checklist_result=checklist_result or {}
+                    )
+                except Exception as e:
+                    logger.warning(f"[{analysis_id}] Validation error: {str(e)}")
+                    validation_result = {
+                        "is_valid": False,
+                        "validation_score": 0,
+                        "mismatches": [],
+                        "missing_items": [],
+                        "corrected_fields": [],
+                        "message": f"Validation error: {str(e)}"
+                    }
+                
+                # 보정된 필드가 있으면 로그 기록
+                corrected_fields = validation_result.get("corrected_fields", [])
+                if corrected_fields:
+                    logger.info(f"[{analysis_id}] Corrected fields from shop data: {', '.join(corrected_fields)}")
+                
+                validation_duration_ms = int((time.time() - validation_start_time) * 1000)
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="validating",
+                    status="success",
+                    duration_ms=validation_duration_ms,
+                    metadata={
+                        "validation_score": validation_result.get("validation_score", 0),
+                        "is_valid": validation_result.get("is_valid", False),
+                        "mismatches_count": len(validation_result.get("mismatches", [])),
+                        "missing_items_count": len(validation_result.get("missing_items", [])),
+                        "corrected_fields_count": len(corrected_fields)
+                    }
+                )
+                logger.info(f"[{analysis_id}] Validation completed - Score: {validation_result.get('validation_score', 0)}")
+            except Exception as e:
+                validation_duration_ms = int((time.time() - validation_start_time) * 1000)
+                logger.warning(f"[{analysis_id}] Validation skipped: {str(e)}")
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="validating",
+                    status="failure",
+                    duration_ms=validation_duration_ms,
+                    error_message=str(e)
+                )
+                validation_result = None
+            
+            # ========== 6단계: 임베딩 저장 (선택적, 빠르게) ==========
+            try:
+                from services.embedding_integration import EmbeddingIntegration
+                embedding_integration = EmbeddingIntegration(db=crawler.db)
+                # Shop 데이터의 주요 텍스트 필드 저장
+                if shop_data.get("shop_name"):
+                    embedding_integration.save_crawled_texts(
+                        shop_data={"shop_name": shop_data.get("shop_name")},
+                        url=url,
+                        auto_learn=True
+                    )
+                logger.debug(f"[{analysis_id}] Embedding saved for shop data")
+            except Exception as e:
+                logger.debug(f"[{analysis_id}] Embedding save skipped: {str(e)}")
+            
+            # ========== 7단계: 최종화 및 결과 저장 (100%) ==========
+            finalizing_start_time = time.time()
             try:
                 _update_progress(analysis_id, "finalizing", 90, "결과를 정리하는 중...")
+                logger.info(f"[{analysis_id}] Finalizing shop analysis...")
+                
+                # 최종 결과 구성 (제품 페이지와 동일한 구조)
+                # analysis_result가 이미 shop_analysis로 감싸져 있을 수 있으므로 확인
+                if isinstance(analysis_result, dict) and "shop_analysis" in analysis_result:
+                    # 이미 shop_analysis로 감싸진 경우
+                    shop_analysis_data = analysis_result["shop_analysis"]
+                elif isinstance(analysis_result, dict) and "overall_score" in analysis_result:
+                    # 직접 분석 결과인 경우
+                    shop_analysis_data = analysis_result
+                else:
+                    # 기본값
+                    shop_analysis_data = analysis_result if analysis_result else {}
+                
                 final_result = {
-                    "shop_analysis": analysis_result,
+                    "shop_analysis": shop_analysis_data,  # 올바른 분석 결과 사용
                     "recommendations": recommendations,
                     "checklist": checklist_result,
-                    "shop_data": shop_data
+                    "shop_data": shop_data,
+                    "validation": validation_result
                 }
-                analysis_store[analysis_id]["result"] = final_result
-                analysis_store[analysis_id]["status"] = "completed"
-                _update_progress(analysis_id, "completed", 100, "분석이 완료되었습니다.")
                 
-                logger.info(f"[{analysis_id}] Shop analysis completed successfully")
+                # analysis_store 업데이트 (안전하게)
+                if analysis_id in analysis_store:
+                    analysis_store[analysis_id]["result"] = final_result
+                    analysis_store[analysis_id]["status"] = "completed"
+                    _update_progress(analysis_id, "completed", 100, "분석이 완료되었습니다.")
+                    store_updated = True
+                else:
+                    logger.error(f"[{analysis_id}] Analysis store entry not found during finalization")
+                    store_updated = False
                 
-                # 히스토리 저장은 비동기로
+                finalizing_duration_ms = int((time.time() - finalizing_start_time) * 1000)
+                
+                # 파이프라인 모니터링 기록
+                try:
+                    pipeline_monitor.record_stage(
+                        analysis_id=analysis_id,
+                        url=url,
+                        url_type=url_type,
+                        stage="finalizing",
+                        status="success" if store_updated else "failure",
+                        duration_ms=finalizing_duration_ms
+                    )
+                    logger.debug(f"[{analysis_id}] Pipeline monitor recorded")
+                except Exception as e:
+                    logger.warning(f"[{analysis_id}] Failed to record finalizing stage: {str(e)}")
+                
+                # 완료 로그 출력
+                try:
+                    # shop_analysis_data에서 점수 추출
+                    score = shop_analysis_data.get('overall_score', 0) if shop_analysis_data else 0
+                    logger.info(f"[{analysis_id}] ✅ Shop analysis completed successfully - Score: {score}, Store updated: {store_updated}")
+                except Exception as e:
+                    logger.error(f"[{analysis_id}] Failed to log completion: {str(e)}")
+                    logger.info(f"[{analysis_id}] Shop analysis finalization phase completed (store_updated: {store_updated})")
+                
+                # 히스토리 저장 (비동기)
                 try:
                     loop = asyncio.get_running_loop()
+                    score = shop_analysis_data.get("overall_score", 0) if shop_analysis_data else 0
                     loop.create_task(_save_history_and_notify_async(
                         analysis_id,
                         url,
                         url_type,
                         final_result,
-                        analysis_result.get("overall_score", 0)
+                        score
                     ))
+                    logger.debug(f"[{analysis_id}] History save task scheduled")
                 except Exception as e:
                     logger.warning(f"[{analysis_id}] Failed to schedule history save: {str(e)}")
+                
+                # 최종 확인: store가 업데이트되지 않았다면 경고
+                if not store_updated:
+                    logger.error(f"[{analysis_id}] ⚠️ WARNING: Store was not updated! Analysis may appear as failed.")
+                    # 한 번 더 시도
+                    try:
+                        if analysis_id in analysis_store:
+                            analysis_store[analysis_id]["status"] = "completed"
+                            analysis_store[analysis_id]["result"] = final_result
+                            logger.info(f"[{analysis_id}] Retry: Store update succeeded")
+                    except:
+                        logger.error(f"[{analysis_id}] ❌ Retry also failed")
             except Exception as e:
-                error_msg = f"결과 저장 실패: {str(e)}"
+                finalizing_duration_ms = int((time.time() - finalizing_start_time) * 1000)
+                error_type = type(e).__name__
+                error_msg = f"최종화 실패: {error_type} - {str(e)}"
                 logger.error(f"[{analysis_id}] {error_msg}", exc_info=True)
-                analysis_store[analysis_id]["status"] = "failed"
-                analysis_store[analysis_id]["error"] = error_msg
-                _update_progress(analysis_id, "failed", 0, error_msg)
+                
+                # 부분 결과라도 저장 시도
+                try:
+                    # analysis_result에서 shop_analysis 추출
+                    partial_shop_analysis = {}
+                    if 'analysis_result' in locals() and analysis_result:
+                        if isinstance(analysis_result, dict) and "shop_analysis" in analysis_result:
+                            partial_shop_analysis = analysis_result["shop_analysis"]
+                        elif isinstance(analysis_result, dict) and "overall_score" in analysis_result:
+                            partial_shop_analysis = analysis_result
+                    
+                    partial_result = {
+                        "shop_analysis": partial_shop_analysis,
+                        "recommendations": recommendations if 'recommendations' in locals() else [],
+                        "checklist": checklist_result if 'checklist_result' in locals() else None,
+                        "shop_data": shop_data if 'shop_data' in locals() else {},
+                        "validation": validation_result if 'validation_result' in locals() else None,
+                        "warning": error_msg
+                    }
+                    if analysis_id in analysis_store:
+                        analysis_store[analysis_id]["result"] = partial_result
+                        analysis_store[analysis_id]["status"] = "completed"
+                        _update_progress(analysis_id, "completed", 100, f"분석 완료 (일부 오류: {error_msg})")
+                except Exception as save_error:
+                    logger.error(f"[{analysis_id}] Failed to save partial result: {str(save_error)}")
+                
+                pipeline_monitor.record_stage(
+                    analysis_id=analysis_id,
+                    url=url,
+                    url_type=url_type,
+                    stage="finalizing",
+                    status="failure",
+                    duration_ms=finalizing_duration_ms,
+                    error_message=error_msg
+                )
         
         else:
             error_msg = f"알 수 없는 URL 타입: {url_type}"

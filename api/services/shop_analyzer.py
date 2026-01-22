@@ -13,12 +13,17 @@ class ShopAnalyzer:
     def __init__(self):
         pass
     
-    async def analyze(self, shop_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def analyze(
+        self, 
+        shop_data: Dict[str, Any],
+        checklist_result: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """
         Shop 데이터 종합 분석 (Shop 특수성 고려)
         
         Args:
             shop_data: 크롤러에서 수집한 Shop 데이터
+            checklist_result: 체크리스트 평가 결과 (선택적)
             
         Returns:
             분석 결과 딕셔너리
@@ -38,8 +43,12 @@ class ShopAnalyzer:
             "customized_insights": self._generate_customized_insights(shop_data, shop_specialty)  # 독자적 인사이트
         }
         
-        # Shop 특수성을 반영한 종합 점수 계산
-        analysis_result["overall_score"] = self._calculate_overall_score(analysis_result, shop_specialty)
+        # Shop 특수성 및 체크리스트 결과를 반영한 종합 점수 계산
+        analysis_result["overall_score"] = self._calculate_overall_score(
+            analysis_result, 
+            shop_specialty,
+            checklist_result
+        )
         
         return analysis_result
     
@@ -642,11 +651,16 @@ class ShopAnalyzer:
         
         return insights
     
-    def _calculate_overall_score(self, analysis_result: Dict[str, Any], shop_specialty: Dict[str, Any]) -> int:
-        """종합 점수 계산 (Shop 특수성 반영)"""
+    def _calculate_overall_score(
+        self, 
+        analysis_result: Dict[str, Any], 
+        shop_specialty: Dict[str, Any],
+        checklist_result: Optional[Dict[str, Any]] = None
+    ) -> int:
+        """종합 점수 계산 (Shop 특수성 및 체크리스트 결과 반영)"""
         weights = {
-            "shop_info": 0.25,
-            "product_analysis": 0.25,
+            "shop_info": 0.20,
+            "product_analysis": 0.20,
             "category_analysis": 0.10,
             "competitor_analysis": 0.10,
             "level_analysis": 0.10,
@@ -666,5 +680,15 @@ class ShopAnalyzer:
             overall += 5  # 브랜드 샵 보너스
         if shop_specialty.get("product_lineup_type") == "specialized":
             overall += 5  # 특화 제품 라인업 보너스
+        
+        # 체크리스트 결과 반영 (10% 가중치)
+        if checklist_result:
+            completion_rate = checklist_result.get("overall_completion", 0)
+            if isinstance(completion_rate, (int, float)):
+                checklist_score = completion_rate * 0.10  # 체크리스트 완성도 10% 반영
+                overall += checklist_score
+                # 체크리스트 결과를 analysis_result에 저장
+                analysis_result["checklist_score"] = completion_rate
+                analysis_result["checklist_contribution"] = checklist_score
         
         return min(100, int(overall))
