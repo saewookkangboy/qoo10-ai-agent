@@ -3,9 +3,15 @@
 """
 import asyncio
 import json
+import os
 import sys
 from typing import Dict, Any, List
 from datetime import datetime
+
+_API_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "api")
+sys.path.insert(0, _API_DIR)
+_TESTS_RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "results")
+os.makedirs(_TESTS_RESULTS_DIR, exist_ok=True)
 
 # 로깅 설정
 LOG_PATH = "/Users/chunghyo/qoo10-ai-agent/.cursor/debug.log"
@@ -269,7 +275,8 @@ async def main():
         })
         
         # 리포트를 파일로 저장
-        with open("test_analysis_result.json", "w", encoding="utf-8") as f:
+        result_path = os.path.join(_TESTS_RESULTS_DIR, "test_analysis_result.json")
+        with open(result_path, "w", encoding="utf-8") as f:
             json.dump({
                 "product_data": product_data,
                 "analysis_result": analysis_result,
@@ -278,7 +285,7 @@ async def main():
                 "mismatched_items": mismatched_items
             }, f, ensure_ascii=False, indent=2)
         
-        print(f"\n💾 결과가 'test_analysis_result.json'에 저장되었습니다.")
+        print(f"\n💾 결과가 '{result_path}'에 저장되었습니다.")
         
     except Exception as e:
         import traceback

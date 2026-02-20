@@ -11,7 +11,10 @@ import sys
 import os
 from typing import Dict, Any, Optional
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_API_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "api")
+sys.path.insert(0, _API_DIR)
+_TESTS_RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "results")
+os.makedirs(_TESTS_RESULTS_DIR, exist_ok=True)
 
 from services.crawler import Qoo10Crawler
 from services.analyzer import ProductAnalyzer
@@ -464,7 +467,7 @@ async def main():
                 "images_count": len((pd.get("images") or {}).get("detail_images", [])),
             }
 
-        out_path = "test_data_pipeline_full_result.json"
+        out_path = os.path.join(_TESTS_RESULTS_DIR, "test_data_pipeline_full_result.json")
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(result_export, f, ensure_ascii=False, indent=2)
 

@@ -5,8 +5,11 @@ These tests use 작은 HTML 조각으로 `_extract_price` 와 `_extract_qpoint_i
 """
 from __future__ import annotations
 
+import sys
+import os
 from typing import Any
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "api"))
 from bs4 import BeautifulSoup
 
 from services.crawler import Qoo10Crawler

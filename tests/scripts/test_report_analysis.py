@@ -3,6 +3,10 @@
 """
 import asyncio
 import json
+import sys
+import os
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "api"))
 from services.crawler import Qoo10Crawler
 from services.analyzer import ProductAnalyzer
 from services.checklist_evaluator import ChecklistEvaluator

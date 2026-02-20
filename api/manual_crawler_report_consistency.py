@@ -15,6 +15,9 @@ from pathlib import Path
 _default_log_path = Path(__file__).resolve().parents[1].parent / ".cursor" / "debug.log"
 LOG_PATH = Path(os.getenv("CRAWLER_DEBUG_LOG_PATH", str(_default_log_path)))
 LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+_TESTS_RESULTS_DIR = Path(__file__).resolve().parents[1] / "tests" / "results"
+_TESTS_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 def log_debug(session_id: str, run_id: str, hypothesis_id: str, location: str, message: str, data: Dict[str, Any] = None):
     """디버그 로그 작성"""
     try:
@@ -368,10 +371,11 @@ async def main():
             "inconsistencies": inconsistencies
         }
         
-        with open("test_consistency_result.json", "w", encoding="utf-8") as f:
+        result_path = _TESTS_RESULTS_DIR / "test_consistency_result.json"
+        with open(result_path, "w", encoding="utf-8") as f:
             json.dump(result_data, f, ensure_ascii=False, indent=2)
         
-        print(f"💾 상세 결과가 'test_consistency_result.json'에 저장되었습니다.")
+        print(f"💾 상세 결과가 '{result_path}'에 저장되었습니다.")
         
     except Exception as e:
         import traceback

@@ -4,6 +4,12 @@
 """
 import asyncio
 import json
+import os
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "api"))
+_TESTS_RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "results")
+os.makedirs(_TESTS_RESULTS_DIR, exist_ok=True)
+
 from services.crawler import Qoo10Crawler
 from services.analyzer import ProductAnalyzer
 from services.checklist_evaluator import ChecklistEvaluator
@@ -98,13 +104,14 @@ async def main():
             "priority_fields": priority_fields
         }
         
-        with open("test_data_pipeline_result.json", "w", encoding="utf-8") as f:
+        result_path = os.path.join(_TESTS_RESULTS_DIR, "test_data_pipeline_result.json")
+        with open(result_path, "w", encoding="utf-8") as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
         
         print("\n" + "=" * 80)
         print("테스트 완료!")
         print("=" * 80)
-        print("\n결과 파일: test_data_pipeline_result.json")
+        print(f"\n결과 파일: {result_path}")
         
     except Exception as e:
         print(f"\n오류 발생: {str(e)}")

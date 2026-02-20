@@ -36,11 +36,8 @@ qoo10-ai-agent/
 │   │   ├── Crawl-Agent.md
 │   │   ├── Analysis-Agent.md
 │   │   └── ... (Recommendation, Checklist, Validation, Report-Output)
+│   ├── archive/              # 서비스 비필수 문서 (PRD, 명세, 테스트·진단 리포트 등)
 │   └── ...
-├── docs/                      # 문서
-│   ├── PRD.md                # 제품 요구사항 문서
-│   ├── 기능명세서.md         # 기능 명세서
-│   └── 아키텍처.md           # 시스템 아키텍처
 ├── api/                      # FastAPI 백엔드
 │   ├── main.py               # FastAPI 애플리케이션
 │   ├── routes/               # API 라우트

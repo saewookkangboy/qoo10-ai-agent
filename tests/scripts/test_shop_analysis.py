@@ -9,7 +9,7 @@ import os
 import pytest
 
 # API 디렉토리를 경로에 추가
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'api'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "api"))
 
 from services.crawler import Qoo10Crawler
 from services.shop_analyzer import ShopAnalyzer

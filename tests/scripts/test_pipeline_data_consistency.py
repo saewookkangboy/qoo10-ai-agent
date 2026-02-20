@@ -4,7 +4,13 @@
 """
 import asyncio
 import json
+import os
+import sys
 from typing import Dict, Any, List
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "api"))
+_TESTS_RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "results")
+os.makedirs(_TESTS_RESULTS_DIR, exist_ok=True)
 from services.crawler import Qoo10Crawler
 from services.analyzer import ProductAnalyzer
 from services.checklist_evaluator import ChecklistEvaluator
@@ -564,14 +570,14 @@ class PipelineConsistencyTester:
             
             # 8. 결과 저장
             print("\n[7단계] 결과 저장 중...")
-            output_file = "test_pipeline_consistency_result.json"
+            output_file = os.path.join(_TESTS_RESULTS_DIR, "test_pipeline_consistency_result.json")
             with open(output_file, "w", encoding="utf-8") as f:
                 json.dump(results, f, ensure_ascii=False, indent=2)
             
             print(f"  ✓ 결과 저장 완료: {output_file}")
             
             # 리포트도 저장
-            report_file = "test_pipeline_report.md"
+            report_file = os.path.join(_TESTS_RESULTS_DIR, "test_pipeline_report.md")
             with open(report_file, "w", encoding="utf-8") as f:
                 f.write(report_content)
             
