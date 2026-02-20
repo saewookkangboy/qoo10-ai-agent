@@ -38,9 +38,50 @@ class SalesEnhancementRecommender:
             logger.warning("AI 서비스 초기화 실패: %s", str(e))
     
     def _load_manual_knowledge(self) -> Dict[str, Any]:
-        """메뉴얼 지식 로드"""
-        # 실제로는 메뉴얼 파일을 읽어서 로드
-        # 여기서는 하드코딩된 지식 사용
+        """메뉴얼 지식 로드: doc/Qoo10_큐텐대학_한국어_메뉴얼.md 있으면 사용, 없으면 기본 지식"""
+        try:
+            from pathlib import Path
+            for base in (Path(__file__).resolve().parent.parent.parent, Path.cwd(), Path.cwd().parent):
+                p = base / "doc" / "Qoo10_큐텐대학_한국어_메뉴얼.md"
+                if p.is_file():
+                    text = p.read_text(encoding="utf-8")
+                    return self._parse_manual_for_knowledge(text)
+                p = base / "Qoo10_큐텐대학_한국어_메뉴얼.md"
+                if p.is_file():
+                    text = p.read_text(encoding="utf-8")
+                    return self._parse_manual_for_knowledge(text)
+        except Exception as e:
+            logger.debug("메뉴얼 파일 로드 스킵: %s", e)
+        return self._default_manual_knowledge()
+
+    def _parse_manual_for_knowledge(self, text: str) -> Dict[str, Any]:
+        """메뉴얼 마크다운에서 섹션·항목 추출해 지식 구조로 변환"""
+        import re
+        sections = []
+        for m in re.finditer(r"^##\s+(.+?)$", text, re.MULTILINE):
+            sections.append(m.group(1).strip())
+        # #### 제목 또는 ** 제목
+        items = []
+        for m in re.finditer(r"^####\s+(.+?)$", text, re.MULTILINE):
+            items.append(m.group(1).strip())
+        return {
+            "seo_tips": [
+                "상품명에 인기 키워드 포함",
+                "검색어 필드 활용",
+                "카테고리 및 브랜드 등록"
+            ],
+            "advertising_types": [
+                {"name": "파워랭크업", "description": "검색형 광고 (200엔부터)", "min_budget": 200},
+                {"name": "스마트세일즈", "description": "알고리즘 기반 자동 노출", "min_budget": 500},
+                {"name": "플러스 전시", "description": "전시형 광고", "min_budget": 300}
+            ],
+            "promotion_tips": ["샵 쿠폰 설정", "상품 할인 전략", "샘플마켓 참가 (상품 수량 10개 이상)"],
+            "manual_sections": sections,
+            "manual_items": items[:80],
+        }
+
+    def _default_manual_knowledge(self) -> Dict[str, Any]:
+        """기본 메뉴얼 지식 (파일 없을 때)"""
         return {
             "seo_tips": [
                 "상품명에 인기 키워드 포함",
@@ -70,7 +111,7 @@ class SalesEnhancementRecommender:
                 "샘플마켓 참가 (상품 수량 10개 이상)"
             ]
         }
-    
+
     async def generate_recommendations(
         self,
         product_data: Dict[str, Any],
@@ -133,10 +174,16 @@ class SalesEnhancementRecommender:
                 seen_titles.add(title)
                 unique_recommendations.append(rec)
         
-        # 우선순위 정렬
+        # 우선순위 정렬 (medium-low 등 복합값은 medium으로 처리)
+        _priority_order = {"high": 3, "medium": 2, "low": 1}
+
+        def _priority_key(rec: Dict[str, Any]) -> int:
+            p = (rec.get("priority") or "medium").lower()
+            return _priority_order.get(p, _priority_order.get(p.split("-")[0], 2))
+
         unique_recommendations = sorted(
             unique_recommendations,
-            key=lambda x: {"high": 3, "medium": 2, "low": 1}[x.get("priority", "medium")],
+            key=_priority_key,
             reverse=True
         )
         
@@ -169,6 +216,7 @@ class SalesEnhancementRecommender:
             
             recommendations.append({
                 "id": f"rec_seo_001",
+                "element_id": "product_info",
                 "category": "SEO",
                 "priority": "high",
                 "title": "상품명에 인기 키워드 추가",
@@ -253,6 +301,7 @@ class SalesEnhancementRecommender:
             
             recommendations.append({
                 "id": "rec_adv_001",
+                "element_id": "price_info",
                 "category": "광고",
                 "priority": "high",
                 "title": "파워랭크업 광고 시작",
@@ -289,6 +338,7 @@ class SalesEnhancementRecommender:
             
             recommendations.append({
                 "id": "rec_adv_002",
+                "element_id": "image_info",
                 "category": "광고",
                 "priority": "medium",
                 "title": "스마트세일즈 광고 활용",
@@ -363,6 +413,7 @@ class SalesEnhancementRecommender:
             
             recommendations.append({
                 "id": "rec_promo_002",
+                "element_id": "coupon_info",
                 "category": "프로모션",
                 "priority": "low",
                 "title": "할인 프로모션 고려",
@@ -413,6 +464,7 @@ class SalesEnhancementRecommender:
             
             recommendations.append({
                 "id": "rec_page_001",
+                "element_id": "image_info",
                 "category": "상품 페이지",
                 "priority": "high",
                 "title": "상세 이미지 추가",
@@ -454,6 +506,7 @@ class SalesEnhancementRecommender:
             
             recommendations.append({
                 "id": "rec_page_002",
+                "element_id": "description_info",
                 "category": "상품 페이지",
                 "priority": "medium",
                 "title": "상품 설명 보완",

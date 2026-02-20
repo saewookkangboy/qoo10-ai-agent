@@ -76,8 +76,8 @@ class DataValidator:
                         expected_structure
                     )
                 
-                # 정규화된 데이터를 참조 데이터로 사용 (더 정확한 검증)
-                if not api_data:
+                # 정규화된 데이터를 참조 데이터로 사용 (상품 데이터만; Shop은 product_data 없음)
+                if not api_data and product_data:
                     # 크롤러 데이터를 정규화하여 참조 데이터로 사용
                     reference_data = Qoo10APISchema.normalize_crawler_data_to_api_structure(product_data)
                     # 정규화된 데이터를 크롤러 형식으로 다시 변환
@@ -256,6 +256,36 @@ class DataValidator:
                 "severity": "high"
             })
         
+        # 요소(element) 단위 검증 (doc/agents/Validation-Agent, 요소 흐름 반영)
+        elements_validation = []
+        page_structure = (product_data or shop_data or {}).get("page_structure") or {}
+        elements_detail = page_structure.get("elements_detail") or []
+        pa = (analysis_result or {}).get("product_analysis") or {}
+        psa = pa.get("page_structure_analysis") or {}
+        analysis_elements = psa.get("elements") or []
+        analysis_by_id = {e.get("element_id"): e for e in analysis_elements if e.get("element_id")}
+        for ed in elements_detail:
+            element_id = ed.get("element_id")
+            name_ko = ed.get("name_ko", element_id or "")
+            crawl_present = bool(ed.get("present"))
+            ae = analysis_by_id.get(element_id) if element_id else None
+            analysis_present = bool(ae.get("present")) if ae else False
+            consistent = crawl_present == analysis_present
+            elements_validation.append({
+                "element_id": element_id,
+                "name_ko": name_ko,
+                "crawl_present": crawl_present,
+                "analysis_present": analysis_present,
+                "consistent": consistent,
+                "note": None if consistent else ("크롤러만 존재" if crawl_present else "분석만 존재")
+            })
+        validation_result["elements_validation"] = elements_validation
+        # QC/QA: 요소 미수집 시 안내 (서비스 개선 로그 반영)
+        if not elements_detail and (product_data or shop_data):
+            validation_result["elements_validation_note"] = "page_structure.elements_detail이 없어 요소 단위 검증을 수행하지 않았습니다. Crawl 단계에서 요소 추출을 활성화하면 항목별 일치 여부가 채워집니다."
+        else:
+            validation_result["elements_validation_note"] = None
+        
         # 검증 점수 계산
         # 검증 필드: product_name, price_sale, price_original, review_count, rating,
         #           image_count, description_length, qpoint_info, coupon_info, shipping_info
@@ -268,7 +298,8 @@ class DataValidator:
             "mismatches": mismatches,
             "missing_items": missing_items,
             "validation_score": validation_score,
-            "corrected_fields": corrected_fields
+            "corrected_fields": corrected_fields,
+            "message": "OK" if validation_result.get("is_valid") else "일부 불일치 또는 누락이 있습니다.",
         })
         
         return validation_result

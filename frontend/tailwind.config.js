@@ -7,6 +7,12 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        'ibm-plex-kr': ['IBM Plex Sans KR', 'sans-serif'],
+        'noto-sans-kr': ['Noto Sans KR', 'sans-serif'],
+        'ibm-plex': ['IBM Plex Sans', 'sans-serif'],
+        'nanum-gothic': ['Nanum Gothic', 'sans-serif'],
+      },
       colors: {
         primary: {
           50: '#f0f9ff',

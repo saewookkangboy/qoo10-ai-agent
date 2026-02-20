@@ -17,10 +17,26 @@ Qoo10 Japan 입점 브랜드의 URL을 입력하면, AI가 상품/샵을 분석�
 3. **FastAPI 백엔드**: RESTful API 서버
 4. **SEO 최적화**: 웹 최적화 기능
 
+## 에이전트 오케스트레이션
+
+전체 서비스는 **Orchestration 중심**으로 구조화되어 있습니다. 분석(크롤링·영역 추출)·리포트·개선 제안·점수 출력이 단계별 에이전트로 나뉘어 데이터 파이프라인이 명확히 흐르도록 설계되어 있습니다.
+
+- **설계 개요·데이터 파이프라인**: [doc/agents/README.md](doc/agents/README.md)
+- **Orchestration Agent**: [doc/agents/Orchestration-Agent.md](doc/agents/Orchestration-Agent.md)
+- **기능별 Agent**: Crawl, Analysis, Recommendation, Checklist, Validation, Report & Output — [doc/agents/](doc/agents/) 내 각 `*-Agent.md` 참고
+
 ## 프로젝트 구조
 
 ```
 qoo10-ai-agent/
+├── doc/                       # 프로젝트 문서
+│   ├── agents/               # 에이전트 오케스트레이션 설계
+│   │   ├── README.md         # 파이프라인 개요·에이전트 역할 매핑
+│   │   ├── Orchestration-Agent.md
+│   │   ├── Crawl-Agent.md
+│   │   ├── Analysis-Agent.md
+│   │   └── ... (Recommendation, Checklist, Validation, Report-Output)
+│   └── ...
 ├── docs/                      # 문서
 │   ├── PRD.md                # 제품 요구사항 문서
 │   ├── 기능명세서.md         # 기능 명세서

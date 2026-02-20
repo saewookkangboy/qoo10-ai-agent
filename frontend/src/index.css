@@ -6,15 +6,94 @@
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+  font-family: 'IBM Plex Sans KR', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'kern' 1, 'liga' 1;
   @apply text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-950;
   transition: background-color 0.2s, color 0.2s;
+  line-height: 1.6;
 }
 
 code {
   font-family: 'SF Mono', 'Monaco', 'Consolas', 'Courier New', monospace;
+}
+
+/* ============================================================================
+   폰트 유틸리티 - IBM Plex Sans KR, Noto Sans KR, IBM Plex Sans, Nanum Gothic
+   ============================================================================ */
+
+/* IBM Plex Sans KR */
+.ibm-plex-sans-kr-thin {
+  font-family: 'IBM Plex Sans KR', sans-serif;
+  font-weight: 100;
+  font-style: normal;
+}
+.ibm-plex-sans-kr-extralight {
+  font-family: 'IBM Plex Sans KR', sans-serif;
+  font-weight: 200;
+  font-style: normal;
+}
+.ibm-plex-sans-kr-light {
+  font-family: 'IBM Plex Sans KR', sans-serif;
+  font-weight: 300;
+  font-style: normal;
+}
+.ibm-plex-sans-kr-regular {
+  font-family: 'IBM Plex Sans KR', sans-serif;
+  font-weight: 400;
+  font-style: normal;
+}
+.ibm-plex-sans-kr-medium {
+  font-family: 'IBM Plex Sans KR', sans-serif;
+  font-weight: 500;
+  font-style: normal;
+}
+.ibm-plex-sans-kr-semibold {
+  font-family: 'IBM Plex Sans KR', sans-serif;
+  font-weight: 600;
+  font-style: normal;
+}
+.ibm-plex-sans-kr-bold {
+  font-family: 'IBM Plex Sans KR', sans-serif;
+  font-weight: 700;
+  font-style: normal;
+}
+
+/* Noto Sans KR (font-weight는 유틸 클래스 또는 인라인으로 지정) */
+.noto-sans-kr {
+  font-family: 'Noto Sans KR', sans-serif;
+  font-optical-sizing: auto;
+  font-style: normal;
+}
+.noto-sans-kr-thin { font-family: 'Noto Sans KR', sans-serif; font-weight: 100; font-style: normal; font-optical-sizing: auto; }
+.noto-sans-kr-extralight { font-family: 'Noto Sans KR', sans-serif; font-weight: 200; font-style: normal; font-optical-sizing: auto; }
+.noto-sans-kr-light { font-family: 'Noto Sans KR', sans-serif; font-weight: 300; font-style: normal; font-optical-sizing: auto; }
+.noto-sans-kr-regular { font-family: 'Noto Sans KR', sans-serif; font-weight: 400; font-style: normal; font-optical-sizing: auto; }
+.noto-sans-kr-medium { font-family: 'Noto Sans KR', sans-serif; font-weight: 500; font-style: normal; font-optical-sizing: auto; }
+.noto-sans-kr-semibold { font-family: 'Noto Sans KR', sans-serif; font-weight: 600; font-style: normal; font-optical-sizing: auto; }
+.noto-sans-kr-bold { font-family: 'Noto Sans KR', sans-serif; font-weight: 700; font-style: normal; font-optical-sizing: auto; }
+
+/* IBM Plex Sans (라틴/숫자용, font-variation-settings 사용) */
+.ibm-plex-sans {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-optical-sizing: auto;
+  font-style: normal;
+  font-variation-settings: 'wdth' 100;
+}
+.ibm-plex-sans-thin { font-family: 'IBM Plex Sans', sans-serif; font-weight: 100; font-style: normal; font-optical-sizing: auto; font-variation-settings: 'wdth' 100; }
+.ibm-plex-sans-extralight { font-family: 'IBM Plex Sans', sans-serif; font-weight: 200; font-style: normal; font-optical-sizing: auto; font-variation-settings: 'wdth' 100; }
+.ibm-plex-sans-light { font-family: 'IBM Plex Sans', sans-serif; font-weight: 300; font-style: normal; font-optical-sizing: auto; font-variation-settings: 'wdth' 100; }
+.ibm-plex-sans-regular { font-family: 'IBM Plex Sans', sans-serif; font-weight: 400; font-style: normal; font-optical-sizing: auto; font-variation-settings: 'wdth' 100; }
+.ibm-plex-sans-medium { font-family: 'IBM Plex Sans', sans-serif; font-weight: 500; font-style: normal; font-optical-sizing: auto; font-variation-settings: 'wdth' 100; }
+.ibm-plex-sans-semibold { font-family: 'IBM Plex Sans', sans-serif; font-weight: 600; font-style: normal; font-optical-sizing: auto; font-variation-settings: 'wdth' 100; }
+.ibm-plex-sans-bold { font-family: 'IBM Plex Sans', sans-serif; font-weight: 700; font-style: normal; font-optical-sizing: auto; font-variation-settings: 'wdth' 100; }
+
+/* Nanum Gothic */
+.nanum-gothic-regular {
+  font-family: 'Nanum Gothic', sans-serif;
+  font-weight: 400;
+  font-style: normal;
 }
 
 /* 스크롤바 스타일링 */

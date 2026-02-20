@@ -231,6 +231,12 @@ class ReportGenerator:
                         ws[f'A{row}'] = analysis_type.replace("_", " ").title()
                         ws[f'B{row}'] = f"{analysis.get('score', 0)}/100"
                         row += 1
+                        # 요소(element) 단위 분석 (페이지 구조 분석인 경우)
+                        if analysis_type == "page_structure_analysis":
+                            for e in analysis.get("elements") or []:
+                                ws[f'A{row}'] = f"  - {e.get('name_ko', e.get('element_id', ''))}"
+                                ws[f'B{row}'] = f"존재={e.get('present')}, 점수={e.get('score', 0)}/100, 품질={e.get('quality', '')}"
+                                row += 1
                 row += 1
             
             # 컬럼 너비 조정
@@ -550,6 +556,17 @@ class ReportGenerator:
             rel = analysis.get("element_relationships") or {}
             if rel.get("relationship_score") is not None:
                 doc.add_paragraph(f'요소 간 관계 점수: {rel.get("relationship_score", 0)}/100')
+            # 요소(element) 단위 분석 (doc/agents, Report-Output-Agent 반영)
+            elements = analysis.get("elements") or []
+            if elements:
+                doc.add_paragraph('요소별 분석:', style='List Bullet')
+                for e in elements:
+                    name_ko = e.get("name_ko", e.get("element_id", ""))
+                    score = e.get("score", 0)
+                    quality = e.get("quality", "")
+                    present = "예" if e.get("present") else "아니오"
+                    rec = e.get("recommendation")
+                    doc.add_paragraph(f'  {name_ko}: 존재={present}, 점수={score}/100, 품질={quality}' + (f', 권장={rec}' if rec else ''), style='List Bullet 2')
         
         # 추천 사항
         if analysis.get("recommendations"):
@@ -1129,6 +1146,22 @@ class ReportGenerator:
             if timestamp:
                 lines.append(f"**검증 시간:** {timestamp}")
                 lines.append("")
+            # 요소(element) 단위 검증 (Validation Agent 반영)
+            elements_validation = validation_result.get("elements_validation") or []
+            elements_note = validation_result.get("elements_validation_note")
+            if elements_validation:
+                lines.append("**요소별 검증 (크롤러 vs 분석):**")
+                inconsistent = [e for e in elements_validation if not e.get("consistent")]
+                if inconsistent:
+                    for e in inconsistent:
+                        lines.append(f"- {e.get('name_ko', e.get('element_id', ''))}: {e.get('note', '불일치')}")
+                else:
+                    lines.append("- 모든 요소가 크롤러·분석 간 일치합니다.")
+                lines.append("")
+            elif elements_note:
+                lines.append("**요소별 검증:**")
+                lines.append(f"- {elements_note}")
+                lines.append("")
         
         return "\n".join(lines)
     
@@ -1168,6 +1201,16 @@ class ReportGenerator:
             rel = analysis.get("element_relationships") or {}
             if rel.get("relationship_score") is not None:
                 lines.append(f"- 요소 간 관계 점수: {rel.get('relationship_score', 0)}/100")
+            elements = analysis.get("elements") or []
+            if elements:
+                lines.append("- **요소별 분석:**")
+                for e in elements:
+                    name_ko = e.get("name_ko", e.get("element_id", ""))
+                    score = e.get("score", 0)
+                    quality = e.get("quality", "")
+                    present = "예" if e.get("present") else "아니오"
+                    rec = e.get("recommendation")
+                    lines.append(f"  - {name_ko}: 존재={present}, 점수={score}/100, 품질={quality}" + (f", 권장={rec}" if rec else ""))
         
         if analysis.get("recommendations"):
             lines.append("**추천 사항:**")

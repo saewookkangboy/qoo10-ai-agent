@@ -1,5 +1,6 @@
 import { Recommendation } from '../types'
 import HelpTooltip from './HelpTooltip'
+import InlineMarkdown from './InlineMarkdown'
 
 interface RecommendationCardProps {
   recommendation: Recommendation
@@ -57,10 +58,10 @@ function RecommendationCard({ recommendation }: RecommendationCardProps) {
   const colors = getPriorityColor(recommendation.priority)
 
   return (
-    <div className={`border-l-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 p-4 ${colors.border} ${colors.bg}`}>
+    <div className={`border-l-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 p-4 sm:p-5 shadow-sm ${colors.border} ${colors.bg}`}>
       <div className="flex items-start gap-2 mb-2">
-        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 flex-1">
-          {recommendation.title}
+        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100 flex-1 min-w-0 leading-snug">
+          <InlineMarkdown as="span">{recommendation.title}</InlineMarkdown>
         </h3>
         <HelpTooltip content={helpContent} />
       </div>
@@ -72,26 +73,26 @@ function RecommendationCard({ recommendation }: RecommendationCardProps) {
           {getPriorityText(recommendation.priority)}
         </span>
       </div>
-      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
-        {recommendation.description}
+      <p className="text-sm sm:text-base text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+        <InlineMarkdown as="span">{recommendation.description}</InlineMarkdown>
       </p>
       {recommendation.action_items && recommendation.action_items.length > 0 && (
-        <div className="rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-3 mb-4">
-          <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">실행 방법</p>
-          <ul className="space-y-1">
+        <div className="rounded-lg border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-3 sm:p-4 mb-4">
+          <p className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">실행 방법</p>
+          <ul className="space-y-1.5">
             {recommendation.action_items.map((item, idx) => (
-              <li key={idx} className="text-xs text-gray-700 dark:text-gray-300 flex gap-2">
-                <span className="text-blue-500 flex-shrink-0">✓</span>
-                <span>{item}</span>
+              <li key={idx} className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-relaxed flex gap-2">
+                <span className="text-blue-500 flex-shrink-0 mt-0.5">✓</span>
+                <InlineMarkdown className="flex-1 min-w-0">{item}</InlineMarkdown>
               </li>
             ))}
           </ul>
         </div>
       )}
-      <div className="flex flex-wrap gap-x-4 gap-y-1 pt-3 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
-        <span>효과: <span className="font-medium text-gray-700 dark:text-gray-300">{recommendation.expected_impact}</span></span>
-        <span>난이도: <span className="font-medium text-gray-700 dark:text-gray-300">{recommendation.difficulty}</span></span>
-        <span>예상: <span className="font-medium text-gray-700 dark:text-gray-300">{recommendation.estimated_time}</span></span>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 pt-3 border-t border-gray-100 dark:border-gray-700 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+        <span>효과: <span className="font-semibold text-gray-700 dark:text-gray-300">{recommendation.expected_impact}</span></span>
+        <span>난이도: <span className="font-semibold text-gray-700 dark:text-gray-300">{recommendation.difficulty}</span></span>
+        <span>예상: <span className="font-semibold text-gray-700 dark:text-gray-300">{recommendation.estimated_time}</span></span>
       </div>
     </div>
   )

@@ -56,14 +56,24 @@ class ProductAnalyzer:
         return analysis_result
     
     async def _analyze_images(self, images: Dict[str, Any]) -> Dict[str, Any]:
-        """이미지 분석 (최적화 버전)"""
+        """이미지 분석: 썸네일 + 상세/제품 소개 이미지 개수·품질·다양성(alt) 반영"""
+        detail_list = images.get("detail_images") or []
+        item_goods = images.get("item_goods_images") or []
+        # 상세 이미지 = detail + item_goods (중복 제거)
+        seen = set(detail_list)
+        for u in item_goods:
+            if u not in seen:
+                seen.add(u)
+                detail_list = list(detail_list) + [u]
+        image_count = len(detail_list)
+
         analysis = {
             "score": 0,
             "thumbnail_quality": "unknown",
-            "image_count": len(images.get("detail_images", [])),
-            "recommendations": []
+            "image_count": image_count,
+            "recommendations": [],
         }
-        
+
         # 썸네일 품질 확인 (최적화: HEAD 요청만 사용)
         thumbnail = images.get("thumbnail")
         if thumbnail:
@@ -381,6 +391,7 @@ class ProductAnalyzer:
         
         if not page_structure:
             analysis["recommendations"].append("페이지 구조 정보를 추출할 수 없습니다")
+            analysis["elements"] = []  # 요소 단위 분석 (Report 등에서 사용)
             # #region agent log - H4 가설 검증
             try:
                 with open(log_path, "a", encoding="utf-8") as f:
@@ -403,6 +414,7 @@ class ProductAnalyzer:
             analysis["recommendations"].append("에러 페이지가 감지되었습니다. 크롤러가 페이지를 제대로 로드하지 못했을 수 있습니다.")
             analysis["is_error_page"] = True
             analysis["error_indicators"] = page_structure.get("error_indicators", [])
+            analysis["elements"] = []  # 요소 단위 분석 (Report 등에서 사용)
             # #region agent log - H1 가설 검증
             try:
                 with open(log_path, "a", encoding="utf-8") as f:
@@ -738,6 +750,68 @@ class ProductAnalyzer:
         analysis["score"] = min(100, max(0, analysis["score"]))
         analysis["grade"] = self._get_page_structure_grade(analysis["score"])
         
+        # 요소(element) 단위 분석 결과 (Analysis Agent → Recommendation/Checklist/Report 반영용)
+        # doc/agents, .spec-kit/product-page-elements-spec.md 기준
+        ELEMENT_SPEC = [
+            ("product_info", "상품 정보", "essential"),
+            ("price_info", "가격 정보", "essential"),
+            ("image_info", "이미지 정보", "essential"),
+            ("description_info", "상품 설명", "essential"),
+            ("review_info", "리뷰 정보", "optional"),
+            ("seller_info", "판매자 정보", "optional"),
+            ("shipping_info", "배송 정보", "optional"),
+            ("coupon_info", "쿠폰 정보", "optional"),
+            ("qpoint_info", "Qポイント 정보", "optional"),
+        ]
+        key_present = analysis.get("key_elements_present", {})
+        structure_completeness = analysis.get("structure_completeness", {})
+        completeness_map = {
+            "product_info": "has_product_name",
+            "price_info": "has_price",
+            "image_info": "has_images",
+            "description_info": "has_description",
+            "review_info": "has_reviews",
+            "seller_info": "has_seller",
+            "shipping_info": "has_shipping",
+            "coupon_info": "has_coupon",
+            "qpoint_info": "has_qpoint",
+        }
+        element_recommendations = {
+            "product_info": "상품 정보 요소가 페이지에서 확인되지 않습니다",
+            "price_info": "가격 정보 요소가 페이지에서 확인되지 않습니다",
+            "image_info": "이미지 정보 요소가 페이지에서 확인되지 않습니다",
+            "description_info": "상품 설명 요소가 페이지에서 확인되지 않습니다",
+            "review_info": None,
+            "seller_info": None,
+            "shipping_info": None,
+            "coupon_info": None,
+            "qpoint_info": None,
+        }
+        elements_out = []
+        for element_id, name_ko, kind in ELEMENT_SPEC:
+            present = key_present.get(element_id, False)
+            comp_key = completeness_map.get(element_id)
+            complete = structure_completeness.get(comp_key, False) if comp_key else present
+            score = 100 if (present or complete) else 0
+            rec = None
+            if not (present or complete) and element_recommendations.get(element_id):
+                rec = element_recommendations[element_id]
+            for r in analysis.get("recommendations", []):
+                if r and name_ko in r and not rec:
+                    rec = r
+                    break
+            quality = "good" if score >= 80 else ("fair" if score >= 50 else "poor")
+            elements_out.append({
+                "element_id": element_id,
+                "name_ko": name_ko,
+                "kind": kind,
+                "score": score,
+                "present": present or complete,
+                "quality": quality,
+                "recommendation": rec,
+            })
+        analysis["elements"] = elements_out
+        
         # #region agent log - H2 가설 검증
         try:
             with open(log_path, "a", encoding="utf-8") as f:
@@ -750,6 +824,7 @@ class ProductAnalyzer:
                         "final_score": analysis["score"],
                         "total_classes": analysis["total_classes"],
                         "key_elements_present": analysis["key_elements_present"],
+                        "elements_count": len(analysis.get("elements", [])),
                         "element_quality_score": analysis["element_quality"].get("overall_quality_score", 0),
                         "relationship_score": analysis["element_relationships"].get("relationship_score", 0),
                         "semantic_depth_score": analysis["semantic_depth"].get("depth_score", 0),

@@ -1,5 +1,6 @@
 import { CompetitorAnalysis } from '../types'
 import HelpTooltip from './HelpTooltip'
+import InlineMarkdown from './InlineMarkdown'
 
 interface CompetitorComparisonCardProps {
   competitorAnalysis: CompetitorAnalysis
@@ -186,14 +187,14 @@ function CompetitorComparisonCard({ competitorAnalysis }: CompetitorComparisonCa
           <div className="space-y-4">
             {recommendations.map((rec, idx) => (
               <div key={idx} className="p-4 sm:p-5 bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 dark:border-yellow-400 rounded-xl border border-yellow-200 dark:border-yellow-800 hover:shadow-md transition-all duration-200">
-                <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">{rec.title}</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{rec.description}</p>
+                <h4 className="font-bold text-gray-900 dark:text-gray-100 mb-2"><InlineMarkdown as="span">{rec.title}</InlineMarkdown></h4>
+                <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-3 leading-relaxed"><InlineMarkdown as="span">{rec.description}</InlineMarkdown></p>
                 {rec.action_items && (
-                  <ul className="text-sm text-gray-900 dark:text-gray-100 space-y-2">
+                  <ul className="text-sm sm:text-base text-gray-900 dark:text-gray-100 space-y-2">
                     {rec.action_items.map((item, i) => (
                       <li key={i} className="flex items-start gap-2">
-                        <span className="text-yellow-600 dark:text-yellow-400 mt-0.5">•</span>
-                        <span>{item}</span>
+                        <span className="text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0">•</span>
+                        <InlineMarkdown className="flex-1 min-w-0">{item}</InlineMarkdown>
                       </li>
                     ))}
                   </ul>

@@ -1,6 +1,7 @@
 import { ChecklistResult, ShopData } from '../types'
 import HelpTooltip from './HelpTooltip'
 import ErrorReportButton from './ErrorReportButton'
+import InlineMarkdown from './InlineMarkdown'
 
 interface ChecklistCardProps {
   checklist: ChecklistResult
@@ -168,13 +169,15 @@ function ChecklistCard({ checklist, analysisId, productData, shopData }: Checkli
                               <span className="px-1.5 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">자동</span>
                             )}
                           </div>
-                          <p className={`text-xs leading-relaxed ${isCompleted ? 'text-gray-600 dark:text-gray-400' : 'text-gray-500 dark:text-gray-500'}`}>
-                            {item.description}
+                          <p className={`text-xs sm:text-sm leading-relaxed ${isCompleted ? 'text-gray-600 dark:text-gray-400' : 'text-gray-500 dark:text-gray-500'}`}>
+                            <InlineMarkdown as="span">{item.description}</InlineMarkdown>
                           </p>
                           {item.recommendation && (
                             <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-                              <p className="text-xs font-medium text-amber-700 dark:text-amber-300 mb-0.5">개선 제안</p>
-                              <p className="text-xs text-gray-700 dark:text-gray-300">{item.recommendation}</p>
+                              <p className="text-xs sm:text-sm font-semibold text-amber-700 dark:text-amber-300 mb-0.5">개선 제안</p>
+                              <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                <InlineMarkdown as="span">{item.recommendation}</InlineMarkdown>
+                              </p>
                             </div>
                           )}
                           {analysisId && (

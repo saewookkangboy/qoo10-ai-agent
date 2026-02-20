@@ -318,6 +318,17 @@ class ChecklistEvaluator:
         
         # 페이지 구조에서 체크리스트 항목과 관련된 div class 매핑
         checklist_class_mapping = self._map_checklist_to_page_structure(page_structure) if page_structure else {}
+        # 요소(element) 단위 매핑 (doc/agents/Checklist-Agent, product-page-elements-spec 기준)
+        item_to_element = {
+            "item_001": "product_info", "item_004": "price_info", "item_005": "shipping_info",
+            "item_006b": "qpoint_info", "item_006c": "shipping_info", "item_007": "image_info",
+            "item_008": "product_info", "item_009": "price_info", "item_011": "coupon_info",
+        }
+        page_structure_elements = []
+        if analysis_result:
+            pa = analysis_result.get("product_analysis") or analysis_result
+            psa = pa.get("page_structure_analysis", {}) if isinstance(pa, dict) else {}
+            page_structure_elements = psa.get("elements") or []
         
         evaluation_result = {
             "overall_completion": 0,
@@ -350,6 +361,13 @@ class ChecklistEvaluator:
             category_auto_checkable_completed = 0
             
             for item_def in items:
+                element_id = item_to_element.get(item_def["id"])
+                element_status = None
+                if element_id and page_structure_elements:
+                    for e in page_structure_elements:
+                        if e.get("element_id") == element_id:
+                            element_status = {"present": e.get("present"), "score": e.get("score"), "quality": e.get("quality")}
+                            break
                 item_result = {
                     "id": item_def["id"],
                     "title": item_def["title"],
@@ -357,7 +375,9 @@ class ChecklistEvaluator:
                     "status": "pending",
                     "auto_checked": False,
                     "recommendation": None,
-                    "confidence": "high"  # 신뢰도 추가
+                    "confidence": "high",
+                    "element_id": element_id,
+                    "element_status": element_status,
                 }
                 
                 # 자동 체크 가능한 항목 평가 (페이지 구조 정보 활용)

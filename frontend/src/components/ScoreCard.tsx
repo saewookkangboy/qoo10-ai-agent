@@ -1,4 +1,5 @@
 import HelpTooltip from './HelpTooltip'
+import InlineMarkdown from './InlineMarkdown'
 
 interface ScoreCardProps {
   title: string
@@ -45,10 +46,10 @@ function ScoreCard({ title, score, analysis }: ScoreCardProps) {
   const colors = getScoreColor(score)
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 p-4">
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 p-4 sm:p-5 shadow-sm">
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-1.5">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100 truncate">{title}</h3>
           <HelpTooltip content={helpContent[title] || '이 항목에 대한 도움말입니다.'} />
         </div>
         <span className={`px-2 py-0.5 text-xs font-medium rounded ${colors.bgLight} ${colors.text}`}>
@@ -67,11 +68,11 @@ function ScoreCard({ title, score, analysis }: ScoreCardProps) {
         </div>
       </div>
       {analysis.recommendations && analysis.recommendations.length > 0 && (
-        <ul className="space-y-1 pt-3 border-t border-gray-100 dark:border-gray-700">
+        <ul className="space-y-1.5 pt-3 border-t border-gray-100 dark:border-gray-700">
           {analysis.recommendations.slice(0, 2).map((rec: string, idx: number) => (
-            <li key={idx} className="text-xs text-gray-700 dark:text-gray-300 leading-snug flex gap-1.5">
+            <li key={idx} className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-relaxed flex gap-1.5">
               <span className="text-blue-500 flex-shrink-0">·</span>
-              <span>{rec}</span>
+              <InlineMarkdown className="flex-1 min-w-0">{rec}</InlineMarkdown>
             </li>
           ))}
         </ul>

@@ -537,17 +537,38 @@ class Qoo10Crawler(ShopCrawlerMixin):
             )
             
             page = await context.new_page()
-            
-            # 페이지 로드
-            logger.debug(f"Loading page: {normalized_url}")
-            # networkidle 대신 load 사용 (더 안정적이고 빠름)
-            # load: 모든 리소스 로드 완료, domcontentloaded보다 안정적
-            try:
-                await page.goto(normalized_url, wait_until='load', timeout=60000)
-            except PlaywrightTimeoutError:
-                # load 타임아웃 시 domcontentloaded로 재시도 (더 빠름)
-                logger.warning(f"Page load timeout, trying domcontentloaded...")
-                await page.goto(normalized_url, wait_until='domcontentloaded', timeout=30000)
+
+            # 페이지 로드: 정규화 URL 실패 시 원본 URL 재시도 (QC/QA 개선 - gmkt.inc 차단/리셋 대응)
+            urls_to_try = [normalized_url]
+            if url and (url.strip() != normalized_url) and re.search(r"/g/\d+", url):
+                urls_to_try.append(url.strip())
+            effective_url = None
+            last_error = None
+            for try_url in urls_to_try:
+                try:
+                    logger.debug(f"Loading page: {try_url}")
+                    await page.goto(try_url, wait_until='load', timeout=60000)
+                    effective_url = try_url
+                    break
+                except PlaywrightTimeoutError:
+                    logger.warning(f"Page load timeout for {try_url}, trying domcontentloaded...")
+                    try:
+                        await page.goto(try_url, wait_until='domcontentloaded', timeout=30000)
+                        effective_url = try_url
+                        break
+                    except Exception as e2:
+                        last_error = e2
+                        if ("ERR_CONNECTION_RESET" in str(e2) or "net::" in str(e2)) and len(urls_to_try) > 1:
+                            continue
+                        raise
+                except Exception as e:
+                    last_error = e
+                    if ("ERR_CONNECTION_RESET" in str(e) or "net::" in str(e)) and len(urls_to_try) > 1:
+                        logger.warning(f"Connection error with {try_url}, retrying with original URL...")
+                        continue
+                    raise
+            if effective_url is None:
+                raise Exception(last_error or "Page load failed for all URLs")
             
             # 추가 대기 (동적 콘텐츠 로딩)
             await asyncio.sleep(2)
@@ -586,12 +607,12 @@ class Qoo10Crawler(ShopCrawlerMixin):
             html_content = await page.content()
             soup = BeautifulSoup(html_content, 'lxml')
             
-            # 상품 데이터 추출 (기존 메서드 재사용)
-            product_code = self._extract_product_code(normalized_url, soup)
+            # 상품 데이터 추출 (기존 메서드 재사용, effective_url 사용)
+            product_code = self._extract_product_code(effective_url, soup)
             product_name = self._extract_product_name(soup)
             
             product_data = {
-                "url": normalized_url,
+                "url": effective_url,
                 "product_code": product_code,
                 "product_name": product_name,
                 "crawled_with": "playwright"  # 크롤링 방법 표시
@@ -734,43 +755,67 @@ class Qoo10Crawler(ShopCrawlerMixin):
                             }
                         }
                         
-                        // 가격 정보 (유효성 검증 포함)
-                        const priceElements = document.querySelectorAll('[class*="price"], [class*="prc"]');
-                        const prices = [];
-                        priceElements.forEach(el => {
-                            const text = el.textContent.trim();
-                            const match = text.match(/(\\d{1,3}(?:,\\d{3})*)円/);
-                            if (match) {
-                                const price = parseInt(match[1].replace(/,/g, ''));
-                                // 합리적인 가격 범위 (100~1,000,000엔)
-                                if (price >= 100 && price <= 1000000) {
-                                    prices.push(price);
-                                }
+                        // 가격 정보: Price 영역 감지 후 해당 영역에서만 추출 (정밀 집계)
+                        let priceRoot = null;
+                        const priceAreaSelectors = ['[class*="price_area"]', '[class*="sale_prc"]', '[class*="prc"]', '[class*="goods_price"]', '[class*="product-price"]'];
+                        for (const sel of priceAreaSelectors) {
+                            const el = document.querySelector(sel);
+                            if (el && /\\d{1,3}(?:,\\d{3})*\\s*円/.test(el.textContent)) {
+                                priceRoot = el;
+                                break;
                             }
-                        });
+                        }
+                        if (!priceRoot) {
+                            const label = Array.from(document.querySelectorAll('*')).find(n => /販売価格|商品価格|参考価格/.test(n.textContent || ''));
+                            if (label) priceRoot = label.closest('div, section, td, li') || label.parentElement;
+                        }
+                        const searchRoot = priceRoot || document.body;
+                        const priceElements = searchRoot.querySelectorAll('[class*="price"], [class*="prc"]');
+                        const prices = [];
+                        const saleLabelMatch = searchRoot.textContent.match(/販売価格[：:\\s]*([\\d,\\s]+)円/);
+                        if (saleLabelMatch) {
+                            const p = parseInt(saleLabelMatch[1].replace(/[,\\s]/g, ''));
+                            if (p >= 100 && p <= 1000000) prices.push(p);
+                        }
+                        const goodsPriceMatch = searchRoot.textContent.match(/商品価格[：:\\s]*([\\d,\\s]+)円/);
+                        if (goodsPriceMatch && !prices.length) {
+                            const p = parseInt(goodsPriceMatch[1].replace(/[,\\s]/g, ''));
+                            if (p >= 100 && p <= 1000000) prices.push(p);
+                        }
+                        if (!prices.length) {
+                            priceElements.forEach(el => {
+                                const text = el.textContent.trim();
+                                const match = text.match(/(\\d{1,3}(?:,\\d{3})*)円/);
+                                if (match) {
+                                    const price = parseInt(match[1].replace(/,/g, ''));
+                                    if (price >= 100 && price <= 1000000) prices.push(price);
+                                }
+                            });
+                        }
                         data.prices = prices;
                         
-                        // 리뷰 수 (다양한 패턴 시도)
+                        // 리뷰 수 (쉼표 포함 숫자 지원: 1,063 등)
                         const reviewPatterns = [
-                            /レビュー\\s*\\((\\d+)\\)/,
-                            /評価\\s*\\((\\d+)\\)/,
-                            /(\\d+)\\s*レビュー/,
-                            /(\\d+)\\s*評価/
+                            /レビュー[\\s_]*[（(]\\s*([\\d,]+)\\s*[）)]/,
+                            /評価[\\s_]*[（(]\\s*([\\d,]+)\\s*[）)]/,
+                            /(\\d{1,3}(?:,\\d{3})*)\\s*レビュー/,
+                            /(\\d{1,3}(?:,\\d{3})*)\\s*評価/
                         ];
                         for (let pattern of reviewPatterns) {
                             const match = document.body.textContent.match(pattern);
                             if (match) {
-                                data.review_count = parseInt(match[1]);
-                                break;
+                                const n = parseInt(match[1].replace(/,/g, ''), 10);
+                                if (n > 0) { data.review_count = n; break; }
                             }
                         }
                         
-                        // 평점
-                        const ratingMatch = document.body.textContent.match(/(\\d+\\.?\\d*)\\s*\\((\\d+)\\)/);
+                        // 평점 + 리뷰수 (4.8 (1,063) 형식, 쉼표 허용)
+                        const ratingMatch = document.body.textContent.match(/(\\d+\\.?\\d*)\\s*[（(]\\s*([\\d,]+)\\s*[）)]/);
                         if (ratingMatch) {
                             data.rating = parseFloat(ratingMatch[1]);
                             if (!data.review_count) {
-                            data.review_count = parseInt(ratingMatch[2]);
+                                const n = parseInt(ratingMatch[2].replace(/,/g, ''), 10);
+                                if (n > 0) data.review_count = n;
                             }
                         }
                         
@@ -848,7 +893,71 @@ class Qoo10Crawler(ShopCrawlerMixin):
                     if not product_data.get("seller_info"):
                         product_data["seller_info"] = {}
                     product_data["seller_info"]["follower_count"] = shop_js_data['follower_count']
-                    
+
+                # 이미지 정밀 보강: 썸네일 + 상세(img src/alt) - DOM에서 직접 수집
+                try:
+                    img_js = await page.evaluate("""
+                        () => {
+                            const out = { thumbnail: null, detail: [] };
+                            const norm = (s) => {
+                                if (!s) return null;
+                                if (s.startsWith('//')) return 'https:' + s;
+                                if (s.startsWith('/')) return 'https://www.qoo10.jp' + s;
+                                return s;
+                            };
+                            const skip = (s) => !s || /icon|logo|banner|button|loading|placeholder/i.test(s);
+                            // 썸네일: 첫 번째 상품 갤러리/메인 이미지
+                            const thumbSelectors = ['img[itemprop="image"]', '.gds_img img', '#goods_img img', '.product-image img', '.thumbnail img', '[class*="gallery"] img', '[class*="slide"] img'];
+                            for (const sel of thumbSelectors) {
+                                const el = document.querySelector(sel);
+                                if (el) {
+                                    const src = el.src || el.getAttribute('data-src') || el.getAttribute('data-original');
+                                    if (src && !skip(src)) { out.thumbnail = norm(src); break; }
+                                }
+                            }
+                            // 상세 이미지: #itemGoods + detail 영역 img (src, alt)
+                            const itemGoods = document.getElementById('itemGoods');
+                            const nodes = itemGoods ? itemGoods.querySelectorAll('img') : [];
+                            const seen = new Set();
+                            nodes.forEach(img => {
+                                const src = img.src || img.getAttribute('data-src') || img.getAttribute('data-original');
+                                if (!src || skip(src)) return;
+                                const url = norm(src);
+                                if (seen.has(url)) return;
+                                seen.add(url);
+                                out.detail.push({ src: url, alt: (img.getAttribute('alt') || '').trim() });
+                            });
+                            document.querySelectorAll('.product-detail img, .goods_detail img, [id*="detail"] img, [class*="detail"] img').forEach(img => {
+                                const src = img.src || img.getAttribute('data-src') || img.getAttribute('data-original');
+                                if (!src || skip(src)) return;
+                                const url = norm(src);
+                                if (seen.has(url)) return;
+                                seen.add(url);
+                                out.detail.push({ src: url, alt: (img.getAttribute('alt') || '').trim() });
+                            });
+                            return out;
+                        }
+                    """)
+                    if img_js and (img_js.get("thumbnail") or (img_js.get("detail") and len(img_js["detail"]) > 0)):
+                        imgs = product_data.setdefault("images", {})
+                        if not imgs.get("thumbnail") and img_js.get("thumbnail"):
+                            imgs["thumbnail"] = img_js["thumbnail"]
+                        if img_js.get("detail"):
+                            existing_src = set(imgs.get("detail_images", []))
+                            with_alt = list(imgs.get("detail_images_with_alt", []))
+                            for ent in img_js["detail"]:
+                                s = ent.get("src") or ent
+                                if isinstance(s, dict):
+                                    s = s.get("src") or ""
+                                if s and s not in existing_src:
+                                    existing_src.add(s)
+                                    alt = ent.get("alt", "") if isinstance(ent, dict) else ""
+                                    imgs.setdefault("detail_images", []).append(s)
+                                    with_alt.append({"src": s, "alt": alt})
+                            imgs["detail_images_with_alt"] = with_alt
+                except Exception as img_err:
+                    logger.warning(f"Playwright image extraction failed: {img_err}")
+
             except Exception as e:
                 logger.warning(f"Failed to extract JS data: {str(e)}")
             
@@ -880,7 +989,7 @@ class Qoo10Crawler(ShopCrawlerMixin):
                 if auto_learn:
                     from .embedding_integration import EmbeddingIntegration
                     embedding_integration = EmbeddingIntegration(db=self.db)
-                    embedding_integration.save_crawled_texts(product_data, normalized_url, auto_learn=True)
+                    embedding_integration.save_crawled_texts(product_data, effective_url, auto_learn=True)
             except Exception as e:
                 logger.warning(f"Failed to save embeddings: {str(e)}")
             
@@ -1704,8 +1813,60 @@ class Qoo10Crawler(ShopCrawlerMixin):
         
         return None
     
+    def _detect_price_area(self, soup: BeautifulSoup) -> Optional[Any]:
+        """
+        실제 분석 페이지의 '가격(Price)' 영역을 감지하여 해당 영역만 사용해 정밀 추출.
+        Qoo10 전용: 販売価格/商品価格/参考価格 레이블 및 prc, price_area 등 class 기반 감지.
+        """
+        if not soup:
+            return None
+        # 1) 레이블 기반: "販売価格", "商品価格", "参考価格" 등이 포함된 블록 찾기
+        label_patterns = [
+            r'販売価格',  # 판매가 (Qoo10 실제 표기)
+            r'商品価格',  # 상품가격
+            r'参考価格',  # 참조가 (정가)
+            r'상품가격',
+            r'가격\s*[：:]',
+            r'価格\s*[：:]',
+        ]
+        for pattern in label_patterns:
+            found = soup.find(string=re.compile(pattern, re.I))
+            if found:
+                parent = found.find_parent(['div', 'section', 'td', 'li', 'span', 'p'])
+                if parent:
+                    # 상위로 2단계까지 확장해 가격 숫자가 함께 있는 블록 확보
+                    container = parent
+                    for _ in range(2):
+                        if container.parent and container.parent.name in ['div', 'section', 'td', 'li', 'table']:
+                            container = container.parent
+                        else:
+                            break
+                    return container
+        # 2) Qoo10 전용 class 기반 (.spec-kit/product-page-elements-spec.md)
+        price_area_selectors = [
+            '[class*="price_area"]',
+            '[class*="sale_prc"]',
+            '[class*="original_prc"]',
+            '[class*="goods_price"]',
+            '[class*="product-price"]',
+            '[class*="prc"]',
+            'div[class*="price"]',
+            'td[class*="price"]',
+        ]
+        for sel in price_area_selectors:
+            try:
+                el = soup.select_one(sel)
+                if el and el.get_text(strip=True):
+                    # 가격 숫자(円 포함)가 있는지로 유효 영역 판별
+                    text = el.get_text()
+                    if re.search(r'\d{1,3}(?:,\d{3})*\s*円|円\s*\d{1,3}(?:,\d{3})*', text):
+                        return el
+            except Exception:
+                continue
+        return None
+
     def _extract_price(self, soup: BeautifulSoup) -> Dict[str, Any]:
-        """가격 정보 추출 (AI 학습 기반) - 실제 Qoo10 페이지 구조에 맞게 개선 및 정확도 향상"""
+        """가격 정보 추출 (정밀 분석) - 가격 영역 감지 후 해당 영역에서만 추출하여 집계 정확도 향상"""
         # #region agent log
         _log_debug("debug-session", "run1", "B", "crawler.py:_extract_price", "가격 정보 추출 시작", {})
         # #endregion
@@ -1714,12 +1875,20 @@ class Qoo10Crawler(ShopCrawlerMixin):
             "original_price": None,
             "sale_price": None,
             "discount_rate": 0,
-            "coupon_discount": None,  # 쿠폰 할인 정보 추가
-            "qpoint_info": None  # Qポイント 정보 추가
+            "coupon_discount": None,
+            "qpoint_info": None
         }
         
-        # 판매가 추출 (다양한 선택자 시도, 우선순위 순서)
+        # 가격 영역 감지: 해당 영역이 있으면 여기서만 추출 (오탐 감소)
+        search_root = self._detect_price_area(soup)
+        if search_root is None:
+            search_root = soup
+        
+        # 판매가 추출: Qoo10 전용 선택자 우선 (.spec-kit/product-page-elements-spec.md)
         sale_price_selectors = [
+            '[class*="sale_prc"]',
+            '[class*="prc"]',
+            '[class*="price_area"]',
             '.price',
             '.product-price',
             '[itemprop="price"]',
@@ -1729,76 +1898,86 @@ class Qoo10Crawler(ShopCrawlerMixin):
             'td.price',
             'span.price',
             'div.price',
-            '[class*="price"]',  # price가 포함된 클래스
-            '[data-price]'  # data 속성
+            '[class*="price"]',
+            '[data-price]',
         ]
         
-        # "商品価格" 또는 "상품가격" 텍스트를 포함하는 요소 찾기 (일본어-한국어 모두 지원)
-        price_pattern = self._create_jp_kr_regex("商品価格", "상품가격")
-        price_section = soup.find(string=re.compile(f'{price_pattern}[：:]|가격[：:]|価格[：:]', re.I))
-        if price_section:
-            parent = price_section.find_parent()
-            if parent:
-                # 부모 요소에서 가격 숫자 찾기
-                price_text = parent.get_text()
-                # "商品価格: 4,562円" 또는 "상품가격: 4,562円" 같은 패턴에서 추출
-                price_match = re.search(f'{price_pattern}[：:]\s*(\d{{1,3}}(?:,\d{{3}})*)円', price_text)
-                if price_match:
-                    price = self._parse_price(price_match.group(1))
-                    if price:
-                        price_data["sale_price"] = price
-                else:
-                    # 일반적인 숫자 추출
-                    price = self._parse_price(price_text)
-                    if price:
-                        price_data["sale_price"] = price
+        # 1) 레이블+숫자 패턴으로 판매가 추출 (販売価格: 2,990円 / 商品価格: 4,562円)
+        sale_label_pattern = self._create_jp_kr_regex("販売価格", "판매가격")
+        goods_price_pattern = self._create_jp_kr_regex("商品価格", "상품가격")
+        for pattern, name in [(sale_label_pattern, "販売価格"), (goods_price_pattern, "商品価格")]:
+            label_el = search_root.find(string=re.compile(f'{pattern}[：:]|{name}[：:]', re.I))
+            if label_el:
+                parent = label_el.find_parent()
+                if parent:
+                    price_text = parent.get_text()
+                    price_match = re.search(r'(\d{1,3}(?:,\d{3})*)\s*円', price_text)
+                    if price_match:
+                        price = self._parse_price(price_match.group(1))
+                        if price and 100 <= price <= 1000000:
+                            price_data["sale_price"] = price
+                            break
+            if price_data["sale_price"]:
+                break
         
-        # 선택자를 통한 가격 추출
-        for selector in sale_price_selectors:
-            price_elem = soup.select_one(selector)
-            if price_elem:
-                price_text = price_elem.get_text(strip=True)
-                price = self._parse_price(price_text)
-                if price and not price_data["sale_price"]:
-                    price_data["sale_price"] = price
-                    break
+        # 2) 감지된 영역 내 선택자로 판매가 추출
+        if not price_data["sale_price"]:
+            for selector in sale_price_selectors:
+                try:
+                    price_elem = search_root.select_one(selector)
+                    if price_elem:
+                        price_text = price_elem.get_text(strip=True)
+                        price = self._parse_price(price_text)
+                        if price and 100 <= price <= 1000000:
+                            price_data["sale_price"] = price
+                            break
+                except Exception:
+                    continue
         
-        # 정가 찾기 (취소선이 있는 가격) - 더 정확한 패턴 매칭
-        # "~~29,400円~~" 같은 패턴 찾기
-        price_text_all = soup.get_text()
-        
-        # 패턴 1: ~~정가~~ 형식
-        strikethrough_pattern = re.search(r'~~(\d{1,3}(?:,\d{3})*)円~~', price_text_all)
-        if strikethrough_pattern:
-            original_price = self._parse_price(strikethrough_pattern.group(1))
-            if original_price:
-                price_data["original_price"] = original_price
-        
-        # 패턴 2: HTML 태그에서 찾기
+        # 정가 추출: 감지된 가격 영역(search_root) 내에서만 검색
+        price_text_area = search_root.get_text()
+        # 参考価格 (Qoo10 참조가) / 定価 패턴 우선
+        ref_price_pattern = re.search(r'参考価格[：:\s]*(\d{1,3}(?:,\d{3})*)\s*円', price_text_area)
+        if ref_price_pattern:
+            original_price = self._parse_price(ref_price_pattern.group(1))
+            if original_price and 100 <= original_price <= 1000000:
+                sale_price = price_data.get("sale_price")
+                if sale_price is None or original_price > sale_price:
+                    price_data["original_price"] = original_price
+        if not price_data["original_price"]:
+            teika_pattern = re.search(r'定価[：:\s]*(\d{1,3}(?:,\d{3})*)\s*円', price_text_area)
+            if teika_pattern:
+                original_price = self._parse_price(teika_pattern.group(1))
+                if original_price and 100 <= original_price <= 1000000:
+                    sale_price = price_data.get("sale_price")
+                    if sale_price is None or original_price > sale_price:
+                        price_data["original_price"] = original_price
+        # ~~정가~~ 형식
+        if not price_data["original_price"]:
+            strikethrough_pattern = re.search(r'~~(\d{1,3}(?:,\d{3})*)円~~', price_text_area)
+            if strikethrough_pattern:
+                original_price = self._parse_price(strikethrough_pattern.group(1))
+                if original_price and 100 <= original_price <= 1000000:
+                    sale_price = price_data.get("sale_price")
+                    if sale_price is None or original_price > sale_price:
+                        price_data["original_price"] = original_price
+        # HTML 태그에서 찾기 (감지 영역 내)
         if not price_data["original_price"]:
             original_price_patterns = [
-                soup.find(class_=re.compile(r'original|정가|定価|元の価格|元価格', re.I)),
-                soup.find('del'),
-                soup.find('s'),
-                soup.find(string=re.compile(r'~~\d+円|定価.*\d+円'))
+                search_root.find(class_=re.compile(r'original|정가|定価|元の価格|元価格|参考', re.I)),
+                search_root.find('del'),
+                search_root.find('s'),
+                search_root.find(string=re.compile(r'~~\d+円|定価.*\d+円|参考価格.*\d+円')),
             ]
-            
             for pattern in original_price_patterns:
                 if pattern:
                     if hasattr(pattern, 'get_text'):
                         original_text = pattern.get_text(strip=True)
                     else:
-                        # string 객체인 경우
-                        parent = pattern.find_parent()
-                        if parent:
-                            original_text = parent.get_text(strip=True)
-                        else:
-                            original_text = str(pattern)
-                    
+                        parent = pattern.find_parent() if hasattr(pattern, 'find_parent') else None
+                        original_text = parent.get_text(strip=True) if parent else str(pattern)
                     original_price = self._parse_price(original_text)
-                    if original_price and original_price > 0:
-                        # 판매가보다 높은지 확인 (정가는 보통 판매가보다 높음)
-                        # None 체크를 먼저 수행하여 타입 오류 방지
+                    if original_price and 100 <= original_price <= 1000000:
                         sale_price = price_data.get("sale_price")
                         if sale_price is None or original_price > sale_price:
                             price_data["original_price"] = original_price
@@ -1875,27 +2054,27 @@ class Qoo10Crawler(ShopCrawlerMixin):
                 if sale_price is not None and original_price < sale_price:
                     price_data["original_price"] = None
         
-        # 데이터 검증: 판매가가 없으면 오류
+        # 데이터 검증: 판매가가 없으면 페이지 전체에서 최후 시도 (가격 영역 감지 실패 시)
         if not price_data["sale_price"]:
-            # 최후의 시도: 페이지 전체에서 가격 패턴 찾기
             all_text = soup.get_text()
+            # Qoo10·일본어 우선 패턴
             price_patterns = [
-                r'商品価格[：:]\s*(\d{1,3}(?:,\d{3})*)円',  # 상품가격 패턴 (우선순위 높음)
+                r'販売価格[：:\s]*(\d{1,3}(?:,\d{3})*)円',
+                r'商品価格[：:]\s*(\d{1,3}(?:,\d{3})*)円',
                 r'価格[：:]\s*(\d{1,3}(?:,\d{3})*)円',
-                r'(\d{1,3}(?:,\d{3})*)円',  # 일반적인 가격 패턴
-                r'¥\s*(\d{1,3}(?:,\d{3})*)'
+                r'(\d{1,3}(?:,\d{3})*)\s*円',
+                r'¥\s*(\d{1,3}(?:,\d{3})*)',
             ]
             for pattern in price_patterns:
                 matches = re.findall(pattern, all_text)
                 if matches:
                     prices = [self._parse_price(m) for m in matches if self._parse_price(m)]
-                    if prices:
-                        # 합리적인 가격 범위 (100엔 ~ 1,000,000엔) - 여러 가격 중 최소값 선택
-                        valid_prices = [p for p in prices if 100 <= p <= 1000000]
-                        if valid_prices:
-                            # 여러 가격이 있으면 최소값을 판매가로 추정 (일반적으로 표시되는 가격)
-                            price_data["sale_price"] = min(valid_prices)
-                            break
+                    valid_prices = [p for p in prices if 100 <= p <= 1000000]
+                    if valid_prices:
+                        price_data["sale_price"] = min(valid_prices)
+                        break
+            if price_data["sale_price"]:
+                _log_debug("debug-session", "run1", "B", "crawler.py:_extract_price", "판매가 fallback 패턴으로 추출", {"sale_price": price_data["sale_price"]})
         
         # #region agent log
         _log_debug("debug-session", "run1", "B", "crawler.py:_extract_price", "가격 정보 추출 완료", {
@@ -1920,15 +2099,39 @@ class Qoo10Crawler(ShopCrawlerMixin):
         except:
             return None
     
-    def _extract_images(self, soup: BeautifulSoup) -> Dict[str, List[str]]:
-        """이미지 정보 추출 - 실제 Qoo10 페이지 구조에 맞게 개선 (itemGoods 영역 포함)"""
-        images = {
+    def _normalize_img_src(self, src: str) -> str:
+        """img src를 절대 URL로 정규화"""
+        if not src:
+            return ""
+        if src.startswith("//"):
+            return "https:" + src
+        if src.startswith("/"):
+            return "https://www.qoo10.jp" + src
+        return src
+
+    def _is_product_image_url(self, src: str) -> bool:
+        """상품/썸네일 이미지로 보이는 URL인지 (아이콘·배너 제외)"""
+        if not src or "http" not in src and not src.startswith("//"):
+            return False
+        lower = src.lower()
+        if any(ex in lower for ex in ["icon", "logo", "banner", "button", "loading", "placeholder", "spacer"]):
+            return False
+        return True
+
+    def _extract_images(self, soup: BeautifulSoup) -> Dict[str, Any]:
+        """
+        이미지 정보 정밀 추출: 썸네일(<img src>) + 상세/제품 소개 이미지(<img src>, alt 수집).
+        분석 점수에 필요한 영역을 크롤링: thumbnail, detail_images(상세 페이지 이미지), alt 정보.
+        """
+        images: Dict[str, Any] = {
             "thumbnail": None,
             "detail_images": [],
-            "item_goods_images": []  # itemGoods 영역의 모든 이미지
+            "detail_images_with_alt": [],  # { "src", "alt" } 분석·다양성용
+            "item_goods_images": [],
         }
-        
-        # 썸네일 이미지 (다양한 선택자 시도)
+        seen_src = set()
+
+        # 1) 썸네일: 제품 대표 이미지 (<img src="...">)
         thumbnail_selectors = [
             'img.product-thumbnail',
             'img[itemprop="image"]',
@@ -1936,94 +2139,87 @@ class Qoo10Crawler(ShopCrawlerMixin):
             'img.main-image',
             '#goods_img img',
             '.goods_img img',
+            '.gds_img img',
+            '.pd_img img',
             '.thumbnail img',
             'img[class*="thumbnail"]',
+            'img[class*="thmb"]',
             'img[class*="main"]',
-            'img[class*="product"]'
+            'img[class*="product"]',
+            '[class*="gallery"] img',
+            '[class*="slideshow"] img',
+            '.slide img',
         ]
-        
         for selector in thumbnail_selectors:
             img = soup.select_one(selector)
             if img:
-                src = img.get('src') or img.get('data-src') or img.get('data-original')
-                if src:
-                    # 상대 경로를 절대 경로로 변환
-                    if src.startswith('//'):
-                        src = 'https:' + src
-                    elif src.startswith('/'):
-                        src = 'https://www.qoo10.jp' + src
-                    images["thumbnail"] = src
+                src = img.get("src") or img.get("data-src") or img.get("data-original")
+                if src and self._is_product_image_url(src):
+                    images["thumbnail"] = self._normalize_img_src(src)
+                    seen_src.add(images["thumbnail"])
                     break
-        
-        # itemGoods 영역의 모든 이미지 추출 (상세 페이지 이미지 영역)
-        item_goods_div = soup.find('div', {'id': 'itemGoods'})
+
+        # 2) itemGoods: 상세 페이지(제품 소개) 이미지 영역
+        item_goods_div = soup.find("div", {"id": "itemGoods"})
         if item_goods_div:
-            seen_item_images = set()
-            # itemGoods 내의 모든 img 태그 찾기
-            item_imgs = item_goods_div.find_all('img')
-            for img in item_imgs:
-                src = img.get('src') or img.get('data-src') or img.get('data-original')
-                if src:
-                    # 상대 경로를 절대 경로로 변환
-                    if src.startswith('//'):
-                        src = 'https:' + src
-                    elif src.startswith('/'):
-                        src = 'https://www.qoo10.jp' + src
-                    
-                    # 중복 제거 및 유효한 이미지 URL인지 확인
-                    if src not in seen_item_images and ('http' in src or src.startswith('//')):
-                        # 작은 아이콘이나 배너 이미지 제외
-                        if not any(exclude in src.lower() for exclude in ['icon', 'logo', 'banner', 'button']):
-                            images["item_goods_images"].append(src)
-                            seen_item_images.add(src)
-        
-        # 상세 이미지 (다양한 선택자 시도)
-        detail_img_selectors = [
-            '.product-detail img',
-            '.detail-images img',
-            '.product-images img',
-            '#goods_detail img',
-            '.goods_detail img',
-            'div[class*="detail"] img',
-            'div[class*="description"] img',
-            'div[class*="content"] img'
+            for img in item_goods_div.find_all("img"):
+                src = img.get("src") or img.get("data-src") or img.get("data-original")
+                if not src or not self._is_product_image_url(src):
+                    continue
+                src = self._normalize_img_src(src)
+                if src not in seen_src:
+                    seen_src.add(src)
+                    alt = (img.get("alt") or "").strip()
+                    images["item_goods_images"].append(src)
+                    images["detail_images_with_alt"].append({"src": src, "alt": alt})
+
+        # 3) 상세 이미지 선택자 (다른 영역의 제품 소개 이미지)
+        detail_selectors = [
+            ".product-detail img",
+            ".detail-images img",
+            ".product-images img",
+            "#goods_detail img",
+            ".goods_detail img",
+            ".gds_detail img",
+            "div[class*='detail'] img",
+            "div[class*='description'] img",
+            "div[class*='content'] img",
+            "[id*='detail'] img",
+            "[id*='description'] img",
         ]
-        
-        seen_images = set()
-        if images["thumbnail"]:
-            seen_images.add(images["thumbnail"])
-        # item_goods_images도 중복 체크에 추가
-        for img_url in images["item_goods_images"]:
-            seen_images.add(img_url)
-        
-        for selector in detail_img_selectors:
-            imgs = soup.select(selector)
-            for img in imgs:
-                src = img.get('src') or img.get('data-src') or img.get('data-original')
-                if src:
-                    # 상대 경로를 절대 경로로 변환
-                    if src.startswith('//'):
-                        src = 'https:' + src
-                    elif src.startswith('/'):
-                        src = 'https://www.qoo10.jp' + src
-                    
-                    # 중복 제거 및 유효한 이미지 URL인지 확인
-                    if src not in seen_images and ('http' in src or src.startswith('//')):
-                        # 작은 아이콘이나 배너 이미지 제외
-                        if not any(exclude in src.lower() for exclude in ['icon', 'logo', 'banner', 'button']):
-                            images["detail_images"].append(src)
-                            seen_images.add(src)
-        
-        # #region agent log
-        _log_debug("debug-session", "run1", "E", "crawler.py:_extract_images", "이미지 추출 완료", {
-            "has_thumbnail": bool(images.get("thumbnail")),
-            "detail_images_count": len(images.get("detail_images", [])),
-            "item_goods_images_count": len(images.get("item_goods_images", [])),
-            "total_images": len(images.get("detail_images", [])) + len(images.get("item_goods_images", [])) + (1 if images.get("thumbnail") else 0),
-            "is_empty": not images.get("thumbnail") and len(images.get("detail_images", [])) == 0 and len(images.get("item_goods_images", [])) == 0
-        })
-        # #endregion
-        
+        for selector in detail_selectors:
+            for img in soup.select(selector):
+                src = img.get("src") or img.get("data-src") or img.get("data-original")
+                if not src or not self._is_product_image_url(src):
+                    continue
+                src = self._normalize_img_src(src)
+                if src not in seen_src:
+                    seen_src.add(src)
+                    alt = (img.get("alt") or "").strip()
+                    images["detail_images"].append(src)
+                    images["detail_images_with_alt"].append({"src": src, "alt": alt})
+
+        # 4) detail_images = 중복 제거된 상세 이미지 목록 (기존 호환 + 분석용 개수)
+        for ent in images["detail_images_with_alt"]:
+            s = ent["src"]
+            if s not in images["detail_images"]:
+                images["detail_images"].append(s)
+
+        # 5) 썸네일 미발견 시: 첫 번째 상품 도메인 이미지를 썸네일로 사용
+        if not images["thumbnail"] and images["detail_images_with_alt"]:
+            images["thumbnail"] = images["detail_images_with_alt"][0]["src"]
+        if not images["thumbnail"] and images["item_goods_images"]:
+            images["thumbnail"] = images["item_goods_images"][0]
+
+        _log_debug(
+            "debug-session", "run1", "E", "crawler.py:_extract_images", "이미지 추출 완료",
+            {
+                "has_thumbnail": bool(images.get("thumbnail")),
+                "detail_images_count": len(images.get("detail_images", [])),
+                "item_goods_images_count": len(images.get("item_goods_images", [])),
+                "detail_with_alt_count": len(images.get("detail_images_with_alt", [])),
+            },
+        )
         return images
     
     def _extract_description(self, soup: BeautifulSoup) -> str:
@@ -2337,7 +2533,27 @@ class Qoo10Crawler(ShopCrawlerMixin):
                 if len(reviews_data["reviews"]) >= 10:
                     break
         
-        # review_count가 0이지만 reviews 배열에 리뷰가 있으면 fallback
+        # 페이지 전체 텍스트에서 총 리뷰 수 추출 (예: レビュー (1,063) / 4.8 (1,063))
+        if reviews_data["review_count"] == 0:
+            try:
+                body = soup.find("body") or soup
+                page_text = body.get_text(separator=" ", strip=True) if body else ""
+                if page_text:
+                    review_total_patterns = [
+                        re.compile(r"レビュー\s*[（(]\s*([\d,]+)\s*[）)]", re.I),
+                        re.compile(r"(\d+\.?\d*)\s*[（(]\s*([\d,]+)\s*[）)]"),  # 4.8 (1,063)
+                    ]
+                    for pat in review_total_patterns:
+                        m = pat.search(page_text)
+                        if m:
+                            g = m.group(2) if m.lastindex >= 2 else m.group(1)
+                            count_val = int(g.replace(",", "").replace("，", ""))
+                            if count_val > 0:
+                                reviews_data["review_count"] = count_val
+                                break
+            except Exception:
+                pass
+        # review_count가 여전히 0이지만 reviews 배열에 리뷰가 있으면 fallback
         if reviews_data["review_count"] == 0 and len(reviews_data["reviews"]) > 0:
             reviews_data["review_count"] = len(reviews_data["reviews"])
         
@@ -3373,6 +3589,48 @@ class Qoo10Crawler(ShopCrawlerMixin):
         
         # 고유한 class 목록 정리 (최대 500개로 제한)
         structure["all_div_classes"] = sorted(list(set(structure["all_div_classes"])))[:500]
+        
+        # 요소(element) 단위 상세 목록 (Crawl Agent → Analysis/Recommendation/Checklist/Report 반영용)
+        # doc/agents 및 .spec-kit/product-page-elements-spec.md 기준
+        ELEMENT_SPEC = [
+            ("product_info", "상품 정보", "product_name_elements"),
+            ("price_info", "가격 정보", "price_elements"),
+            ("image_info", "이미지 정보", "image_elements"),
+            ("description_info", "상품 설명", "description_elements"),
+            ("review_info", "리뷰 정보", "review_elements"),
+            ("seller_info", "판매자 정보", "seller_elements"),
+            ("shipping_info", "배송 정보", "shipping_elements"),
+            ("coupon_info", "쿠폰 정보", "coupon_elements"),
+            ("qpoint_info", "Qポイント 정보", "qpoint_elements"),
+        ]
+        key_to_semantic = {
+            "product_info": "product_name_elements",
+            "price_info": "price_elements",
+            "image_info": "image_elements",
+            "description_info": "description_elements",
+            "review_info": "review_elements",
+            "seller_info": "seller_elements",
+            "shipping_info": "shipping_elements",
+            "coupon_info": "coupon_elements",
+            "qpoint_info": "qpoint_elements",
+        }
+        elements_detail = []
+        for element_id, name_ko, semantic_key in ELEMENT_SPEC:
+            key_entries = structure.get("key_elements", {}).get(element_id, [])
+            sem_entries = structure.get("semantic_structure", {}).get(semantic_key, [])
+            classes_from_key = [e.get("class") for e in key_entries if isinstance(e, dict) and e.get("class")] if key_entries else []
+            classes_from_sem = [e.get("class") if isinstance(e, dict) else (e if isinstance(e, str) else None) for e in (sem_entries[:15] if sem_entries else [])]
+            classes_from_sem = [c for c in classes_from_sem if c]
+            all_classes = list(dict.fromkeys(classes_from_key + classes_from_sem))
+            present = len(all_classes) > 0 or (element_id in structure.get("key_elements", {}) and structure["key_elements"][element_id])
+            elements_detail.append({
+                "element_id": element_id,
+                "name_ko": name_ko,
+                "present": bool(present),
+                "classes": all_classes[:20],
+                "source": "key_elements" if classes_from_key else ("semantic_structure" if classes_from_sem else "none"),
+            })
+        structure["elements_detail"] = elements_detail
         
         # #region agent log - H1, H3, H4 가설 검증
         try:

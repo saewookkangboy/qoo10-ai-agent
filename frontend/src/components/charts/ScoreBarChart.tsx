@@ -117,9 +117,7 @@ export default function ScoreBarChart({ data, height = 300 }: ScoreBarChartProps
 
     const handleResize = () => {
       if (chartRef.current && chartInstanceRef.current) {
-        chartInstanceRef.current.updateSpec({
-          width: chartRef.current.offsetWidth
-        })
+        chartInstanceRef.current.resizeSync(chartRef.current.offsetWidth, height)
       }
     }
 

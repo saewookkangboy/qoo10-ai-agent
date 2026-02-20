@@ -151,14 +151,23 @@ class ShopCrawlerMixin:
                                 data.follower_count = parseInt(followerMatch[1].replace(/,/g, ''));
                             }
 
-                            const productMatch = document.body.textContent.match(/全ての商品[_\s]*\((\d+)\)/);
+                            const productMatch = document.body.textContent.match(/全ての商品[_\s]*[（(]\s*(\d+)\s*[）)]/);
                             if (productMatch) {
                                 data.product_count = parseInt(productMatch[1]);
                             }
 
-                            const powerMatch = document.body.textContent.match(/POWER[_\s]*(\d+)%/);
+                            let powerMatch = document.body.textContent.match(/POWER[_\s]*(\d+)\s*[%％]/);
+                            if (!powerMatch) {
+                                const powerSection = document.body.textContent.indexOf('POWER') >= 0
+                                    ? document.body.textContent.substring(
+                                        document.body.textContent.indexOf('POWER'),
+                                        document.body.textContent.indexOf('POWER') + 80
+                                    ) : '';
+                                powerMatch = powerSection.match(/(\d{2,3})\s*[%％]/);
+                            }
                             if (powerMatch) {
-                                data.power_level = parseInt(powerMatch[1]);
+                                const pct = parseInt(powerMatch[1]);
+                                if (pct >= 70 && pct <= 100) data.power_level = pct;
                             }
 
                             const productItems = document.querySelectorAll('.item, .product-item, div[class*="item"]');
@@ -426,6 +435,23 @@ class ShopCrawlerMixin:
         return "Shop 이름 없음"
 
     def _extract_shop_level(self, soup: BeautifulSoup) -> Optional[str]:
+        # 페이지 전체 텍스트에서 POWER N% 우선 추출 (텍스트가 여러 노드에 나뉘어 있어도 매칭)
+        try:
+            body = soup.find("body") or soup
+            page_text = body.get_text(separator=" ", strip=True) if body else ""
+            if page_text:
+                # POWER 95% / POWER_95% / 전각 ％. POWER와 % 사이에 다른 숫자(예: 51,981) 있을 수 있으므로
+                # 70–100 범위의 퍼센트만 레벨로 인정
+                for power_match in re.finditer(r"POWER.{0,80}?(\d{1,3})\s*[%％]", page_text, re.I):
+                    power_pct = int(power_match.group(1))
+                    if 70 <= power_pct <= 100:
+                        if power_pct >= 90:
+                            return "power"
+                        return "excellent"
+                    # 51 등 다른 숫자면 계속 다음 매치 검사
+        except Exception:
+            pass
+
         power_pattern = self._create_jp_kr_regex("POWER", "파워")
         power_jp_pattern = self._create_jp_kr_regex("パワー", "파워")
         power_patterns = [
@@ -511,11 +537,27 @@ class ShopCrawlerMixin:
         return 0
 
     def _extract_product_count(self, soup: BeautifulSoup) -> int:
+        # 페이지 전체 텍스트에서 "全ての商品 (N)" 우선 추출 (공식 표기와 일치)
+        try:
+            body = soup.find("body") or soup
+            page_text = body.get_text(separator=" ", strip=True) if body else ""
+            if page_text:
+                # 반각/전각 괄호 모두 허용: (18) 또는 （18）
+                product_match = re.search(
+                    r"全ての商品\s*[（(]\s*(\d+)\s*[）)]",
+                    page_text,
+                )
+                if product_match:
+                    return int(product_match.group(1))
+        except Exception:
+            pass
+
         all_product_pattern = self._create_jp_kr_regex("全ての商品", "전체상품")
         product_pattern = self._create_jp_kr_regex("商品", "상품")
         product_count_pattern = self._create_jp_kr_regex("商品数", "상품수")
         product_patterns = [
             f"{all_product_pattern}\\s*\\((\\d+)\\)",
+            f"{all_product_pattern}\\s*[（(]\\s*(\\d+)\\s*[）)]",
             f"{product_pattern}.*\\((\\d+)\\)",
             f"{all_product_pattern}[：:]\\s*(\\d+)",
             f"{product_count_pattern}[：:]\\s*(\\d+)",
