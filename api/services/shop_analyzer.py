@@ -1,6 +1,10 @@
 """
 Shop 분석 서비스
 Qoo10 Shop 페이지를 분석하여 Shop 레벨, 카테고리, 경쟁사 정보 등을 제공합니다.
+
+지표 정의 및 코드 정합성:
+- doc/ENHANCED_ANALYSIS_METRICS.md — Shop 지표(정보/상품/카테고리/특수성 등)
+- doc/METRICS_CODE_MAPPING.md — 문서 vs 구현 일치/갭 매핑
 """
 from typing import Dict, Any, List, Optional
 from bs4 import BeautifulSoup

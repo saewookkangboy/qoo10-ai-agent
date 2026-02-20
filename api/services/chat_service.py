@@ -1,41 +1,40 @@
 """
 챗봇 서비스
 분석 리포트에 대한 질문에 답변하는 AI 챗봇
-Gemini API를 사용합니다.
+AI 제공자: Gemini 우선, 없으면 OpenAI 폴백 (환경 변수 AI_PROVIDER로 지정 가능)
 """
 from typing import Dict, Any, Optional
-import os
 import json
 import logging
 
 logger = logging.getLogger(__name__)
 
-# Gemini 서비스 임포트
-try:
-    from .gemini_service import GeminiService
-    GEMINI_SERVICE_AVAILABLE = True
-except ImportError:
-    GEMINI_SERVICE_AVAILABLE = False
-    GeminiService = None
-    logger.warning("Gemini service not available. Chat service will use fallback responses.")
+
+def _ai_service_usable(svc) -> bool:
+    """Gemini(model) 또는 OpenAI(available) 사용 가능 여부"""
+    if svc is None:
+        return False
+    if getattr(svc, "model", None):
+        return True
+    if getattr(svc, "available", False):
+        return True
+    return False
 
 
 class ChatService:
     """챗봇 서비스 클래스"""
-    
+
     def __init__(self):
-        self.gemini_service = None
-        
-        # Gemini 초기화
-        if GEMINI_SERVICE_AVAILABLE and GeminiService:
-            try:
-                self.gemini_service = GeminiService()
-                if self.gemini_service.model:
-                    logger.info("Gemini 서비스가 활성화되었습니다.")
-                else:
-                    logger.warning("GEMINI_API_KEY not set. Chat service will use fallback responses.")
-            except Exception as e:
-                logger.warning(f"Gemini 서비스 초기화 실패: {str(e)}")
+        self._ai_service = None
+        try:
+            from .ai_provider import get_ai_service_for_chat
+            self._ai_service = get_ai_service_for_chat()
+            if _ai_service_usable(self._ai_service):
+                logger.info("챗봇 AI 서비스가 활성화되었습니다 (Gemini 또는 OpenAI).")
+            else:
+                logger.warning("AI API 키가 없습니다. 챗봇은 폴백 응답만 사용합니다.")
+        except Exception as e:
+            logger.warning("AI 서비스 초기화 실패: %s", str(e))
     
     async def generate_response(
         self,
@@ -54,21 +53,20 @@ class ChatService:
         Returns:
             AI 응답 메시지
         """
-        # Gemini 사용, 실패 시 Fallback
-        if self.gemini_service and self.gemini_service.model and analysis_result:
-            return await self._generate_gemini_response(message, analysis_result)
-        else:
-            return self._generate_fallback_response(message, analysis_result)
-    
-    async def _generate_gemini_response(
+        # AI 서비스 사용 (Gemini 또는 OpenAI), 실패 시 Fallback
+        if _ai_service_usable(self._ai_service) and analysis_result:
+            return await self._generate_ai_response(message, analysis_result)
+        return self._generate_fallback_response(message, analysis_result)
+
+    async def _generate_ai_response(
         self,
         message: str,
         analysis_result: Dict[str, Any]
     ) -> str:
-        """Gemini를 사용한 응답 생성"""
+        """AI 서비스(Gemini 또는 OpenAI)를 사용한 응답 생성"""
         try:
             context = self._build_context(analysis_result)
-            
+
             system_prompt = """당신은 Qoo10 상품 분석 리포트 전문가입니다. 
 사용자가 리포트에 대해 질문하면, 리포트 내용을 바탕으로 명확하고 실용적인 답변을 제공하세요.
 
@@ -80,7 +78,7 @@ class ChatService:
 5. 필요시 리포트의 특정 섹션을 언급
 
 답변은 대화 형식으로 자연스럽게 작성하세요."""
-            
+
             user_prompt = f"""다음은 분석 리포트의 요약입니다:
 
 {context}
@@ -88,23 +86,22 @@ class ChatService:
 사용자 질문: {message}
 
 위 리포트 내용을 바탕으로 질문에 답변해주세요."""
-            
-            response = await self.gemini_service.generate_text(
+
+            response = await self._ai_service.generate_text(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
                 temperature=0.7,
                 max_tokens=1000
             )
-            
+
             if response:
                 return response.strip()
-            else:
-                return self._generate_fallback_response(message, analysis_result)
-            
-        except Exception as e:
-            logger.error(f"Error generating Gemini response: {str(e)}")
             return self._generate_fallback_response(message, analysis_result)
-    
+
+        except Exception as e:
+            logger.error("AI 응답 생성 오류: %s", str(e))
+            return self._generate_fallback_response(message, analysis_result)
+
     def _build_context(self, analysis_result: Dict[str, Any]) -> str:
         """분석 결과를 컨텍스트 문자열로 변환"""
         context_parts = []
@@ -199,4 +196,4 @@ class ChatService:
             return "경쟁사 분석 정보는 리포트의 경쟁사 비교 섹션에서 확인하실 수 있습니다."
         
         else:
-            return "죄송합니다. 더 정확한 답변을 위해 Gemini API 키가 필요합니다. 현재는 기본 응답만 제공됩니다. 리포트의 각 섹션을 직접 확인하시거나, 구체적인 질문을 해주시면 더 도움을 드릴 수 있습니다."
+            return "죄송합니다. 더 정확한 답변을 위해 AI API 키(GEMINI_API_KEY 또는 OPENAI_API_KEY)가 필요합니다. 현재는 기본 응답만 제공됩니다. 리포트의 각 섹션을 직접 확인하시거나, 구체적인 질문을 해주시면 더 도움을 드릴 수 있습니다."

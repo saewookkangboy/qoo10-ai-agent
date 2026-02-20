@@ -166,10 +166,13 @@ export interface SEOAnalysis {
 
 export interface PageStructureAnalysis {
   score: number
+  grade?: 'Excellent' | 'Good' | 'Fair' | 'Poor'
   total_classes: number
   key_elements_present: Record<string, boolean>
   structure_completeness: Record<string, boolean>
   top_classes?: Array<{ class: string; frequency: number }>
+  element_quality?: { overall_quality_score?: number; diversity_score?: number; consistency_score?: number }
+  element_relationships?: { relationship_score?: number }
   recommendations: string[]
 }
 

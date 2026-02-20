@@ -1,0 +1,50 @@
+{
+  "description": "역할별 지금 업데이트할 작업 목록 (todos.json category·우선순위·마일스톤 반영)",
+  "updated_at": "2026-02-20",
+  "role_actions": {
+    "pm": [
+      {"todo_id": "todo_016", "priority": "medium", "milestone": "Phase 1", "status": "pending", "summary": "테스트 코드 작성 — 일정·커버리지 목표 조율"},
+      {"todo_id": "todo_017", "priority": "medium", "milestone": "Phase 1", "status": "pending", "summary": "배포 환경 설정 — 리소스·CI/CD 일정 조율"}
+    ],
+    "frontend_developer": [
+      {"todo_id": "todo_008", "priority": "high", "milestone": "Phase 1", "status": "pending", "summary": "React 프로젝트 초기화"},
+      {"todo_id": "todo_009", "priority": "high", "milestone": "Phase 1", "status": "pending", "summary": "URL 입력 컴포넌트 개발 (todo_008 의존)"},
+      {"todo_id": "todo_004", "priority": "high", "milestone": "Phase 1", "status": "pending", "summary": "F6: 리포트 시각화 카드 형태 (todo_002, todo_003 의존)"},
+      {"todo_id": "todo_010", "priority": "high", "milestone": "Phase 1", "status": "pending", "summary": "리포트 카드 컴포넌트 개발"}
+    ],
+    "backend_developer": [
+      {"todo_id": "todo_005", "priority": "high", "milestone": "Phase 1", "status": "pending", "summary": "FastAPI 서버 구축"},
+      {"todo_id": "todo_006", "priority": "high", "milestone": "Phase 1", "status": "pending", "summary": "크롤링 서비스 구현 (todo_005 의존)"},
+      {"todo_id": "todo_007", "priority": "high", "milestone": "Phase 1", "status": "pending", "summary": "AI 분석 서비스 구현 (todo_006 의존)"},
+      {"todo_id": "todo_001", "priority": "high", "milestone": "Phase 1", "status": "pending", "summary": "F1: URL 입력 및 분석 시작 (todo_005 의존)"},
+      {"todo_id": "todo_002", "priority": "high", "milestone": "Phase 1", "status": "pending", "summary": "F2: 상품 상세페이지 분석 (todo_001 의존)"},
+      {"todo_id": "todo_003", "priority": "high", "milestone": "Phase 1", "status": "pending", "summary": "F4: 매출 강화 아이디어 제안 (todo_002 의존)"},
+      {"todo_id": "todo_011", "priority": "medium", "milestone": "Phase 2", "status": "pending", "summary": "F3: Shop 카테고리 분석"},
+      {"todo_id": "todo_012", "priority": "medium", "milestone": "Phase 2", "status": "pending", "summary": "F5: 메뉴얼 기반 체크리스트"},
+      {"todo_id": "todo_013", "priority": "medium", "milestone": "Phase 2", "status": "pending", "summary": "F7: 경쟁사 비교 분석 (todo_011 의존)"},
+      {"todo_id": "todo_014", "priority": "medium", "milestone": "Phase 2", "status": "pending", "summary": "F8: 리포트 다운로드 (PDF/Excel)"},
+      {"todo_id": "todo_016", "priority": "medium", "milestone": "Phase 1", "status": "pending", "summary": "테스트 코드 작성 (백엔드 단위/통합)"}
+    ],
+    "server_db_developer": [
+      {"todo_id": "todo_015", "priority": "high", "milestone": "Phase 1", "status": "pending", "summary": "데이터베이스 설계 및 구축"},
+      {"todo_id": "todo_017", "priority": "medium", "milestone": "Phase 1", "status": "pending", "summary": "배포 환경 설정 (Docker, CI/CD, 모니터링)"}
+    ],
+    "security_manager": [
+      {"todo_id": null, "priority": "medium", "milestone": "Phase 1", "status": "pending", "summary": "보안 체크리스트 추가 권장 — API 키·입력 검증·크롤링 정책"}
+    ],
+    "ui_ux_designer": [
+      {"todo_id": "todo_004", "priority": "high", "milestone": "Phase 1", "status": "pending", "summary": "F6: 리포트 시각화 — 카드 레이아웃·색상·인터랙션"},
+      {"todo_id": "todo_009", "priority": "high", "milestone": "Phase 1", "status": "pending", "summary": "URL 입력 컴포넌트 — 폼·에러·로딩 UX"},
+      {"todo_id": "todo_010", "priority": "high", "milestone": "Phase 1", "status": "pending", "summary": "리포트 카드 컴포넌트 — 헤더·지표·모달 UX"}
+    ],
+    "ai_marketing_researcher": [
+      {"todo_id": "todo_003", "priority": "high", "milestone": "Phase 1", "status": "pending", "summary": "F4: 매출 강화 아이디어 — 메뉴얼 지식베이스·제안 로직"},
+      {"todo_id": "todo_011", "priority": "medium", "milestone": "Phase 2", "status": "pending", "summary": "F3: Shop 카테고리 분석 — 리서치 요구사항"},
+      {"todo_id": "todo_013", "priority": "medium", "milestone": "Phase 2", "status": "pending", "summary": "F7: 경쟁사 비교 분석 — 비교 항목·차별화 포인트"}
+    ]
+  },
+  "notes": [
+    "todo_018(OPENAI/GEMINI API 키·AI 고도화)는 completed 상태로, 백엔드·AI 리서치 역할 참고용.",
+    "역할별 작업은 의존성(todos.json dependencies) 순서를 지켜 진행하는 것을 권장."
+  ]
+}

@@ -6,8 +6,12 @@
 - CRAWLING_ANALYSIS_PRINCIPLES.md 참조
 - 모든 분석은 일관된 기준과 원칙을 따라야 함
 - 크롤링 방법(crawled_with)에 따라 적절한 분석 수행
+
+지표 정의 및 코드 정합성:
+- doc/ENHANCED_ANALYSIS_METRICS.md — 세부 지표(가중치, 점수 범위, 등급)
+- doc/METRICS_CODE_MAPPING.md — 문서 vs 구현 일치/갭 매핑
 """
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import re
 from PIL import Image
 import httpx
@@ -331,8 +335,13 @@ class ProductAnalyzer:
     
     def _analyze_page_structure(self, page_structure: Dict[str, Any]) -> Dict[str, Any]:
         """
-        페이지 구조 분석
-        모든 div class를 분석하여 페이지의 구조적 완성도를 평가
+        페이지 구조 분석 (정밀 분석 버전)
+        dev-agent-kit 서브에이전트 원칙에 따라 더욱 정밀한 분석 수행:
+        - 요소 간 관계 분석
+        - 요소 품질 평가 (빈도, 위치, 계층 구조)
+        - 시맨틱 구조의 깊이 분석
+        - 요소 간 상관관계 분석
+        - 접근성 및 SEO 관점의 구조 분석
         """
         # #region agent log - H2, H4 가설 검증
         log_path = "/Users/chunghyo/qoo10-ai-agent/.cursor/debug.log"
@@ -345,7 +354,7 @@ class ProductAnalyzer:
                     "id": f"log_{int(datetime.now().timestamp() * 1000)}_analyze_start",
                     "timestamp": int(datetime.now().timestamp() * 1000),
                     "location": "analyzer.py:_analyze_page_structure",
-                    "message": "페이지 구조 분석 시작",
+                    "message": "페이지 구조 분석 시작 (정밀 분석)",
                     "data": {
                         "page_structure_is_none": page_structure is None,
                         "page_structure_keys": list(page_structure.keys()) if page_structure else []
@@ -362,6 +371,11 @@ class ProductAnalyzer:
             "total_classes": 0,
             "key_elements_present": {},
             "structure_completeness": {},
+            "element_quality": {},  # 요소 품질 평가 추가
+            "element_relationships": {},  # 요소 간 관계 분석 추가
+            "semantic_depth": {},  # 시맨틱 구조 깊이 분석 추가
+            "correlation_analysis": {},  # 요소 간 상관관계 분석 추가
+            "accessibility_seo_score": 0,  # 접근성 및 SEO 점수 추가
             "recommendations": []
         }
         
@@ -411,15 +425,7 @@ class ProductAnalyzer:
         # 전체 class 수
         all_classes = page_structure.get("all_div_classes", [])
         analysis["total_classes"] = len(all_classes)
-        
-        # 기본 점수 (class가 많을수록 구조가 복잡하고 완성도가 높음)
-        if analysis["total_classes"] >= 50:
-            analysis["score"] += 20
-        elif analysis["total_classes"] >= 30:
-            analysis["score"] += 15
-        elif analysis["total_classes"] >= 20:
-            analysis["score"] += 10
-        else:
+        if analysis["total_classes"] < 20:
             analysis["recommendations"].append("페이지 구조가 단순합니다. 더 많은 정보 요소를 추가하세요")
         
         # 주요 요소 존재 여부 확인
@@ -526,7 +532,6 @@ class ProductAnalyzer:
             
             if found:
                 analysis["key_elements_present"][element_key] = True
-                analysis["score"] += 15
             else:
                 analysis["key_elements_present"][element_key] = False
                 analysis["recommendations"].append(f"{element_name} 요소가 페이지에서 확인되지 않습니다")
@@ -603,17 +608,7 @@ class ProductAnalyzer:
                 optional_count += 1
             else:
                 analysis["key_elements_present"][element_key] = False
-        
-        # 선택적 요소 점수 (최대 20점)
-        if optional_count >= 4:
-            analysis["score"] += 20
-        elif optional_count >= 3:
-            analysis["score"] += 15
-        elif optional_count >= 2:
-            analysis["score"] += 10
-        elif optional_count >= 1:
-            analysis["score"] += 5
-        else:
+        if optional_count == 0:
             analysis["recommendations"].append("추가 정보 요소(리뷰, 판매자 정보, 배송 정보 등)를 추가하면 신뢰도가 향상됩니다")
         
         # 구조 완성도 평가
@@ -630,16 +625,8 @@ class ProductAnalyzer:
         }
         
         analysis["structure_completeness"] = structure_completeness
-        
-        # 완성도 점수 계산
-        completeness_score = sum(1 for v in structure_completeness.values() if v)
-        if completeness_score >= 7:
-            analysis["score"] += 20
-        elif completeness_score >= 5:
-            analysis["score"] += 15
-        elif completeness_score >= 3:
-            analysis["score"] += 10
-        else:
+        completeness_count = sum(1 for v in structure_completeness.values() if v)
+        if completeness_count < 3:
             analysis["recommendations"].append("페이지 구조가 불완전합니다. 필수 요소들을 추가하세요")
         
         # class 빈도 분석 (자주 사용되는 class는 중요한 요소일 가능성이 높음)
@@ -693,13 +680,61 @@ class ProductAnalyzer:
             except: pass
             # #endregion
             
-            if important_class_count >= 5:
-                analysis["score"] += 10
-            elif important_class_count >= 3:
-                analysis["score"] += 5
+            analysis["class_frequency_score"] = min(100, important_class_count * 20)  # 0-100
+        else:
+            analysis["class_frequency_score"] = 0
         
-        # 점수 정규화 (0-100)
+        # ===== 정밀 분석: 요소 품질 / 관계 / 시맨틱 깊이 / 상관관계 / 접근성·SEO =====
+        analysis["element_quality"] = self._analyze_element_quality(
+            key_elements, semantic_structure, class_frequency
+        )
+        analysis["element_relationships"] = self._analyze_element_relationships(
+            key_elements, semantic_structure
+        )
+        analysis["semantic_depth"] = self._analyze_semantic_depth(semantic_structure)
+        analysis["correlation_analysis"] = self._analyze_element_correlations(
+            key_elements, semantic_structure, structure_completeness
+        )
+        analysis["accessibility_seo_score"] = self._analyze_accessibility_seo(
+            semantic_structure, key_elements, class_frequency, page_structure
+        )
+        
+        # 스펙 기반 가중치 합산 (.spec-kit/product-page-elements-spec.md)
+        essential_count = sum(1 for k in ["product_info", "price_info", "image_info", "description_info"] if analysis["key_elements_present"].get(k))
+        essential_score = (essential_count / 4) * 100 if essential_count <= 4 else 100
+        optional_score = (optional_count / 5) * 100 if optional_count <= 5 else 100
+        completeness_score = (completeness_count / 9) * 100 if completeness_count <= 9 else 100
+        class_freq_score = analysis.get("class_frequency_score", 0)
+        quality_score = analysis["element_quality"].get("overall_quality_score", 0)
+        relationship_score = analysis["element_relationships"].get("relationship_score", 0)
+        depth_score = min(100, analysis["semantic_depth"].get("depth_score", 0))
+        correlation_score = analysis["correlation_analysis"].get("correlation_score", 0)
+        accessibility_score = min(100, analysis["accessibility_seo_score"])
+        
+        weights = {
+            "essential": 0.25,      # 필수 4요소 25%
+            "optional": 0.20,      # 선택 5요소 20%
+            "completeness": 0.15,  # 구조 완성도 15%
+            "class_frequency": 0.10,  # 클래스 빈도 10%
+            "quality": 0.15,       # 요소 품질 15%
+            "relationship": 0.10, # 요소 관계 10%
+            "depth": 0.05,         # 시맨틱 깊이 5%
+            "correlation": 0.05,   # 상관관계 5%
+            "accessibility": 0.05, # 접근성·SEO 5%
+        }
+        analysis["score"] = int(
+            essential_score * weights["essential"]
+            + optional_score * weights["optional"]
+            + completeness_score * weights["completeness"]
+            + class_freq_score * weights["class_frequency"]
+            + quality_score * weights["quality"]
+            + relationship_score * weights["relationship"]
+            + depth_score * weights["depth"]
+            + correlation_score * weights["correlation"]
+            + accessibility_score * weights["accessibility"]
+        )
         analysis["score"] = min(100, max(0, analysis["score"]))
+        analysis["grade"] = self._get_page_structure_grade(analysis["score"])
         
         # #region agent log - H2 가설 검증
         try:
@@ -708,11 +743,16 @@ class ProductAnalyzer:
                     "id": f"log_{int(datetime.now().timestamp() * 1000)}_analyze_end",
                     "timestamp": int(datetime.now().timestamp() * 1000),
                     "location": "analyzer.py:_analyze_page_structure",
-                    "message": "페이지 구조 분석 완료",
+                    "message": "페이지 구조 분석 완료 (정밀 분석)",
                     "data": {
                         "final_score": analysis["score"],
                         "total_classes": analysis["total_classes"],
                         "key_elements_present": analysis["key_elements_present"],
+                        "element_quality_score": analysis["element_quality"].get("overall_quality_score", 0),
+                        "relationship_score": analysis["element_relationships"].get("relationship_score", 0),
+                        "semantic_depth_score": analysis["semantic_depth"].get("depth_score", 0),
+                        "correlation_score": analysis["correlation_analysis"].get("correlation_score", 0),
+                        "accessibility_seo_score": analysis["accessibility_seo_score"],
                         "recommendations_count": len(analysis["recommendations"])
                     },
                     "sessionId": "debug-session",
@@ -723,6 +763,458 @@ class ProductAnalyzer:
         # #endregion
         
         return analysis
+    
+    def _analyze_element_quality(
+        self, 
+        key_elements: Dict[str, Any], 
+        semantic_structure: Dict[str, Any],
+        class_frequency: Dict[str, int]
+    ) -> Dict[str, Any]:
+        """
+        요소 품질 평가
+        - 빈도 분석: 자주 사용되는 요소는 중요도가 높음
+        - 다양성 분석: 다양한 요소가 존재하는지 확인
+        - 일관성 분석: 유사한 패턴의 요소들이 일관되게 사용되는지
+        """
+        quality_analysis = {
+            "overall_quality_score": 0,
+            "frequency_analysis": {},
+            "diversity_score": 0,
+            "consistency_score": 0,
+            "recommendations": []
+        }
+        
+        # 빈도 분석: 각 요소 카테고리의 빈도 평가
+        frequency_scores = {}
+        for category, elements in key_elements.items():
+            if elements:
+                # 요소 개수와 평균 빈도 계산
+                total_frequency = sum(
+                    elem.get("frequency", 1) 
+                    for elem in elements 
+                    if isinstance(elem, dict)
+                )
+                avg_frequency = total_frequency / len(elements) if elements else 0
+                
+                frequency_scores[category] = {
+                    "element_count": len(elements),
+                    "avg_frequency": avg_frequency,
+                    "score": min(100, len(elements) * 10 + int(avg_frequency * 5))
+                }
+        
+        quality_analysis["frequency_analysis"] = frequency_scores
+        
+        # 빈도 점수 계산 (평균)
+        if frequency_scores:
+            avg_frequency_score = sum(
+                score["score"] for score in frequency_scores.values()
+            ) / len(frequency_scores)
+            quality_analysis["overall_quality_score"] += int(avg_frequency_score * 0.4)
+        
+        # 다양성 분석: 시맨틱 구조의 다양성 평가
+        semantic_keys = list(semantic_structure.keys())
+        diversity_score = 0
+        
+        # 필수 요소 카테고리 확인
+        essential_categories = [
+            "product_name_elements", "price_elements", 
+            "image_elements", "description_elements"
+        ]
+        essential_found = sum(1 for key in essential_categories if key in semantic_keys)
+        diversity_score += (essential_found / len(essential_categories)) * 50
+        
+        # 선택적 요소 카테고리 확인
+        optional_categories = [
+            "review_elements", "seller_elements", 
+            "shipping_elements", "coupon_elements", "qpoint_elements"
+        ]
+        optional_found = sum(1 for key in optional_categories if key in semantic_keys)
+        diversity_score += (optional_found / len(optional_categories)) * 50
+        
+        quality_analysis["diversity_score"] = int(diversity_score)
+        quality_analysis["overall_quality_score"] += int(diversity_score * 0.3)
+        
+        # 일관성 분석: 유사한 패턴의 요소들이 일관되게 사용되는지
+        consistency_score = 0
+        
+        # 각 카테고리 내에서 요소들의 빈도 일관성 확인
+        for category, elements in key_elements.items():
+            if len(elements) > 1:
+                frequencies = [
+                    elem.get("frequency", 1) 
+                    for elem in elements 
+                    if isinstance(elem, dict)
+                ]
+                if frequencies:
+                    # 표준편차가 낮을수록 일관성이 높음
+                    avg_freq = sum(frequencies) / len(frequencies)
+                    variance = sum((f - avg_freq) ** 2 for f in frequencies) / len(frequencies)
+                    std_dev = variance ** 0.5
+                    
+                    # 표준편차가 평균의 30% 이하면 일관성이 높음
+                    if avg_freq > 0 and std_dev / avg_freq < 0.3:
+                        consistency_score += 10
+        
+        quality_analysis["consistency_score"] = min(100, consistency_score)
+        quality_analysis["overall_quality_score"] += int(quality_analysis["consistency_score"] * 0.3)
+        
+        # 품질 점수 정규화
+        quality_analysis["overall_quality_score"] = min(100, quality_analysis["overall_quality_score"])
+        
+        # 추천사항
+        if quality_analysis["diversity_score"] < 50:
+            quality_analysis["recommendations"].append(
+                "페이지 요소의 다양성이 부족합니다. 더 많은 정보 요소를 추가하세요"
+            )
+        
+        if quality_analysis["consistency_score"] < 50:
+            quality_analysis["recommendations"].append(
+                "요소 사용의 일관성이 부족합니다. 유사한 패턴의 요소를 일관되게 사용하세요"
+            )
+        
+        return quality_analysis
+    
+    def _analyze_element_relationships(
+        self,
+        key_elements: Dict[str, Any],
+        semantic_structure: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        요소 간 관계 분석
+        - 필수 요소 간의 연결성 확인
+        - 관련 요소들의 그룹화 확인
+        - 요소 간 의존성 분석
+        """
+        relationship_analysis = {
+            "relationship_score": 0,
+            "essential_connections": {},
+            "element_groups": {},
+            "dependency_analysis": {},
+            "recommendations": []
+        }
+        
+        # 필수 요소 간 연결성 확인
+        essential_pairs = [
+            ("product_info", "price_info", "상품 정보와 가격 정보"),
+            ("product_info", "image_info", "상품 정보와 이미지 정보"),
+            ("price_info", "image_info", "가격 정보와 이미지 정보"),
+            ("product_info", "description_info", "상품 정보와 설명 정보")
+        ]
+        
+        connections_found = 0
+        for elem1_key, elem2_key, pair_name in essential_pairs:
+            elem1_found = (
+                elem1_key in key_elements and key_elements[elem1_key]
+            ) or (
+                self._get_semantic_key(elem1_key) in semantic_structure 
+                and semantic_structure[self._get_semantic_key(elem1_key)]
+            )
+            
+            elem2_found = (
+                elem2_key in key_elements and key_elements[elem2_key]
+            ) or (
+                self._get_semantic_key(elem2_key) in semantic_structure 
+                and semantic_structure[self._get_semantic_key(elem2_key)]
+            )
+            
+            if elem1_found and elem2_found:
+                connections_found += 1
+                relationship_analysis["essential_connections"][pair_name] = True
+            else:
+                relationship_analysis["essential_connections"][pair_name] = False
+        
+        # 연결성 점수 계산
+        if essential_pairs:
+            connection_score = (connections_found / len(essential_pairs)) * 100
+            relationship_analysis["relationship_score"] += int(connection_score * 0.6)
+        
+        # 요소 그룹화 확인
+        # 관련 요소들이 함께 존재하는지 확인
+        related_groups = {
+            "구매 정보 그룹": ["price_info", "coupon_info", "qpoint_info"],
+            "상품 정보 그룹": ["product_info", "image_info", "description_info"],
+            "신뢰 정보 그룹": ["review_info", "seller_info", "shipping_info"]
+        }
+        
+        groups_complete = 0
+        for group_name, group_elements in related_groups.items():
+            found_count = 0
+            for elem_key in group_elements:
+                if (
+                    elem_key in key_elements and key_elements[elem_key]
+                ) or (
+                    self._get_semantic_key(elem_key) in semantic_structure 
+                    and semantic_structure[self._get_semantic_key(elem_key)]
+                ):
+                    found_count += 1
+            
+            completeness = found_count / len(group_elements)
+            relationship_analysis["element_groups"][group_name] = {
+                "completeness": completeness,
+                "found_elements": found_count,
+                "total_elements": len(group_elements)
+            }
+            
+            if completeness >= 0.7:  # 70% 이상 완성도
+                groups_complete += 1
+        
+        # 그룹화 점수 계산
+        if related_groups:
+            group_score = (groups_complete / len(related_groups)) * 100
+            relationship_analysis["relationship_score"] += int(group_score * 0.4)
+        
+        relationship_analysis["relationship_score"] = min(100, relationship_analysis["relationship_score"])
+        
+        # 추천사항
+        if relationship_analysis["relationship_score"] < 60:
+            relationship_analysis["recommendations"].append(
+                "필수 요소 간의 연결성이 부족합니다. 관련 정보를 함께 배치하세요"
+            )
+        
+        return relationship_analysis
+    
+    def _analyze_semantic_depth(self, semantic_structure: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        시맨틱 구조 깊이 분석
+        - 각 카테고리의 요소 깊이 확인
+        - 중첩 레벨 분석
+        - 요소 그룹화 깊이 확인
+        """
+        depth_analysis = {
+            "depth_score": 0,
+            "category_depths": {},
+            "average_depth": 0,
+            "max_depth": 0,
+            "recommendations": []
+        }
+        
+        total_depth = 0
+        category_count = 0
+        max_depth = 0
+        
+        for category, elements in semantic_structure.items():
+            if elements:
+                # 요소 개수로 깊이 측정
+                element_count = len(elements) if isinstance(elements, list) else 1
+                
+                # 빈도 정보가 있으면 가중치 적용
+                weighted_depth = element_count
+                if isinstance(elements, list) and elements:
+                    # 첫 번째 요소가 딕셔너리이고 frequency 정보가 있으면
+                    if isinstance(elements[0], dict):
+                        avg_frequency = sum(
+                            e.get("frequency", 1) for e in elements if isinstance(e, dict)
+                        ) / len(elements)
+                        weighted_depth = element_count * (1 + avg_frequency / 10)
+                
+                depth_analysis["category_depths"][category] = {
+                    "element_count": element_count,
+                    "weighted_depth": weighted_depth
+                }
+                
+                total_depth += weighted_depth
+                category_count += 1
+                max_depth = max(max_depth, weighted_depth)
+        
+        if category_count > 0:
+            depth_analysis["average_depth"] = total_depth / category_count
+            depth_analysis["max_depth"] = max_depth
+            
+            # 깊이 점수 계산 (평균 깊이와 최대 깊이를 고려)
+            depth_score = min(100, int(depth_analysis["average_depth"] * 5) + int(max_depth * 2))
+            depth_analysis["depth_score"] = depth_score
+        
+        # 추천사항
+        if depth_analysis["average_depth"] < 2:
+            depth_analysis["recommendations"].append(
+                "시맨틱 구조의 깊이가 부족합니다. 더 상세한 요소 구조를 추가하세요"
+            )
+        
+        return depth_analysis
+    
+    def _analyze_element_correlations(
+        self,
+        key_elements: Dict[str, Any],
+        semantic_structure: Dict[str, Any],
+        structure_completeness: Dict[str, bool]
+    ) -> Dict[str, Any]:
+        """
+        요소 간 상관관계 분석
+        - 가격-이미지 상관관계
+        - 설명-리뷰 상관관계
+        - 상품 정보-판매자 정보 상관관계
+        """
+        correlation_analysis = {
+            "correlation_score": 0,
+            "correlations": {},
+            "recommendations": []
+        }
+        
+        # 상관관계 쌍 정의
+        correlation_pairs = [
+            {
+                "pair": ("price_info", "image_info"),
+                "name": "가격-이미지",
+                "description": "가격 정보와 이미지 정보는 함께 제공되어야 구매 결정에 도움이 됩니다"
+            },
+            {
+                "pair": ("description_info", "review_info"),
+                "name": "설명-리뷰",
+                "description": "상품 설명과 리뷰 정보가 함께 있으면 신뢰도가 향상됩니다"
+            },
+            {
+                "pair": ("product_info", "seller_info"),
+                "name": "상품-판매자",
+                "description": "상품 정보와 판매자 정보가 함께 있으면 신뢰도가 향상됩니다"
+            },
+            {
+                "pair": ("image_info", "description_info"),
+                "name": "이미지-설명",
+                "description": "이미지와 설명이 함께 있으면 상품 이해도가 향상됩니다"
+            }
+        ]
+        
+        correlations_found = 0
+        for pair_info in correlation_pairs:
+            elem1_key, elem2_key = pair_info["pair"]
+            pair_name = pair_info["name"]
+            
+            # 요소 존재 여부 확인
+            elem1_found = (
+                elem1_key in key_elements and key_elements[elem1_key]
+            ) or (
+                self._get_semantic_key(elem1_key) in semantic_structure 
+                and semantic_structure[self._get_semantic_key(elem1_key)]
+            )
+            
+            elem2_found = (
+                elem2_key in key_elements and key_elements[elem2_key]
+            ) or (
+                self._get_semantic_key(elem2_key) in semantic_structure 
+                and semantic_structure[self._get_semantic_key(elem2_key)]
+            )
+            
+            # 둘 다 존재하면 상관관계가 좋음
+            if elem1_found and elem2_found:
+                correlations_found += 1
+                correlation_analysis["correlations"][pair_name] = {
+                    "exists": True,
+                    "strength": "strong"
+                }
+            elif elem1_found or elem2_found:
+                # 하나만 존재하면 약한 상관관계
+                correlation_analysis["correlations"][pair_name] = {
+                    "exists": False,
+                    "strength": "weak",
+                    "missing": elem2_key if elem1_found else elem1_key
+                }
+                correlation_analysis["recommendations"].append(
+                    f"{pair_info['description']} ({pair_name} 상관관계)"
+                )
+            else:
+                # 둘 다 없으면 상관관계 없음
+                correlation_analysis["correlations"][pair_name] = {
+                    "exists": False,
+                    "strength": "none"
+                }
+        
+        # 상관관계 점수 계산
+        if correlation_pairs:
+            correlation_score = (correlations_found / len(correlation_pairs)) * 100
+            correlation_analysis["correlation_score"] = int(correlation_score)
+        
+        return correlation_analysis
+    
+    def _analyze_accessibility_seo(
+        self,
+        semantic_structure: Dict[str, Any],
+        key_elements: Dict[str, Any],
+        class_frequency: Dict[str, int],
+        page_structure: Optional[Dict[str, Any]] = None,
+    ) -> int:
+        """
+        접근성 및 SEO 관점의 구조 분석
+        - 시맨틱 HTML 요소 사용 확인
+        - 구조화된 데이터 확인
+        - 접근성 요소(role, aria-label) 확인 — page_structure.accessibility_hints 사용
+        """
+        score = 0
+        
+        # 시맨틱 요소 확인
+        semantic_elements_found = len([
+            key for key in semantic_structure.keys() 
+            if semantic_structure[key]
+        ])
+        if semantic_elements_found >= 7:
+            score += 40
+        elif semantic_elements_found >= 5:
+            score += 30
+        elif semantic_elements_found >= 3:
+            score += 20
+        else:
+            score += 10
+        
+        # 필수 SEO 요소 확인
+        seo_essential = [
+            "product_name_elements", "price_elements", 
+            "image_elements", "description_elements"
+        ]
+        seo_found = sum(1 for key in seo_essential if key in semantic_structure and semantic_structure[key])
+        if seo_found == len(seo_essential):
+            score += 30
+        elif seo_found >= 3:
+            score += 20
+        elif seo_found >= 2:
+            score += 10
+        
+        # 구조화된 데이터 확인 (class 빈도로 추정)
+        if class_frequency:
+            important_keywords = ["product", "goods", "item", "detail", "info"]
+            important_classes = [
+                cls for cls in class_frequency.keys()
+                if any(kw in cls.lower() for kw in important_keywords)
+            ]
+            if len(important_classes) >= 10:
+                score += 30
+            elif len(important_classes) >= 5:
+                score += 20
+            elif len(important_classes) >= 3:
+                score += 10
+        
+        # 접근성 힌트(role, aria-label) 반영 — 크롤러가 수집한 경우 가산
+        if page_structure:
+            hints = page_structure.get("accessibility_hints") or {}
+            roles = hints.get("roles") or []
+            aria_count = hints.get("aria_labels_count") or 0
+            if roles or aria_count > 0:
+                score = min(100, score + 10)
+        
+        return min(100, score)
+    
+    def _get_page_structure_grade(self, score: int) -> str:
+        """페이지 구조 분석 등급 (.spec-kit/product-page-elements-spec.md 기준)"""
+        if score >= 90:
+            return "Excellent"
+        if score >= 70:
+            return "Good"
+        if score >= 50:
+            return "Fair"
+        return "Poor"
+    
+    def _get_semantic_key(self, element_key: str) -> str:
+        """요소 키를 시맨틱 키로 변환"""
+        mapping = {
+            "product_info": "product_name_elements",
+            "price_info": "price_elements",
+            "image_info": "image_elements",
+            "description_info": "description_elements",
+            "review_info": "review_elements",
+            "seller_info": "seller_elements",
+            "shipping_info": "shipping_elements",
+            "coupon_info": "coupon_elements",
+            "qpoint_info": "qpoint_elements"
+        }
+        return mapping.get(element_key, element_key)
     
     def _calculate_overall_score(self, analysis_result: Dict[str, Any]) -> int:
         """종합 점수 계산"""

@@ -1,6 +1,41 @@
 {
   "todos": [
     {
+      "id": "todo_019",
+      "description": "상세페이지 분석 결과 UI 심플화 및 가독성·전문성 개편",
+      "priority": "high",
+      "status": "completed",
+      "milestone": "Phase 1",
+      "created_at": "2026-01-28T00:00:00Z",
+      "category": "frontend",
+      "dependencies": [],
+      "subtasks": [
+        "분석 리포트 헤더·점수 영역 심플화 (배경 장식 축소, 카드 구조 단순화)",
+        "ScoreCard 컴포넌트 단순화 (점수+라벨+핵심 제안만)",
+        "RecommendationCard 가독성 개선 (타이포·여백·메타 정보 정리)",
+        "ChecklistCard 섹션 구분 명확화 및 시각적 노이즈 감소",
+        "다운로드·경쟁사 섹션 정리 및 일관된 여백 적용"
+      ]
+    },
+    {
+      "id": "todo_018",
+      "description": "OPENAI/GEMINI API 키 추가 및 AI 기능 고도화",
+      "priority": "high",
+      "status": "completed",
+      "milestone": "Phase 1",
+      "created_at": "2026-02-20T00:00:00Z",
+      "category": "backend",
+      "dependencies": ["todo_007"],
+      "subtasks": [
+        "환경 변수 정리 (.env.example: OPENAI, GEMINI, ANTHROPIC, AI_PROVIDER, 모델/토큰)",
+        "OpenAI 서비스 추가 (openai_service.py, Chat Completions, 에러/로깅)",
+        "AI 제공자 선택 로직 (Gemini 우선, OpenAI 폴백, AI_PROVIDER)",
+        "분석/채팅/추천 파이프라인 연동 (선택 가능)",
+        "모델·토큰 설정 (AI_MODEL_OPENAI, AI_MODEL_GEMINI, AI_MAX_TOKENS)",
+        "문서화 (API 키 설정 및 AI 제공자 사용 방법)"
+      ]
+    },
+    {
       "id": "todo_001",
       "description": "F1: URL 입력 및 분석 시작 기능 구현",
       "priority": "high",
@@ -304,6 +339,53 @@
         "환경 변수 관리",
         "로깅 및 모니터링 설정",
         "스케일링 전략 수립"
+      ]
+    },
+    {
+      "id": "todo_020",
+      "description": "ENHANCED_ANALYSIS_METRICS vs 코드 정합성 갭 정리 (문서 또는 코드 동기화)",
+      "priority": "medium",
+      "status": "pending",
+      "milestone": "Phase 2",
+      "created_at": "2026-02-20T00:00:00Z",
+      "category": "backend",
+      "dependencies": [],
+      "subtasks": [
+        "METRICS_CODE_MAPPING.md 갭 목록 기준 문서 업데이트 또는 analyzer/shop_analyzer 점수 로직 단계적 반영",
+        "이미지/설명/가격/리뷰 세부 구간·배점 정합성 선택 적용",
+        "상품 종합 보너스(Excellent +5/+3) 코드 반영 검토"
+      ]
+    },
+    {
+      "id": "todo_021",
+      "description": "분석 결과 품질·크롤링 품질 측정 및 집계 (파이프라인·운영 강화)",
+      "priority": "medium",
+      "status": "pending",
+      "milestone": "Phase 2",
+      "created_at": "2026-02-20T00:00:00Z",
+      "category": "backend",
+      "dependencies": ["todo_015"],
+      "subtasks": [
+        "분석 완료 시 overall_score·섹션별 점수 pipeline_monitoring metadata 또는 전용 저장",
+        "overall_score/등급별 분포 집계 (기간별)",
+        "크롤링 필드 완성도·실패 사유 분류 기록 및 집계",
+        "Admin API 분석 품질/크롤링 품질 조회 엔드포인트 검토"
+      ]
+    },
+    {
+      "id": "todo_022",
+      "description": "신규 측정 지표 (시계열·키워드·리뷰 추이) 설계 및 구현",
+      "priority": "medium",
+      "status": "pending",
+      "milestone": "Phase 2",
+      "created_at": "2026-02-20T00:00:00Z",
+      "category": "backend",
+      "dependencies": ["todo_015"],
+      "subtasks": [
+        "분석 이력 저장 스키마 (product_code/shop_id, analyzed_at, score, section_scores)",
+        "상품/Shop 점수 추이·트렌드 요약 API 또는 배치 집계",
+        "키워드 노출률·카테고리별 평균 점수 집계",
+        "리뷰 부정비율·평점 추이 (선택)"
       ]
     }
   ]

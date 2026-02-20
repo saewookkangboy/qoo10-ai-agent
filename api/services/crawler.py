@@ -3252,26 +3252,35 @@ class Qoo10Crawler(ShopCrawlerMixin):
             except: pass
         # #endregion
         
-        # 주요 요소별로 분류할 패턴 정의
+        # 주요 요소별로 분류할 패턴 정의 (일반 + Qoo10 전용: .spec-kit/product-page-elements-spec.md)
         key_patterns = {
-            "product_info": ["product", "goods", "item", "detail", "info", "name", "title"],
-            "price_info": ["price", "cost", "discount", "sale", "original", "prc"],
-            "image_info": ["image", "img", "photo", "thumbnail", "thmb", "picture"],
-            "review_info": ["review", "rating", "star", "comment", "evaluation"],
-            "seller_info": ["shop", "seller", "store", "vendor", "merchant"],
+            "product_info": [
+                "product", "goods", "item", "detail", "info", "name", "title",
+                "goods_name", "product_name", "item_title", "gd_name", "prod_name", "gds_name",
+            ],
+            "price_info": [
+                "price", "cost", "discount", "sale", "original", "prc",
+                "sale_prc", "original_prc", "price_area", "total_price",
+            ],
+            "image_info": [
+                "image", "img", "photo", "thumbnail", "thmb", "picture",
+                "thumb", "gds_img", "product_img", "detail_img", "pd_img",
+            ],
+            "review_info": ["review", "rating", "star", "comment", "evaluation", "review_list", "rating_area", "review_count"],
+            "seller_info": ["shop", "seller", "store", "vendor", "merchant", "shop_info", "seller_area", "store_name"],
             "shipping_info": ["shipping", "delivery", "ship", "配送", "送料"],
             "coupon_info": ["coupon", "discount", "割引", "クーポン"],
             "qpoint_info": ["qpoint", "point", "ポイント", "Qポイント"],
         }
         
-        # 의미 있는 구조 요소를 위한 태그 매핑
+        # 의미 있는 구조 요소를 위한 태그 매핑 (Qoo10 전용 보강)
         semantic_mapping = {
-            "product_name_elements": ["name", "title", "goods_name", "product_name"],
-            "price_elements": ["price", "prc", "cost"],
-            "image_elements": ["image", "img", "photo", "thmb", "thumbnail"],
-            "description_elements": ["description", "detail", "content"],
-            "review_elements": ["review", "rating", "star", "comment"],
-            "seller_elements": ["shop", "seller", "store"],
+            "product_name_elements": ["name", "title", "goods_name", "product_name", "item_title", "gd_name", "prod_name", "gds_name"],
+            "price_elements": ["price", "prc", "cost", "sale_prc", "original_prc", "price_area", "total_price"],
+            "image_elements": ["image", "img", "photo", "thmb", "thumbnail", "thumb", "gds_img", "product_img", "detail_img", "pd_img"],
+            "description_elements": ["description", "detail", "content", "gds_detail", "product_detail", "desc_area", "detail_content"],
+            "review_elements": ["review", "rating", "star", "comment", "review_list", "rating_area", "review_count"],
+            "seller_elements": ["shop", "seller", "store", "shop_info", "seller_area", "store_name"],
             "shipping_elements": ["shipping", "ship", "delivery", "配送", "送料"],
             "coupon_elements": ["coupon", "割引", "クーポン", "discount"],
             "qpoint_elements": ["qpoint", "point", "ポイント"],
@@ -3311,17 +3320,20 @@ class Qoo10Crawler(ShopCrawlerMixin):
                     if any(keyword in cls_lower for keyword in keywords):
                         semantic_elements[semantic_key].append(cls)
         
-        # 추가로 특정 태그에서도 수집 (최적화: 제한된 선택자만 사용)
+        # 추가로 특정 태그에서도 수집 (Qoo10·시맨틱 선택자 보강)
         quick_selectors = {
-            "product_name_elements": ['h1', 'h2[class*="name"]'],
-            "price_elements": ['span[class*="price"]', 'strong[class*="price"]'],
-            "image_elements": ['img[class*="thumbnail"]'],
+            "product_name_elements": ['h1', 'h2[class*="name"]', '[class*="goods_name"]', '[class*="product_name"]', '[class*="gd_name"]'],
+            "price_elements": ['span[class*="price"]', 'strong[class*="price"]', '[class*="prc"]', '[class*="sale_prc"]', '[class*="price_area"]'],
+            "image_elements": ['img[class*="thumbnail"]', 'img[class*="thmb"]', '[class*="gds_img"]', '[class*="product_img"]', '[class*="detail_img"]'],
+            "description_elements": ['[class*="gds_detail"]', '[class*="product_detail"]', '[class*="desc_area"]', '[class*="detail_content"]'],
+            "review_elements": ['[class*="review_list"]', '[class*="rating_area"]', '[class*="review_count"]'],
+            "seller_elements": ['[class*="shop_info"]', '[class*="seller_area"]', '[class*="store_name"]'],
         }
         
         for semantic_key, selectors in quick_selectors.items():
-            for selector in selectors[:2]:  # 최대 2개 선택자만 시도
+            for selector in selectors[:5]:  # 선택자당 최대 5개 시도
                 try:
-                    elems = soup.select(selector, limit=10)  # 최대 10개만
+                    elems = soup.select(selector, limit=15)
                     for elem in elems:
                         classes = elem.get('class', [])
                         if classes:
@@ -3329,8 +3341,8 @@ class Qoo10Crawler(ShopCrawlerMixin):
                                 if cls and cls not in seen_classes:
                                     semantic_elements[semantic_key].append(cls)
                                     seen_classes.add(cls)
-                except:
-                    continue  # 선택자 오류 무시
+                except Exception:
+                    continue
         
         # 중복 제거 및 빈도 계산
         for key in semantic_elements:
@@ -3343,6 +3355,21 @@ class Qoo10Crawler(ShopCrawlerMixin):
             ]
         
         structure["semantic_structure"] = semantic_elements
+        
+        # 접근성·시맨틱 힌트 수집 (role, aria-label 등 — 제품 페이지 요소 정밀 분석용)
+        roles_seen: set = set()
+        aria_labels_seen: set = set()
+        for div in all_divs[:300]:
+            role = div.get("role")
+            if role:
+                roles_seen.add(role)
+            aria = div.get("aria-label") or div.get("aria-labelledby")
+            if aria:
+                aria_labels_seen.add(str(aria)[:80])
+        structure["accessibility_hints"] = {
+            "roles": sorted(roles_seen),
+            "aria_labels_count": len(aria_labels_seen),
+        }
         
         # 고유한 class 목록 정리 (최대 500개로 제한)
         structure["all_div_classes"] = sorted(list(set(structure["all_div_classes"])))[:500]

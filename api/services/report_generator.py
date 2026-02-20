@@ -542,11 +542,19 @@ class ReportGenerator:
             doc.add_paragraph(f'브랜드 설정: {"예" if analysis.get("brand_set") else "아니오"}')
         elif title == "페이지 구조 분석":
             doc.add_paragraph(f'전체 클래스 수: {analysis.get("total_classes", 0)}개')
+            grade = analysis.get("grade") or self._get_grade(analysis.get("score", 0))
+            doc.add_paragraph(f'등급: {grade}')
             key_elements = analysis.get("key_elements_present", {})
             if key_elements:
                 doc.add_paragraph('주요 요소 존재 여부:')
                 for key, present in key_elements.items():
                     doc.add_paragraph(f'  - {key}: {"예" if present else "아니오"}', style='List Bullet 2')
+            eq = analysis.get("element_quality") or {}
+            if eq.get("overall_quality_score") is not None:
+                doc.add_paragraph(f'요소 품질 점수: {eq.get("overall_quality_score", 0)}/100 (다양성: {eq.get("diversity_score", 0)}, 일관성: {eq.get("consistency_score", 0)})')
+            rel = analysis.get("element_relationships") or {}
+            if rel.get("relationship_score") is not None:
+                doc.add_paragraph(f'요소 간 관계 점수: {rel.get("relationship_score", 0)}/100')
         
         # 추천 사항
         if analysis.get("recommendations"):
@@ -1152,11 +1160,19 @@ class ReportGenerator:
             lines.append(f"- 브랜드 설정: {'예' if analysis.get('brand_set') else '아니오'}")
         elif title == "페이지 구조 분석":
             lines.append(f"- 전체 클래스 수: {analysis.get('total_classes', 0)}개")
+            grade = analysis.get("grade") or self._get_grade(analysis.get("score", 0))
+            lines.append(f"- 등급: **{grade}**")
             key_elements = analysis.get("key_elements_present", {})
             if key_elements:
                 lines.append("- 주요 요소 존재 여부:")
                 for key, present in key_elements.items():
                     lines.append(f"  - {key}: {'예' if present else '아니오'}")
+            eq = analysis.get("element_quality") or {}
+            if eq.get("overall_quality_score") is not None:
+                lines.append(f"- 요소 품질: {eq.get('overall_quality_score', 0)}/100 (다양성 {eq.get('diversity_score', 0)}, 일관성 {eq.get('consistency_score', 0)})")
+            rel = analysis.get("element_relationships") or {}
+            if rel.get("relationship_score") is not None:
+                lines.append(f"- 요소 간 관계 점수: {rel.get('relationship_score', 0)}/100")
         
         if analysis.get("recommendations"):
             lines.append("**추천 사항:**")

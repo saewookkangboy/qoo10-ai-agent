@@ -666,17 +666,16 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                 analyzer = ProductAnalyzer()
                 raw_analysis_result = await analyzer.analyze(product_data)
                 
-                # Gemini를 사용한 AI 분석 강화 (선택적)
+                # AI 분석 강화 (Gemini 우선, 없으면 OpenAI 폴백, 환경 변수 AI_PROVIDER로 지정 가능)
                 try:
-                    from services.gemini_service import GeminiService
-                    gemini_service = GeminiService()
-                    if gemini_service.model:
-                        logger.info(f"[{analysis_id}] Enhancing analysis with Gemini AI...")
-                        enhanced_result = await gemini_service.enhance_analysis_with_ai(
+                    from services.ai_provider import get_ai_service_for_analysis
+                    ai_svc = get_ai_service_for_analysis()
+                    if ai_svc and (getattr(ai_svc, "model", None) or getattr(ai_svc, "available", False)):
+                        logger.info("[%s] Enhancing analysis with AI (Gemini/OpenAI)...", analysis_id)
+                        enhanced_result = await ai_svc.enhance_analysis_with_ai(
                             product_data=product_data,
                             analysis_result={"product_analysis": raw_analysis_result}
                         )
-                        # product_analysis 구조 유지
                         if "product_analysis" in enhanced_result:
                             analysis_result = enhanced_result
                         else:
@@ -684,8 +683,7 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                     else:
                         analysis_result = {"product_analysis": raw_analysis_result}
                 except Exception as e:
-                    logger.warning(f"[{analysis_id}] Gemini AI enhancement skipped: {str(e)}")
-                    # Gemini 실패해도 기본 분석 결과 사용
+                    logger.warning("[%s] AI enhancement skipped: %s", analysis_id, str(e))
                     analysis_result = {"product_analysis": raw_analysis_result}
                 
                 # 분석 결과 검증 (더 유연하게)
@@ -1114,18 +1112,17 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                 # 초기 분석 (체크리스트 결과는 나중에 반영)
                 raw_analysis_result = await shop_analyzer.analyze(shop_data, checklist_result=None)
                 
-                # Gemini를 사용한 AI 분석 강화 (선택적)
+                # raw_analysis_result는 이미 shop_analysis 구조 (overall_score 포함)
+                # AI 분석 강화 (Gemini 우선, 없으면 OpenAI 폴백)
                 try:
-                    from services.gemini_service import GeminiService
-                    gemini_service = GeminiService()
-                    if gemini_service.model:
-                        logger.info(f"[{analysis_id}] Enhancing shop analysis with Gemini AI...")
-                        # shop_data는 product_data 파라미터로 전달
-                        enhanced_result = await gemini_service.enhance_analysis_with_ai(
-                            product_data=shop_data,  # shop_data를 product_data로 전달
+                    from services.ai_provider import get_ai_service_for_analysis
+                    ai_svc = get_ai_service_for_analysis()
+                    if ai_svc and (getattr(ai_svc, "model", None) or getattr(ai_svc, "available", False)):
+                        logger.info("[%s] Enhancing shop analysis with AI (Gemini/OpenAI)...", analysis_id)
+                        enhanced_result = await ai_svc.enhance_analysis_with_ai(
+                            product_data=shop_data,
                             analysis_result={"shop_analysis": raw_analysis_result}
                         )
-                        # shop_analysis 구조 유지
                         if "shop_analysis" in enhanced_result:
                             analysis_result = enhanced_result
                         else:
@@ -1133,29 +1130,36 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                     else:
                         analysis_result = {"shop_analysis": raw_analysis_result}
                 except Exception as e:
-                    logger.warning(f"[{analysis_id}] Gemini AI enhancement skipped: {str(e)}")
-                    # Gemini 실패해도 기본 분석 결과 사용
+                    logger.warning("[%s] AI enhancement skipped: %s", analysis_id, str(e))
                     analysis_result = {"shop_analysis": raw_analysis_result}
                 
-                # 분석 결과 검증 (더 유연하게)
-                if not analysis_result:
-                    logger.warning(f"[{analysis_id}] Analysis result is empty, creating default result")
+                # 분석 결과 검증 (shop_analysis 내부의 overall_score 확인)
+                if not analysis_result or "shop_analysis" not in analysis_result:
+                    logger.warning(f"[{analysis_id}] Analysis result is empty or invalid, creating default result")
                     analysis_result = {
-                        "overall_score": 0,
-                        "shop_info": {},
-                        "product_analysis": {},
-                        "category_analysis": {},
-                        "competitor_analysis": {},
-                        "level_analysis": {},
-                        "shop_specialty": {},
-                        "product_type_analysis": {},
-                        "customized_insights": {}
+                        "shop_analysis": {
+                            "overall_score": 0,
+                            "shop_info": {},
+                            "product_analysis": {},
+                            "category_analysis": {},
+                            "competitor_analysis": {},
+                            "level_analysis": {},
+                            "shop_specialty": {},
+                            "product_type_analysis": {},
+                            "customized_insights": {}
+                        }
                     }
                 
-                # overall_score가 없으면 기본값 설정
-                if "overall_score" not in analysis_result:
-                    logger.warning(f"[{analysis_id}] Overall score not found, setting default to 0")
-                    analysis_result["overall_score"] = 0
+                # shop_analysis 내부의 overall_score 확인 및 설정
+                shop_analysis_data = analysis_result.get("shop_analysis", {})
+                if not isinstance(shop_analysis_data, dict):
+                    logger.warning(f"[{analysis_id}] shop_analysis is not a dict, creating default")
+                    shop_analysis_data = {}
+                    analysis_result["shop_analysis"] = shop_analysis_data
+                
+                if "overall_score" not in shop_analysis_data:
+                    logger.warning(f"[{analysis_id}] Overall score not found in shop_analysis, setting default to 0")
+                    shop_analysis_data["overall_score"] = 0
                 
                 analysis_duration_ms = int((time.time() - analysis_start_time) * 1000)
                 pipeline_monitor.record_stage(
@@ -1168,7 +1172,9 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                     metadata={"overall_score": analysis_result.get("overall_score", 0)}
                 )
                 
-                logger.info(f"[{analysis_id}] Shop analysis completed - Score: {analysis_result.get('overall_score', 0)}")
+                # shop_analysis에서 overall_score 추출
+                shop_analysis_score = analysis_result.get("shop_analysis", {}).get("overall_score", 0)
+                logger.info(f"[{analysis_id}] Shop analysis completed - Score: {shop_analysis_score}")
             except Exception as e:
                 analysis_duration_ms = int((time.time() - analysis_start_time) * 1000)
                 error_msg = f"Shop 분석 실패: {str(e)}"

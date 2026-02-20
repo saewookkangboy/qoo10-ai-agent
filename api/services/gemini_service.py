@@ -44,19 +44,21 @@ class GeminiService:
         
         try:
             genai.configure(api_key=self.api_key)
-            # 사용 가능한 모델 확인 및 선택
-            # gemini-2.5-flash (빠르고 비용 효율적) 또는 gemini-2.5-pro (더 강력)
+            # 모델: 환경 변수 AI_MODEL_GEMINI 또는 기본값 gemini-2.5-flash
+            model_name = (os.getenv("AI_MODEL_GEMINI") or "gemini-2.5-flash").strip()
             try:
-                # 먼저 gemini-2.5-flash 시도 (더 빠르고 비용 효율적)
-                self.model = genai.GenerativeModel('gemini-2.5-flash')
-                logger.info("Gemini API 서비스가 활성화되었습니다. (모델: gemini-2.5-flash)")
-            except Exception:
-                # gemini-2.5-flash 실패 시 gemini-2.5-pro 시도
-                try:
-                    self.model = genai.GenerativeModel('gemini-2.5-pro')
-                    logger.info("Gemini API 서비스가 활성화되었습니다. (모델: gemini-2.5-pro)")
-                except Exception as e2:
-                    logger.error(f"Gemini 모델 초기화 실패: {str(e2)}")
+                self.model = genai.GenerativeModel(model_name)
+                logger.info("Gemini API 서비스가 활성화되었습니다. (모델: %s)", model_name)
+            except Exception as e1:
+                if model_name != "gemini-2.5-pro":
+                    try:
+                        self.model = genai.GenerativeModel("gemini-2.5-pro")
+                        logger.info("Gemini API 서비스가 활성화되었습니다. (모델: gemini-2.5-pro)")
+                    except Exception as e2:
+                        logger.error("Gemini 모델 초기화 실패: %s", str(e2))
+                        self.model = None
+                else:
+                    logger.error("Gemini 모델 초기화 실패: %s", str(e1))
                     self.model = None
         except Exception as e:
             logger.error(f"Gemini API 초기화 실패: {str(e)}")

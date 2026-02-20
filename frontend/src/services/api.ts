@@ -21,12 +21,17 @@ export const analyzeService = {
   async startAnalysis(request: AnalyzeRequest): Promise<AnalyzeResponse> {
     try {
       const response = await api.post<AnalyzeResponse>('/api/v1/analyze', request, {
-        timeout: 10000,  // 분석 시작은 10초 타임아웃 (빠른 응답 필요)
+        timeout: 30000,  // 분석 시작은 30초 타임아웃 (백그라운드 작업 시작 대기)
       })
     return response.data
     } catch (error: any) {
       if (error.code === 'ECONNABORTED') {
         throw new Error('요청 시간이 초과되었습니다. 다시 시도해주세요.')
+      }
+      if (error.response) {
+        // 서버에서 반환한 에러 메시지 사용
+        const errorMessage = error.response.data?.detail || error.response.data?.message || '분석 시작에 실패했습니다.'
+        throw new Error(errorMessage)
       }
       throw error
     }

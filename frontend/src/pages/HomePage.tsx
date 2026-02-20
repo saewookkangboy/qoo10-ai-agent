@@ -22,8 +22,11 @@ function HomePage() {
       const response = await analyzeService.startAnalysis({ url })
       navigate(`/analysis/${response.analysis_id}`)
     } catch (err: any) {
-      setError(err.response?.data?.detail || '분석 시작에 실패했습니다.')
+      // 에러 메시지 추출 (다양한 형식 지원)
+      const errorMessage = err.message || err.response?.data?.detail || err.response?.data?.message || '분석 시작에 실패했습니다.'
+      setError(errorMessage)
       setLoading(false)
+      console.error('Analysis start error:', err)
     }
   }
 

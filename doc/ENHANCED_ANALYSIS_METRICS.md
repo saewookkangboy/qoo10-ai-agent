@@ -474,7 +474,8 @@
 ## 🔄 업데이트 이력
 
 - **2026-01-14**: 초기 버전 작성 (고도화된 지표 체계)
+- **2026-02-20**: 코드 정합성 참조 추가 (METRICS_CODE_MAPPING.md)
 
 ---
 
-**참고**: 이 문서는 `CRAWLING_ANALYSIS_PRINCIPLES.md`의 확장 버전이며, 모든 분석 서비스는 이 지표를 기준으로 구현해야 합니다.
+**참고**: 이 문서는 `CRAWLING_ANALYSIS_PRINCIPLES.md`의 확장 버전이며, 모든 분석 서비스는 이 지표를 기준으로 구현해야 합니다. 구현 상태와 문서 간 일치/갭은 `doc/METRICS_CODE_MAPPING.md`에서 관리합니다.

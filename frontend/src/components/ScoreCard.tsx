@@ -45,59 +45,37 @@ function ScoreCard({ title, score, analysis }: ScoreCardProps) {
   const colors = getScoreColor(score)
 
   return (
-    <div className="glass-card dark:glass-card-dark rounded-2xl p-4 sm:p-6 glass-transition relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent dark:from-white/5 pointer-events-none"></div>
-      <div className="relative z-10">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between mb-4 sm:mb-6">
-        <div className="flex items-center gap-2">
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-1.5">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
           <HelpTooltip content={helpContent[title] || '이 항목에 대한 도움말입니다.'} />
         </div>
-        <span className={`px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium rounded ${colors.bgLight} ${colors.text}`}>
+        <span className={`px-2 py-0.5 text-xs font-medium rounded ${colors.bgLight} ${colors.text}`}>
           {getScoreLabel(score)}
         </span>
       </div>
-
-      {/* 점수 표시 영역 */}
-      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 mb-4 sm:mb-6">
-        {/* 큰 점수 원형 표시 */}
-        <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full ${colors.bg} flex items-center justify-center text-white font-bold text-2xl sm:text-3xl flex-shrink-0 shadow-lg backdrop-blur-sm relative overflow-hidden`}>
-          <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent"></div>
-          <span className="relative z-10">{score}</span>
+      <div className="flex items-center gap-3 mb-3">
+        <div className={`w-12 h-12 rounded-full ${colors.bg} flex items-center justify-center text-white font-bold text-lg flex-shrink-0`}>
+          {score}
         </div>
-        
-        {/* 진행 바 및 세부 정보 */}
-        <div className="flex-1 w-full sm:w-auto">
-          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 sm:h-2.5 mb-3">
-            <div
-              className={`h-full rounded-full ${colors.bg} transition-all duration-500`}
-              style={{ width: `${score}%` }}
-            ></div>
+        <div className="flex-1 min-w-0">
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+            <div className={`h-full rounded-full ${colors.bg}`} style={{ width: `${score}%` }} />
           </div>
-          <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-            <span className="font-medium">{score}점</span>
-            <span className="mx-1">/</span>
-            <span>100점</span>
-          </div>
+          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{score} / 100</div>
         </div>
       </div>
-
-      {/* 주요 제안 */}
       {analysis.recommendations && analysis.recommendations.length > 0 && (
-        <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-200 dark:border-gray-700">
-          <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 sm:mb-3">주요 제안</p>
-          <ul className="space-y-1.5 sm:space-y-2">
-            {analysis.recommendations.slice(0, 2).map((rec: string, idx: number) => (
-              <li key={idx} className="flex items-start text-xs sm:text-sm text-gray-900 dark:text-gray-100">
-                <span className="text-blue-600 dark:text-blue-400 mr-2 mt-0.5 flex-shrink-0">•</span>
-                <span className="leading-relaxed">{rec}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ul className="space-y-1 pt-3 border-t border-gray-100 dark:border-gray-700">
+          {analysis.recommendations.slice(0, 2).map((rec: string, idx: number) => (
+            <li key={idx} className="text-xs text-gray-700 dark:text-gray-300 leading-snug flex gap-1.5">
+              <span className="text-blue-500 flex-shrink-0">·</span>
+              <span>{rec}</span>
+            </li>
+          ))}
+        </ul>
       )}
-      </div>
     </div>
   )
 }

@@ -90,6 +90,22 @@ dev-agent todo add "리포트 시각화" -p medium -m "Phase 1"
 dev-agent todo list
 ```
 
+### 5. API 키 설정 및 AI 제공자(OpenAI/Gemini) 사용 방법
+
+- **보안**: API 키는 **환경 변수로만** 설정합니다. 코드나 `.env` 파일을 Git에 커밋하지 마세요. (dev-agent-kit API 키 관리 가이드라인 준수)
+- **설정 위치**: `api/` 디렉터리에서 `cp .env.example .env` 후 `.env`에 실제 키 값을 입력합니다.
+
+| 환경 변수 | 용도 |
+|-----------|------|
+| `GEMINI_API_KEY` | Google Gemini (분석 강화, 채팅, 추천). 기본 우선 사용. |
+| `OPENAI_API_KEY` | OpenAI (분석 강화, 채팅, 추천). Gemini 미설정 시 폴백. |
+| `AI_PROVIDER` | `gemini`(기본) 또는 `openai`. `openai`면 OpenAI만 사용. |
+| `AI_MODEL_OPENAI` | OpenAI 모델 (예: `gpt-4o-mini`, `gpt-4o`). 비용/성능 조절. |
+| `AI_MODEL_GEMINI` | Gemini 모델 (예: `gemini-2.5-flash`, `gemini-2.5-pro`). |
+| `AI_MAX_TOKENS` | (선택) AI 응답 최대 토큰 수. |
+
+동작 요약: **Gemini 우선** → 키가 없으면 **OpenAI 폴백**. `AI_PROVIDER=openai`로 두면 OpenAI만 사용합니다.
+
 ## 개발 워크플로우
 
 ### Phase 1: MVP 개발 (3개월)
