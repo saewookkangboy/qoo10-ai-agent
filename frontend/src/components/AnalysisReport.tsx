@@ -24,9 +24,15 @@ interface AnalysisReportProps {
   analysisId?: string
 }
 
+// Safe score access for partial API responses (e.g. HTTP fallback)
+const safeScore = (obj: { score?: number } | null | undefined): number =>
+  (obj != null && typeof obj === 'object' && typeof (obj as any).score === 'number')
+    ? (obj as any).score
+    : 0
+
 function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
   const { product_analysis, shop_analysis, recommendations, checklist, competitor_analysis, validation } = result
-  const overallScore = product_analysis?.overall_score || shop_analysis?.overall_score || 0
+  const overallScore = product_analysis?.overall_score ?? shop_analysis?.overall_score ?? 0
   const [activeTab, setActiveTab] = useState<'recommendations' | 'checklist'>('recommendations')
   const [isValidationModalOpen, setIsValidationModalOpen] = useState(false)
 
@@ -85,7 +91,7 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
                       : 'border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20'
                   }`}
                 >
-                  {validation.is_valid ? '검증 통과' : `검증 ${validation.validation_score.toFixed(0)}%`}
+                  {validation.is_valid ? '검증 통과' : `검증 ${(validation.validation_score ?? 0).toFixed(0)}%`}
                 </button>
               )}
               <ThemeToggle />
@@ -99,7 +105,7 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
             >
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">데이터 검증</span>
               <span className="text-sm text-gray-500 dark:text-gray-400">
-                {validation.validation_score.toFixed(1)}%
+                {(validation.validation_score ?? 0).toFixed(1)}%
                 {validation.mismatches?.length ? ` · 불일치 ${validation.mismatches.length}건` : ''}
                 {validation.missing_items?.length ? ` · 누락 ${validation.missing_items.length}건` : ''}
               </span>
@@ -134,51 +140,67 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
         {/* 핵심 지표 카드 */}
         {product_analysis && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <ScoreCard
-              title="이미지"
-              score={product_analysis.image_analysis.score}
-              analysis={product_analysis.image_analysis}
-            />
-            <ScoreCard
-              title="설명"
-              score={product_analysis.description_analysis.score}
-              analysis={product_analysis.description_analysis}
-            />
-            <ScoreCard
-              title="가격"
-              score={product_analysis.price_analysis.score}
-              analysis={product_analysis.price_analysis}
-            />
-            <ScoreCard
-              title="리뷰"
-              score={product_analysis.review_analysis.score}
-              analysis={product_analysis.review_analysis}
-            />
+            {product_analysis.image_analysis != null && (
+              <ScoreCard
+                title="이미지"
+                score={safeScore(product_analysis.image_analysis)}
+                analysis={product_analysis.image_analysis}
+              />
+            )}
+            {product_analysis.description_analysis != null && (
+              <ScoreCard
+                title="설명"
+                score={safeScore(product_analysis.description_analysis)}
+                analysis={product_analysis.description_analysis}
+              />
+            )}
+            {product_analysis.price_analysis != null && (
+              <ScoreCard
+                title="가격"
+                score={safeScore(product_analysis.price_analysis)}
+                analysis={product_analysis.price_analysis}
+              />
+            )}
+            {product_analysis.review_analysis != null && (
+              <ScoreCard
+                title="리뷰"
+                score={safeScore(product_analysis.review_analysis)}
+                analysis={product_analysis.review_analysis}
+              />
+            )}
           </div>
         )}
 
         {shop_analysis && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <ScoreCard
-              title="샵 정보"
-              score={shop_analysis.shop_info.score}
-              analysis={shop_analysis.shop_info}
-            />
-            <ScoreCard
-              title="상품 분석"
-              score={shop_analysis.product_analysis.score}
-              analysis={shop_analysis.product_analysis}
-            />
-            <ScoreCard
-              title="카테고리"
-              score={shop_analysis.category_analysis.score}
-              analysis={shop_analysis.category_analysis}
-            />
-            <ScoreCard
-              title="레벨 분석"
-              score={shop_analysis.level_analysis.score}
-              analysis={shop_analysis.level_analysis}
-            />
+            {shop_analysis.shop_info != null && (
+              <ScoreCard
+                title="샵 정보"
+                score={safeScore(shop_analysis.shop_info)}
+                analysis={shop_analysis.shop_info}
+              />
+            )}
+            {shop_analysis.product_analysis != null && (
+              <ScoreCard
+                title="상품 분석"
+                score={safeScore(shop_analysis.product_analysis)}
+                analysis={shop_analysis.product_analysis}
+              />
+            )}
+            {shop_analysis.category_analysis != null && (
+              <ScoreCard
+                title="카테고리"
+                score={safeScore(shop_analysis.category_analysis)}
+                analysis={shop_analysis.category_analysis}
+              />
+            )}
+            {shop_analysis.level_analysis != null && (
+              <ScoreCard
+                title="레벨 분석"
+                score={safeScore(shop_analysis.level_analysis)}
+                analysis={shop_analysis.level_analysis}
+              />
+            )}
           </div>
         )}
 
@@ -222,8 +244,8 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
                       <span className="w-1.5 h-1.5 rounded-full bg-red-500" /> High · {highPriorityRecs.length}건
                     </h3>
                     <div className="space-y-4">
-                      {highPriorityRecs.map((rec) => (
-                        <RecommendationCard key={rec.id} recommendation={rec} />
+                      {highPriorityRecs.map((rec, i) => (
+                        <RecommendationCard key={`high-${i}-${rec.id ?? ''}`} recommendation={rec} />
                       ))}
                     </div>
                   </section>
@@ -234,8 +256,8 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> Medium · {mediumPriorityRecs.length}건
                     </h3>
                     <div className="space-y-4">
-                      {mediumPriorityRecs.map((rec) => (
-                        <RecommendationCard key={rec.id} recommendation={rec} />
+                      {mediumPriorityRecs.map((rec, i) => (
+                        <RecommendationCard key={`medium-${i}-${rec.id ?? ''}`} recommendation={rec} />
                       ))}
                     </div>
                   </section>
@@ -246,8 +268,8 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
                       <span className="w-1.5 h-1.5 rounded-full bg-gray-400" /> Low · {lowPriorityRecs.length}건
                     </h3>
                     <div className="space-y-4">
-                      {lowPriorityRecs.map((rec) => (
-                        <RecommendationCard key={rec.id} recommendation={rec} />
+                      {lowPriorityRecs.map((rec, i) => (
+                        <RecommendationCard key={`low-${i}-${rec.id ?? ''}`} recommendation={rec} />
                       ))}
                     </div>
                   </section>

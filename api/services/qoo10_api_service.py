@@ -33,7 +33,7 @@ class Qoo10APIService:
         """
         self.certification_key = certification_key or os.getenv("QOO10_API_KEY")
         if not self.certification_key:
-            logger.warning("Qoo10 API Key가 설정되지 않았습니다. API 기능을 사용할 수 없습니다.")
+            logger.info("Qoo10 API 키 미설정 — 공식 API 대신 크롤링을 사용합니다. 키가 있으면 api/.env에 QOO10_API_KEY=... 로 설정하세요.")
     
     def _generate_signature(self, parameters: Dict[str, Any]) -> str:
         """

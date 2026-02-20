@@ -6,11 +6,19 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 import json
 import logging
+import time
 from contextlib import contextmanager
 
 from services.database import CrawlerDatabase
 
 logger = logging.getLogger(__name__)
+
+# SQLite locked 시 재시도
+try:
+    import sqlite3
+    _SQLITE_OPERATIONAL_ERROR = sqlite3.OperationalError
+except ImportError:
+    _SQLITE_OPERATIONAL_ERROR = Exception
 
 
 class PipelineMonitor:
@@ -53,43 +61,53 @@ class PipelineMonitor:
             error_message: 오류 메시지 (실패 시)
             metadata: 추가 메타데이터
         """
-        try:
-            with self.db.get_connection() as conn:
-                cursor = conn.cursor()
-                
-                metadata_json = None
-                if metadata:
+        metadata_json = None
+        if metadata:
+            metadata_json = json.dumps(metadata)
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                with self.db.get_connection() as conn:
+                    cursor = conn.cursor()
                     if self.db.use_postgres:
-                        metadata_json = json.dumps(metadata)
+                        cursor.execute("""
+                            INSERT INTO pipeline_monitoring (
+                                analysis_id, url, url_type, stage, status,
+                                error_message, duration_ms, metadata
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (
+                            analysis_id, url, url_type, stage, status,
+                            error_message, duration_ms, metadata_json
+                        ))
                     else:
-                        metadata_json = json.dumps(metadata)
-                
-                if self.db.use_postgres:
-                    cursor.execute("""
-                        INSERT INTO pipeline_monitoring (
+                        cursor.execute("""
+                            INSERT INTO pipeline_monitoring (
+                                analysis_id, url, url_type, stage, status,
+                                error_message, duration_ms, metadata
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
                             analysis_id, url, url_type, stage, status,
-                            error_message, duration_ms, metadata
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (
-                        analysis_id, url, url_type, stage, status,
-                        error_message, duration_ms, metadata_json
-                    ))
+                            error_message, duration_ms, metadata_json
+                        ))
+                    conn.commit()
+                try:
+                    self._update_success_rates(stage, status, duration_ms)
+                except Exception:
+                    pass
+                return
+            except _SQLITE_OPERATIONAL_ERROR as e:
+                err = str(e).lower()
+                if "locked" in err or "busy" in err:
+                    if attempt < max_retries - 1:
+                        time.sleep(0.3 * (attempt + 1))
+                        continue
+                    logger.warning("Pipeline stage not recorded (database busy after %s retries): %s", max_retries, stage)
                 else:
-                    cursor.execute("""
-                        INSERT INTO pipeline_monitoring (
-                            analysis_id, url, url_type, stage, status,
-                            error_message, duration_ms, metadata
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        analysis_id, url, url_type, stage, status,
-                        error_message, duration_ms, metadata_json
-                    ))
-                
-                # 성공률 집계 업데이트 (시간별, 일별)
-                self._update_success_rates(stage, status, duration_ms)
-                
-        except Exception as e:
-            logger.error(f"Failed to record pipeline stage: {str(e)}", exc_info=True)
+                    logger.error("Failed to record pipeline stage: %s", e, exc_info=True)
+                return
+            except Exception as e:
+                logger.error("Failed to record pipeline stage: %s", e, exc_info=True)
+                return
     
     def _update_success_rates(
         self,

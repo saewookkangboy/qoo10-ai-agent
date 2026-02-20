@@ -11,69 +11,83 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000,  // 30초 타임아웃 설정
+  timeout: 60000,  // 60초 타임아웃 (기본)
 })
+
+/** 백엔드 연결 확인 (짧은 타임아웃). 실패 시 분석 시작 전 안내용으로 사용 */
+export async function checkApiHealth(): Promise<boolean> {
+  try {
+    await api.get('/health', { timeout: 3000 })
+    return true
+  } catch {
+    return false
+  }
+}
 
 export const analyzeService = {
   /**
-   * 분석 시작
+   * 분석 시작 (백엔드가 즉시 analysis_id 반환, 분석은 백그라운드 진행)
    */
   async startAnalysis(request: AnalyzeRequest): Promise<AnalyzeResponse> {
     try {
       const response = await api.post<AnalyzeResponse>('/api/v1/analyze', request, {
-        timeout: 30000,  // 분석 시작은 30초 타임아웃 (백그라운드 작업 시작 대기)
+        timeout: 60000,  // 분석 시작 요청: 60초 (프록시/콜드스타트 대비)
       })
-    return response.data
+      return response.data
     } catch (error: any) {
       if (error.code === 'ECONNABORTED') {
-        throw new Error('요청 시간이 초과되었습니다. 다시 시도해주세요.')
+        throw new Error('요청 시간이 초과되었습니다. API 서버가 실행 중인지 확인하고 다시 시도해주세요.')
+      }
+      if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error')) {
+        throw new Error('API 서버에 연결할 수 없습니다. 백엔드 서버가 실행 중인지 확인해주세요.')
       }
       if (error.response) {
-        // 서버에서 반환한 에러 메시지 사용
-        const errorMessage = error.response.data?.detail || error.response.data?.message || '분석 시작에 실패했습니다.'
-        throw new Error(errorMessage)
+        const errorMessage = error.response.data?.detail ?? error.response.data?.message ?? '분석 시작에 실패했습니다.'
+        throw new Error(typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage))
       }
       throw error
     }
   },
 
   /**
-   * 분석 결과 조회
+   * 분석 결과 조회 (단일 요청 타임아웃 30초)
    */
   async getAnalysisResult(analysisId: string): Promise<AnalysisResult> {
-    const response = await api.get<AnalysisResult>(`/api/v1/analyze/${analysisId}`)
+    const response = await api.get<AnalysisResult>(`/api/v1/analyze/${analysisId}`, {
+      timeout: 30000
+    })
     return response.data
   },
 
   /**
-   * 분석 결과 폴링 (주기적으로 조회) - 최적화 버전
+   * 분석 결과 폴링 (임베딩·AI 분석 등으로 2~5분 소요될 수 있음)
    */
   async pollAnalysisResult(
     analysisId: string,
     onUpdate: (result: AnalysisResult) => void,
-    interval: number = 1000,  // 폴링 간격 단축: 2초 -> 1초
-    maxAttempts: number = 60  // 최대 시도 횟수 증가: 30 -> 60 (총 60초)
+    interval: number = 2000,   // 2초 간격 (서버 부하 완화)
+    maxAttempts: number = 180  // 최대 6분 대기 (180 × 2초)
   ): Promise<AnalysisResult> {
     let attempts = 0
-    
+
     const poll = async (): Promise<AnalysisResult> => {
       attempts++
       const result = await this.getAnalysisResult(analysisId)
-      
+
       onUpdate(result)
-      
+
       if (result.status === 'completed' || result.status === 'failed') {
         return result
       }
-      
+
       if (attempts >= maxAttempts) {
-        throw new Error('Analysis timeout')
+        throw new Error('분석이 예상보다 오래 걸리고 있습니다. 이 페이지를 새로고침하면 완료된 결과를 볼 수 있습니다.')
       }
-      
+
       await new Promise(resolve => setTimeout(resolve, interval))
       return poll()
     }
-    
+
     return poll()
   },
 

@@ -29,7 +29,8 @@ function AnalysisPage() {
         setResult(analysisResult)
         setLoading(false)
       } catch (err: any) {
-        setError(err.message || '분석 결과를 가져오는데 실패했습니다.')
+        const msg = err.message || '분석 결과를 가져오는데 실패했습니다.'
+        setError(msg.includes('새로고침') ? msg : `${msg} (잠시 후 새로고침 해보세요.)`)
         setLoading(false)
       }
     }

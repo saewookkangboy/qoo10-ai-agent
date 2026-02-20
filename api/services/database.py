@@ -32,6 +32,8 @@ class CrawlerDatabase:
         """데이터베이스 초기화"""
         self.db_path = db_path
         self.use_postgres = USE_POSTGRES
+        # SQLite 잠금 대기 시간(초). API 요청 블로킹 완화를 위해 기본 5초 (env: SQLITE_TIMEOUT)
+        self.sqlite_timeout = float(os.getenv("SQLITE_TIMEOUT", "5.0"))
         self._init_database()
     
     def _get_connection_string(self):
@@ -415,11 +417,11 @@ class CrawlerDatabase:
             conn.cursor_factory = RealDictCursor
         else:
             db_path = self._get_db_path()
-            # SQLite 타임아웃 설정 (5초) - 동시 접근 시 대기
-            conn = sqlite3.connect(db_path, timeout=5.0)
+            timeout_sec = self.sqlite_timeout
+            conn = sqlite3.connect(db_path, timeout=timeout_sec)
             conn.row_factory = sqlite3.Row
-            # WAL 모드 활성화 (동시 읽기 성능 향상)
             conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=%d" % (int(timeout_sec * 1000),))
         
         try:
             yield conn

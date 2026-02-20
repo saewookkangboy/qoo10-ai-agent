@@ -185,10 +185,13 @@ class EmbeddingService:
             else:
                 raise
         
-        # 보완 모델 로드 (앙상블 모드)
+        # 보완 모델 로드 (앙상블 모드, ~1.1GB 다운로드 가능)
         if self.use_ensemble and self.complementary_model_name:
             try:
-                logger.info(f"보완 임베딩 모델 로딩 중: {self.complementary_model_config['name']}")
+                logger.info(
+                    f"보완 임베딩 모델 로딩 중: {self.complementary_model_config['name']} "
+                    "(첫 실행 시 다운로드에 수 분 걸릴 수 있음. 건너뛰려면 api/.env에 EMBEDDING_ENSEMBLE=0)"
+                )
                 self.complementary_model = SentenceTransformer(self.complementary_model_config['name'])
                 logger.info(f"보완 임베딩 모델 로딩 완료: {self.complementary_model_name}")
                 logger.info(f"앙상블 모드 활성화: {self.model_name} + {self.complementary_model_name}")
