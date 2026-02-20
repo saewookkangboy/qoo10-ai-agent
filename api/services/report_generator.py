@@ -40,11 +40,6 @@ except ImportError:
     DOCX_AVAILABLE = False
     # Document가 없을 때를 위한 더미 클래스 (타입 힌트용)
     Document = None  # type: ignore
-    import warnings
-    warnings.warn(
-        "python-docx is not installed. DOC report generation will not be available.",
-        UserWarning
-    )
 
 
 class ReportGenerator:

@@ -6,15 +6,18 @@ from typing import Dict, Any, List, Optional
 import os
 import json
 import logging
+import warnings
 from dotenv import load_dotenv
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Google Generative AI 임포트
+# Google Generative AI 임포트 (deprecated 패키지 FutureWarning 억제)
 try:
-    import google.generativeai as genai
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=FutureWarning)
+        import google.generativeai as genai
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False

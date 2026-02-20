@@ -72,6 +72,36 @@
 - **정규화**: 위 지표를 종합한 **quality_score** = element_quality.overall_quality_score (0–100). 구현: `analyzer.py`의 `_analyze_element_quality`.
 - **가중치**: 최종 합산 시 quality_score에 **10%** 적용. (아래 §9 점수 산식 참조)
 
+### 6.5. class_freq_score (중요 class 빈도 점수)
+
+- **목적**: 페이지 내에서 “의미적으로 중요한” CSS class가 실제로 자주 쓰이는지 빈도로 평가한다. 자주 반복되는 class 중 중요 키워드가 포함된 비율이 높을수록 점수가 올라간다.
+- **중요 class의 정의**  
+  - **선정 기준**: CSS class 이름(대소문자 무시)에 아래 **important_keywords** 중 하나라도 포함되면 “중요 class”로 간주한다.  
+  - **키워드 목록** (구현: `api/services/analyzer.py` `_analyze_page_structure` 내 660행):  
+    `product`, `goods`, `price`, `image`, `detail`, `description`  
+  - 시맨틱 역할·상품 페이지 핵심 요소를 나타내는 이름 패턴을 기준으로 하며, 별도 시맨틱 구조(예: key_elements)가 아닌 **class 이름 문자열**만 사용한다.
+- **빈도 측정 방법**  
+  - **데이터 소스**: 크롤러가 단일 페이지를 파싱할 때 만든 `page_structure["class_frequency"]` (`Dict[str, int]`)를 사용한다.  
+  - **의미**: 각 class가 **해당 페이지 내에서** 등장한 횟수(페이지 내 반복 횟수)이다.  
+  - **전체 페이지 집합 대비 출현 비율**은 사용하지 않으며, **페이지 내 반복 횟수**만 사용한다.  
+  - 상위 N개: 해당 페이지의 `class_frequency`를 빈도 값 내림차순으로 정렬한 뒤 **상위 10개** class만 사용한다.
+- **가중치 적용 및 계산식**  
+  - **1단계**: `class_frequency = page_structure.get("class_frequency", {})`  
+  - **2단계**: `top_classes = sorted(class_frequency.items(), key=빈도, reverse=True)[:10]`  
+  - **3단계**: `important_class_count = top_classes` 중에서 class 이름에 `important_keywords` 중 하나라도 포함된 개수 (0~10)  
+  - **4단계**: `class_frequency_score = min(100, important_class_count * 20)` → 0, 20, 40, …, 100 (0–100 캡)  
+  - 최종 합산 시 **가중치 10%** 적용. (§9 점수 산식 참조)
+- **구현 위치 및 입·출력**  
+  - **함수**: 별도 함수 없음. `api/services/analyzer.py`의 **`_analyze_page_structure`** 내부에서 인라인으로 계산된다.  
+  - **입력**: `page_structure` (dict). 그중 `page_structure["class_frequency"]`가 `Dict[str, int]` (class 이름 → 페이지 내 출현 횟수).  
+  - **출력**: `analysis["class_frequency_score"]` (int, 0–100), `analysis["top_classes"]` (list of `{"class": str, "frequency": int}`, 상위 10개).  
+  - 합산 시에는 `class_freq_score = analysis.get("class_frequency_score", 0)`으로 읽어 §9의 가중치 합산에 사용한다.
+- **예시**  
+  - `class_frequency = {"product_name": 3, "goods_detail": 2, "price_area": 4, "image_thumb": 5, "detail_content": 1, "other_class": 10}`  
+  - 상위 10개: `other_class`, `image_thumb`, `price_area`, `product_name`, `goods_detail`, `detail_content` 등.  
+  - 이 중 important_keywords 포함: `product_name`, `goods_detail`, `price_area`, `image_thumb`, `detail_content` → `important_class_count = 5`  
+  - `class_frequency_score = min(100, 5 * 20) = 100`.
+
 ---
 
 ## 7. 요소 간 관계 (Element Relationships)
@@ -107,7 +137,7 @@
 | essential_score | 필수 4요소 존재 비율 (존재 개수/4)×100 | 25% |
 | optional_score | 선택 5요소 존재 비율 (존재 개수/5)×100 | 15% |
 | completeness_score | 구조 완성도 9항목 존재 비율 (존재 개수/9)×100 | 15% |
-| class_freq_score | 중요 class 빈도 기반 점수 (구현: important_class_count 등) | 10% |
+| class_freq_score | 중요 class 빈도 기반 점수 (정의·계산식·구현: §6.5 참조, `_analyze_page_structure` 내 인라인) | 10% |
 | quality_score | element_quality.overall_quality_score | 10% |
 | relationship_score | element_relationships.relationship_score | 10% |
 | depth_score | semantic_depth.depth_score (최대 100 캡) | 5% |
@@ -121,7 +151,7 @@
 
 - **예시 계산**:  
   essential_score=100, optional_score=60, completeness_score=100, class_freq_score=80, quality_score=70, relationship_score=100, depth_score=50, correlation_score=75, accessibility_score=40 이면  
-  `100×0.25 + 60×0.15 + 100×0.15 + 80×0.10 + 70×0.10 + 100×0.10 + 50×0.05 + 75×0.05 + 40×0.05 = 25 + 9 + 15 + 8 + 7 + 10 + 2.5 + 3.75 + 2 = 76.25` → **76점**.
+  `100×0.25 + 60×0.15 + 100×0.15 + 80×0.10 + 70×0.10 + 100×0.10 + 50×0.05 + 75×0.05 + 40×0.05 = 25 + 9 + 15 + 8 + 7 + 10 + 2.5 + 3.75 + 2 = 82.25` → **82점**.
 
 ---
 
