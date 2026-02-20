@@ -12,10 +12,7 @@
 
 ### 1. 의존성 설치
 
-```bash
-cd /Users/chunghyo/qoo10-ai-agent/mcp_servers/stitch_dev_agent_kit
-pip install -r requirements.txt
-```
+
 
 ### 2. 환경 변수 설정
 
@@ -23,34 +20,24 @@ pip install -r requirements.txt
 
 ```bash
 # 방법 1: .env 파일 생성
+# 방법 1: .env 파일 생성
+# 참고: .env.example 파일이 저장소에 포함되어 있습니다
 cp .env.example .env
+# .env 파일을 편집하여 STITCH_API_KEY를 설정
 # .env 파일을 편집하여 STITCH_API_KEY를 설정
 
 # 방법 2: 환경 변수 직접 설정
+# 주의: 이 방법은 API 키가 셸 히스토리에 저장될 수 있으므로 권장하지 않습니다
+# 가능하면 .env 파일 사용을 권장합니다
 export STITCH_API_URL="https://stitch.withgoogle.com"
-export STITCH_API_KEY="your-api-key-here"
+export STITCH_API_KEY="your-api-key-here"  # 프로덕션에서는 사용하지 마세요
 ```
 
 ### 3. Cursor MCP 설정
 
 Cursor의 `mcp.json` 파일에 다음 설정이 자동으로 추가되었습니다:
 
-```json
-{
-  "mcpServers": {
-    "stitch-dev-agent-kit": {
-      "command": "python3",
-      "args": [
-        "/Users/chunghyo/qoo10-ai-agent/mcp_servers/stitch_dev_agent_kit/server.py"
-      ],
-      "env": {
-        "STITCH_API_URL": "https://stitch.withgoogle.com",
-        "STITCH_API_KEY": ""
-      }
-    }
-  }
-}
-```
+
 
 **중요**: `STITCH_API_KEY` 값을 실제 API 키로 변경해야 합니다.
 
@@ -78,10 +65,10 @@ Cursor를 재시작한 후, AI 채팅에서 다음과 같이 사용할 수 있�
 
 ### 직접 테스트
 
-서버를 직접 테스트하려면:
+서버를 직접 테스트하려면 (프로젝트 루트에서):
 
 ```bash
-cd /Users/chunghyo/qoo10-ai-agent/mcp_servers/stitch_dev_agent_kit
+cd mcp_servers/stitch_dev_agent_kit
 python3 server.py
 ```
 

@@ -32,7 +32,7 @@
       "name": "Frontend Developer",
       "name_ko": "프론트엔드 개발자",
       "description": "React 등 프론트엔드 개발",
-      "categories": ["frontend"],
+      "categories": ["frontend", "testing"],
       "guidelines": [
         "React + TypeScript, API 클라이언트 연동 일관성",
         "백엔드 API 스펙 변경 시 프론트 반영",

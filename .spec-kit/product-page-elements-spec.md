@@ -15,14 +15,16 @@
 
 ## 2. 필수 요소 (Essential Elements)
 
-| 요소 ID | 한글명 | key_elements 키 | semantic_structure 키 | 검색 키워드 (class/선택자) | 가중치 |
+| 요소 ID | 한글명 | key_elements 키 | semantic_structure 키 | 검색 키워드 (class/선택자) | 요소당 비중 |
 |--------|--------|-----------------|------------------------|----------------------------|--------|
 | product_info | 상품 정보 | product_info | product_name_elements | product, goods, item, detail, info, name, title, goods_name, product_name | 25% |
 | price_info | 가격 정보 | price_info | price_elements | price, cost, discount, sale, original, prc | 25% |
 | image_info | 이미지 정보 | image_info | image_elements | image, img, photo, thumbnail, thmb, picture | 25% |
 | description_info | 상품 설명 | description_info | description_elements | description, detail, content | 25% |
 
-- **필수 4요소**가 모두 존재해야 기본 점수 40점 만점. 개별 누락 시 해당 비중만큼 감점 및 추천사항 추가.
+- **정규화**: 존재하는 필수 요소 비율로 **essential_score** = (존재 개수 / 4) × 100 (0–100).
+- **가중치**: 최종 합산 시 essential_score에 **25%** 적용. (아래 §9 점수 산식 참조)
+- 개별 누락 시 추천사항 추가.
 
 ---
 
@@ -36,7 +38,8 @@
 | coupon_info | 쿠폰 정보 | coupon_info | coupon_elements | coupon, discount, 割引, クーポン | 전환 |
 | qpoint_info | Qポイント | qpoint_info | qpoint_elements | qpoint, point, ポイント, Qポイント | 전환 |
 
-- 선택 요소는 최대 30점 분배(요소당 비중 균등 또는 그룹별 가중치). 존재할수록 점수 가산.
+- **정규화**: 존재하는 선택 요소 비율로 **optional_score** = (존재 개수 / 5) × 100 (0–100).
+- **가중치**: 최종 합산 시 optional_score에 **15%** 적용. (아래 §9 점수 산식 참조)
 
 ---
 
@@ -56,7 +59,8 @@
 ## 5. 구조 완성도 (Structure Completeness)
 
 - **항목**: has_product_name, has_price, has_images, has_description, has_reviews, has_seller, has_shipping, has_coupon, has_qpoint  
-- **점수**: 9항목 중 존재하는 항목 비율로 0–20점. 7개 이상이면 20점, 5–6개 15점, 3–4개 10점, 그 미만 0점 및 추천사항.
+- **정규화**: 9항목 중 존재 비율로 **completeness_score** = (존재 개수 / 9) × 100 (0–100). 구현: `api/services/analyzer.py`의 structure_completeness 카운트 기준.
+- **가중치**: 최종 합산 시 completeness_score에 **15%** 적용. (아래 §9 점수 산식 참조)
 
 ---
 
@@ -65,7 +69,8 @@
 - **빈도 분석**: 각 카테고리별 요소 개수·평균 빈도 → 품질 점수 기여.
 - **다양성**: 필수 4카테고리 + 선택 5카테고리 존재 비율.
 - **일관성**: 동일 카테고리 내 class 빈도 편차(표준편차/평균)가 작을수록 가산.
-- **가중치**: 전체 품질 점수는 페이지 구조 총점의 최대 15% 반영 권장.
+- **정규화**: 위 지표를 종합한 **quality_score** = element_quality.overall_quality_score (0–100). 구현: `analyzer.py`의 `_analyze_element_quality`.
+- **가중치**: 최종 합산 시 quality_score에 **10%** 적용. (아래 §9 점수 산식 참조)
 
 ---
 
@@ -77,19 +82,50 @@
   - 구매 정보 그룹: price, coupon, qpoint  
   - 상품 정보 그룹: product, image, description  
   - 신뢰 정보 그룹: review, seller, shipping  
-- 그룹별 70% 이상 존재 시 가산. 관계 점수는 총점의 최대 10% 반영 권장.
+- 그룹별 70% 이상 존재 시 가산.
+- **정규화**: **relationship_score** = element_relationships.relationship_score (0–100). 구현: `analyzer.py`의 `_analyze_element_relationships`.
+- **가중치**: 최종 합산 시 relationship_score에 **10%** 적용. (아래 §9 점수 산식 참조)
 
 ---
 
 ## 8. 시맨틱 깊이·상관관계·접근성·SEO
 
-- **시맨틱 깊이**: 카테고리별 요소 개수·가중 빈도로 깊이 점수. 총점의 최대 5% 반영 권장.
-- **상관관계**: 가격-이미지, 설명-리뷰, 상품-판매자, 이미지-설명 쌍 존재 여부. 총점의 최대 5% 반영 권장.
-- **접근성·SEO**: 시맨틱 요소 수, 필수 SEO 요소 4종 존재, 구조화 class 수. 총점의 최대 5% 반영 권장.
+- **시맨틱 깊이**: 카테고리별 요소 개수·가중 빈도로 **depth_score** (0–100). 구현: `analyzer.py`의 `_analyze_semantic_depth`. 가중치 **5%**.
+- **상관관계**: 가격-이미지, 설명-리뷰, 상품-판매자, 이미지-설명 쌍 존재 여부 → **correlation_score** (0–100). 구현: `analyzer.py`의 correlation_analysis. 가중치 **5%**.
+- **접근성·SEO**: 시맨틱 요소 수, 필수 SEO 요소 4종 존재, 구조화 class 수 → **accessibility_score** (0–100). 구현: `analyzer.py`의 `_analyze_accessibility_seo`. 가중치 **5%**.
 
 ---
 
-## 9. 등급 기준 (Page Structure Grade)
+## 9. Scoring Formula (점수 산식)
+
+**참조**: `api/services/analyzer.py` — `_analyze_page_structure` 내 가중치 합산부.
+
+- **정규화 규칙**: 아래 모든 서브점수는 **0–100** 범위로 산출·캡핑한 뒤 가중치를 적용한다. (구현에서 이미 0–100으로 계산되는 항목은 그대로 사용.)
+
+| 서브점수 | 설명 | 가중치 |
+|----------|------|--------|
+| essential_score | 필수 4요소 존재 비율 (존재 개수/4)×100 | 25% |
+| optional_score | 선택 5요소 존재 비율 (존재 개수/5)×100 | 15% |
+| completeness_score | 구조 완성도 9항목 존재 비율 (존재 개수/9)×100 | 15% |
+| class_freq_score | 중요 class 빈도 기반 점수 (구현: important_class_count 등) | 10% |
+| quality_score | element_quality.overall_quality_score | 10% |
+| relationship_score | element_relationships.relationship_score | 10% |
+| depth_score | semantic_depth.depth_score (최대 100 캡) | 5% |
+| correlation_score | correlation_analysis.correlation_score | 5% |
+| accessibility_score | accessibility_seo_score (최대 100 캡) | 5% |
+
+- **합산 공식**:  
+  `page_structure_score = ⌊ Σ (sub_score_i × weight_i) ⌋`  
+  이때 `sub_score_i`는 위 항목을 0–100으로 정규화한 값, `weight_i`는 위 표의 비율(합 100%).  
+  최종 `score = clamp(page_structure_score, 0, 100)`.
+
+- **예시 계산**:  
+  essential_score=100, optional_score=60, completeness_score=100, class_freq_score=80, quality_score=70, relationship_score=100, depth_score=50, correlation_score=75, accessibility_score=40 이면  
+  `100×0.25 + 60×0.15 + 100×0.15 + 80×0.10 + 70×0.10 + 100×0.10 + 50×0.05 + 75×0.05 + 40×0.05 = 25 + 9 + 15 + 8 + 7 + 10 + 2.5 + 3.75 + 2 = 76.25` → **76점**.
+
+---
+
+## 10. 등급 기준 (Page Structure Grade)
 
 | 등급 | 점수 구간 | 설명 |
 |------|-----------|------|
@@ -100,13 +136,13 @@
 
 ---
 
-## 10. 체크리스트 (dev-agent-kit 정합성)
+## 11. 체크리스트 (dev-agent-kit 정합성)
 
 - [ ] 필수 4요소(product, price, image, description) 매핑이 analyzer와 crawler에서 일치하는가?
 - [ ] 선택 요소 5종이 key_elements 및 semantic_structure 양쪽으로 평가되는가?
 - [ ] 구조 완성도 9항목이 structure_completeness에 반영되는가?
 - [ ] element_quality, element_relationships, semantic_depth, correlation_analysis, accessibility_seo_score가 리포트에 노출되는가?
-- [ ] 등급(grade)이 page_structure_analysis에 포함되어 다른 섹션과 동일하게 표시되는가?
+- [ ] 등급(grade)이 page_structure_analysis에 포함되어 다른 섹션과 동일하게 표시되는가? (점수는 §9 점수 산식과 일치)
 
 ---
 

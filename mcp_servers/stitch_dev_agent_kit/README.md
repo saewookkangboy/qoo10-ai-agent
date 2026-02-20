@@ -31,7 +31,9 @@ Cursor의 `mcp.json` 파일에 다음 설정을 추가합니다:
     "stitch-dev-agent-kit": {
       "command": "python3",
       "args": [
-        "/Users/chunghyo/qoo10-ai-agent/mcp_servers/stitch_dev_agent_kit/server.py"
+       "args": [
+        "/path/to/your/project/mcp_servers/stitch_dev_agent_kit/server.py"
+       ],
       ],
       "env": {
         "STITCH_API_URL": "https://stitch.withgoogle.com",
@@ -77,9 +79,10 @@ Cursor의 `mcp.json` 파일에 다음 설정을 추가합니다:
 
 ## 테스트
 
-서버를 직접 테스트하려면:
+서버를 직접 테스트하려면 (프로젝트 루트에서):
 
 ```bash
+cd mcp_servers/stitch_dev_agent_kit
 python3 server.py
 ```
 

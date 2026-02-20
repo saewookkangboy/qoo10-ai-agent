@@ -712,7 +712,7 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                     stage="analyzing",
                     status="success",
                     duration_ms=analysis_duration_ms,
-                    metadata={"overall_score": analysis_result.get("overall_score", 0)}
+                    metadata={"overall_score": analysis_result.get("shop_analysis", {}).get("overall_score", 0)}
                 )
                 
                 logger.info(f"[{analysis_id}] Analysis completed - Score: {analysis_result.get('overall_score', 0)}")

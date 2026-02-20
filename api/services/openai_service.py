@@ -144,7 +144,11 @@ class OpenAIService:
         context_parts.append("\n=== 이미지 정보 ===")
         context_parts.append(f"상세 이미지 개수: {len(images.get('detail_images', []))}개")
 
-        product_analysis = analysis_result.get("product_analysis") or analysis_result.get("shop_analysis") or {}
+        product_analysis = analysis_result.get("product_analysis")
+        if product_analysis is None:
+            product_analysis = analysis_result.get("shop_analysis")
+        if product_analysis is None:
+            product_analysis = {}
         context_parts.append("\n=== 분석 결과 ===")
         context_parts.append(f"종합 점수: {product_analysis.get('overall_score', 0)}/100")
         context_parts.append(f"이미지 분석 점수: {product_analysis.get('image_analysis', {}).get('score', 0)}/100")
@@ -292,7 +296,9 @@ JSON 형식으로 응답해주세요:
     ) -> Dict[str, Any]:
         """기존 분석 결과를 AI로 강화 (product_analysis 또는 shop_analysis 구조 유지)"""
         if not self._client:
-            return analysis_result
+import copy
+
+            enhanced_result = copy.deepcopy(analysis_result)
 
         try:
             ai_analysis = await self.analyze_product_with_ai(product_data, analysis_result)

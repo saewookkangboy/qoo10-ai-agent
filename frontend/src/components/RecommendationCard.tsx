@@ -7,6 +7,19 @@ interface RecommendationCardProps {
 
 const helpContent = '개선 제안은 Qoo10 큐텐 대학의 판매 노하우를 기반으로 생성되었습니다.\n\n• High Priority: 즉시 개선이 필요한 항목으로 매출에 직접적인 영향을 미칩니다\n• Medium Priority: 단기적으로 개선하면 효과를 볼 수 있는 항목입니다\n• Low Priority: 장기적으로 고려하면 좋은 개선 사항입니다\n\n각 제안의 실행 방법을 따라 단계적으로 개선하시면 매출 증대에 도움이 됩니다.'
 
+function getPriorityText(priority: string): string {
+  switch (priority) {
+    case 'high':
+      return '높음'
+    case 'medium':
+      return '중간'
+    case 'low':
+      return '낮음'
+    default:
+      return '-'
+  }
+}
+
 function RecommendationCard({ recommendation }: RecommendationCardProps) {
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -56,7 +69,7 @@ function RecommendationCard({ recommendation }: RecommendationCardProps) {
           {recommendation.category}
         </span>
         <span className={`px-2 py-0.5 text-xs font-medium rounded ${colors.badge}`}>
-          {recommendation.priority === 'high' ? '높음' : recommendation.priority === 'medium' ? '중간' : '낮음'}
+          {getPriorityText(recommendation.priority)}
         </span>
       </div>
       <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-4">

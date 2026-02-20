@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import sys
 from typing import Any, Dict, List, Optional
 
@@ -27,6 +28,16 @@ app = Server("stitch-dev-agent-kit")
 # Stitch dev-agent-kit 설정
 STITCH_API_URL = os.getenv("STITCH_API_URL", "https://stitch.withgoogle.com")
 STITCH_API_KEY = os.getenv("STITCH_API_KEY", "")
+
+_AGENT_ID_PATTERN = re.compile(r"^[\w\-]+$")
+
+
+def _validate_agent_id(agent_id: str) -> None:
+    """agent_id가 비어있지 않고 허용 패턴(영문/숫자/언더스코어/하이픈)인지 검사. 실패 시 ValueError."""
+    if not agent_id or not agent_id.strip():
+        raise ValueError("agent_id는 비어 있을 수 없습니다")
+    if not _AGENT_ID_PATTERN.fullmatch(agent_id):
+        raise ValueError("agent_id는 영문, 숫자, 언더스코어(_), 하이픈(-)만 허용됩니다")
 
 
 @app.list_tools()
@@ -154,12 +165,10 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[mcp_types.Cont
                 type="text",
                 text=json.dumps({
                     "error": str(e),
-                    "tool": name,
-                    "arguments": arguments
+                    "tool": name
                 }, ensure_ascii=False)
             )
         ]
-
 
 async def create_sub_agent(name: str, description: str, config: Dict[str, Any] = None) -> Dict[str, Any]:
     """서브에이전트 생성"""
@@ -210,7 +219,7 @@ async def get_sub_agent(agent_id: str) -> Dict[str, Any]:
     
     if not STITCH_API_KEY:
         raise ValueError("STITCH_API_KEY 환경 변수가 설정되지 않았습니다")
-    
+    _validate_agent_id(agent_id)
     url = f"{STITCH_API_URL}/api/v1/sub-agents/{agent_id}"
     headers = {
         "Authorization": f"Bearer {STITCH_API_KEY}",
@@ -229,7 +238,7 @@ async def run_sub_agent(agent_id: str, input_data: Dict[str, Any], session_id: O
     
     if not STITCH_API_KEY:
         raise ValueError("STITCH_API_KEY 환경 변수가 설정되지 않았습니다")
-    
+    _validate_agent_id(agent_id)
     url = f"{STITCH_API_URL}/api/v1/sub-agents/{agent_id}/run"
     headers = {
         "Authorization": f"Bearer {STITCH_API_KEY}",
@@ -253,7 +262,7 @@ async def delete_sub_agent(agent_id: str) -> Dict[str, Any]:
     
     if not STITCH_API_KEY:
         raise ValueError("STITCH_API_KEY 환경 변수가 설정되지 않았습니다")
-    
+    _validate_agent_id(agent_id)
     url = f"{STITCH_API_URL}/api/v1/sub-agents/{agent_id}"
     headers = {
         "Authorization": f"Bearer {STITCH_API_KEY}",

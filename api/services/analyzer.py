@@ -713,25 +713,27 @@ class ProductAnalyzer:
         
         weights = {
             "essential": 0.25,      # 필수 4요소 25%
-            "optional": 0.20,      # 선택 5요소 20%
+            "optional": 0.15,      # 선택 5요소 15%
             "completeness": 0.15,  # 구조 완성도 15%
             "class_frequency": 0.10,  # 클래스 빈도 10%
-            "quality": 0.15,       # 요소 품질 15%
+            "quality": 0.10,       # 요소 품질 10%
             "relationship": 0.10, # 요소 관계 10%
             "depth": 0.05,         # 시맨틱 깊이 5%
             "correlation": 0.05,   # 상관관계 5%
             "accessibility": 0.05, # 접근성·SEO 5%
         }
         analysis["score"] = int(
-            essential_score * weights["essential"]
-            + optional_score * weights["optional"]
-            + completeness_score * weights["completeness"]
-            + class_freq_score * weights["class_frequency"]
-            + quality_score * weights["quality"]
-            + relationship_score * weights["relationship"]
-            + depth_score * weights["depth"]
-            + correlation_score * weights["correlation"]
-            + accessibility_score * weights["accessibility"]
+            (
+                essential_score * weights["essential"]
+                + optional_score * weights["optional"]
+                + completeness_score * weights["completeness"]
+                + class_freq_score * weights["class_frequency"]
+                + quality_score * weights["quality"]
+                + relationship_score * weights["relationship"]
+                + depth_score * weights["depth"]
+                + correlation_score * weights["correlation"]
+                + accessibility_score * weights["accessibility"]
+            )
         )
         analysis["score"] = min(100, max(0, analysis["score"]))
         analysis["grade"] = self._get_page_structure_grade(analysis["score"])
@@ -787,20 +789,22 @@ class ProductAnalyzer:
         # 빈도 분석: 각 요소 카테고리의 빈도 평가
         frequency_scores = {}
         for category, elements in key_elements.items():
-            if elements:
-                # 요소 개수와 평균 빈도 계산
-                total_frequency = sum(
-                    elem.get("frequency", 1) 
-                    for elem in elements 
-                    if isinstance(elem, dict)
-                )
-                avg_frequency = total_frequency / len(elements) if elements else 0
-                
-                frequency_scores[category] = {
-                    "element_count": len(elements),
-                    "avg_frequency": avg_frequency,
-                    "score": min(100, len(elements) * 10 + int(avg_frequency * 5))
-                }
+            # 방어: 리스트가 아니면 단일 dict는 리스트로, 그 외는 빈 리스트
+            if not isinstance(elements, list):
+                if isinstance(elements, dict):
+                    elements = [elements]
+                else:
+                    elements = []
+            valid_elems = [e for e in elements if isinstance(e, dict)]
+            valid_count = len(valid_elems)
+            # 비 dict 항목은 제외하고 valid_elems만으로 빈도 계산
+            total_frequency = sum(e.get("frequency", 1) for e in valid_elems)
+            avg_frequency = (total_frequency / valid_count) if valid_count else 0
+            frequency_scores[category] = {
+                "element_count": valid_count,
+                "avg_frequency": avg_frequency,
+                "score": min(100, valid_count * 10 + int(avg_frequency * 5)) if valid_count else 0
+            }
         
         quality_analysis["frequency_analysis"] = frequency_scores
         
