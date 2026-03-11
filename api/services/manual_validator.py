@@ -158,7 +158,8 @@ def validate_manual_vs_crawled(
                 continue
             extra_in_manual.append(url)
 
-    # 4) 크롤링된 섹션별 항목 제목이 메뉴얼에 없는 경우
+    # 4) 크롤링된 섹션별 항목 제목이 메뉴얼에 없는 경우 (section, item_title, url) 기준 중복 제거)
+    seen_missing_key: set = set()  # (section, item_title, url) tuple
     for sec in topic.get("sections") or []:
         section_title = sec.get("section_title") or ""
         for link in sec.get("links") or []:
@@ -176,11 +177,15 @@ def validate_manual_vs_crawled(
                 if found:
                     break
             if not found:
-                missing_in_manual_items.append({
-                    "section": section_title,
-                    "item_title": title,
-                    "url": link.get("url"),
-                })
+                url_val = link.get("url") or ""
+                key = (section_title, title, url_val)
+                if key not in seen_missing_key:
+                    seen_missing_key.add(key)
+                    missing_in_manual_items.append({
+                        "section": section_title,
+                        "item_title": title,
+                        "url": link.get("url"),
+                    })
 
     # 5) coverage_score
     total_expected = len(crawled_urls) + len(expected_titles)

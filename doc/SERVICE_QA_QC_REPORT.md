@@ -2,7 +2,7 @@
 
 **진행 일자**: 2026-03-11  
 **대상**: 전체 에이전트 파이프라인 (Orchestration, Crawl, Analysis, Recommendation, Checklist, Validation, Report-Output)  
-**참조**: [doc/agents/README.md](agents/README.md), [DATA_PIPELINE_TEST_SUMMARY.md](DATA_PIPELINE_TEST_SUMMARY.md)
+**참조**: [agents/README.md](agents/README.md), [DATA_PIPELINE_TEST_SUMMARY.md](DATA_PIPELINE_TEST_SUMMARY.md)
 
 ---
 

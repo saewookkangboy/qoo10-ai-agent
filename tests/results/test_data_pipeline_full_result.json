@@ -1,1734 +1,328 @@
 {
-  "url": "https://www.qoo10.jp/shop/whippedofficial",
-  "url_type": "shop",
+  "url": "https://www.qoo10.jp/g/1093098159",
+  "url_type": "product",
   "analysis_result": {
-    "shop_analysis": {
-      "overall_score": 43,
-      "shop_info": {
-        "shop_name": "ホイップド公式",
-        "shop_id": "whippedofficial",
-        "shop_level": "normal",
-        "follower_count": 51982,
-        "product_count": 18,
-        "score": 70
+    "product_analysis": {
+      "overall_score": 69,
+      "image_analysis": {
+        "score": 100,
+        "thumbnail_quality": "good",
+        "image_count": 23,
+        "recommendations": []
       },
-      "product_analysis": {
-        "total_products": 30,
-        "average_rating": 0.0,
-        "total_reviews": 0,
-        "price_range": {
-          "min": 1320,
-          "max": 8000
-        },
-        "score": 20
+      "description_analysis": {
+        "score": 50,
+        "description_length": 133,
+        "seo_keywords": [
+          "スキンケア",
+          "角質ケア・マッサージ",
+          "ピーリング・ゴマージュ",
+          "通販",
+          "インターネット",
+          "ショッピング",
+          "Qoo10"
+        ],
+        "structure_quality": "poor",
+        "recommendations": [
+          "상품 설명을 최소 500자 이상 작성하세요",
+          "줄바꿈이나 리스트를 사용하여 설명을 구조화하세요"
+        ]
       },
-      "category_analysis": {
-        "main_category": "클렌저",
-        "category_distribution": {
-          "レディース服": 1,
-          "下着・レッグウェア": 1,
-          "バッグ・雑貨": 1,
-          "シューズ": 1,
-          "腕時計・アクセサリー": 1,
-          "スキンケア": 1,
-          "ベースメイク": 1,
-          "ポイントメイク": 1,
-          "キット・コフレ・福袋": 1,
-          "メイク小物": 1,
-          "UVケア": 1,
-          "ボディ・ハンド・フットケア": 1,
-          "脱毛・除毛": 1,
-          "ヘア": 1,
-          "ネイル": 1,
-          "香水": 1,
-          "メンズビューティー": 1,
-          "ダイエット・矯正": 1,
-          "コンタクトレンズ": 1,
-          "メンズファッション": 1,
-          "スポーツ": 1,
-          "メンズバッグ・シューズ・小物": 1,
-          "アウトドア": 1,
-          "自転車": 1,
-          "美容・健康家電": 1,
-          "テレビゲーム": 1,
-          "生活家電": 1,
-          "季節家電": 1,
-          "キッチン家電": 1,
-          "パソコン": 1,
-          "テレビ・オーディオ": 1,
-          "カメラ・光学機器用": 1,
-          "PC周辺機器・消耗品": 1,
-          "照明": 1,
-          "OA・事務家電": 1,
-          "電子タバコ・加熱式タバコ": 1,
-          "家具・インテリア": 1,
-          "寝具・ベッド・マットレス": 1,
-          "日用品雑貨": 1,
-          "キッチン用品": 1,
-          "文具": 1,
-          "ホビー・コスプレ": 1,
-          "ガーデニング・DIY・工具": 1,
-          "楽器": 1,
-          "カー用品": 1,
-          "アダルト": 1,
-          "食品": 1,
-          "飲料": 1,
-          "米・雑穀": 1,
-          "お酒": 1,
-          "ドラッグストア": 1,
-          "KPOP": 1,
-          "CD": 1,
-          "DVD・Blu-ray": 1,
-          "本": 1,
-          "チケット・サービス": 1,
-          "旅行・レジャー": 1,
-          "ベビー・マタニティ": 1,
-          "キッズ": 1,
-          "おもちゃ・知育": 1,
-          "イヤホン・ヘッドホン": 1,
-          "スマートフォン・タブレットPC": 1,
-          "スマホケース・保護フィルム": 1,
-          "犬用品": 1,
-          "猫用品": 1,
-          "バス・お手入れ用品": 1,
-          "食器・給水器・給餌器": 1,
-          "ペットインテリア・雑貨": 1,
-          "メモリアルグッズ": 1,
-          "熱帯魚・アクアリウム用品": 1,
-          "小動物・鳥用品": 1,
-          "爬虫類・両生類・昆虫用品": 1,
-          "サプリメント": 1,
-          "ダイエット": 1,
-          "健康食品・飲料": 1,
-          "美容サポート": 1,
-          "기타": 4,
-          "클렌저": 16,
-          "마스크팩": 5,
-          "크림": 3,
-          "로션": 1,
-          "보디케어": 1
-        },
-        "category_count": 82,
-        "score": 100
+      "price_analysis": {
+        "score": 90,
+        "sale_price": 2392,
+        "original_price": 3300,
+        "discount_rate": 27,
+        "positioning": "unknown",
+        "recommendations": []
       },
-      "competitor_analysis": {
+      "review_analysis": {
         "score": 70,
-        "main_category": "클렌저",
-        "category_competition": {
-          "レディース服": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "下着・レッグウェア": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "バッグ・雑貨": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "シューズ": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "腕時計・アクセサリー": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "スキンケア": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "ベースメイク": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "ポイントメイク": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "キット・コフレ・福袋": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "メイク小物": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "UVケア": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "ボディ・ハンド・フットケア": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "脱毛・除毛": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "ヘア": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "ネイル": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "香水": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "メンズビューティー": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "ダイエット・矯正": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "コンタクトレンズ": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "メンズファッション": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "スポーツ": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "メンズバッグ・シューズ・小物": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "アウトドア": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "自転車": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "美容・健康家電": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "テレビゲーム": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "生活家電": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "季節家電": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "キッチン家電": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "パソコン": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "テレビ・オーディオ": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "カメラ・光学機器用": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "PC周辺機器・消耗品": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "照明": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "OA・事務家電": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "電子タバコ・加熱式タバコ": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "家具・インテリア": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "寝具・ベッド・マットレス": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "日用品雑貨": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "キッチン用品": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "文具": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "ホビー・コスプレ": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "ガーデニング・DIY・工具": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "楽器": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "カー用品": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "アダルト": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "食品": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "飲料": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "米・雑穀": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "お酒": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "ドラッグストア": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "KPOP": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "CD": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "DVD・Blu-ray": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "本": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "チケット・サービス": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "旅行・レジャー": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "ベビー・マタニティ": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "キッズ": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "おもちゃ・知育": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "イヤホン・ヘッドホン": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "スマートフォン・タブレットPC": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "スマホケース・保護フィルム": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "犬用品": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "猫用品": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "バス・お手入れ用品": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "食器・給水器・給餌器": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "ペットインテリア・雑貨": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "メモリアルグッズ": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "熱帯魚・アクアリウム用品": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "小動物・鳥用品": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "爬虫類・両生類・昆虫用品": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "サプリメント": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "ダイエット": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "健康食品・飲料": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "美容サポート": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "기타": {
-            "num_products": 4,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 10,
-            "category_ratio": 0.133
-          },
-          "클렌저": {
-            "num_products": 16,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 40,
-            "category_ratio": 0.533
-          },
-          "마스크팩": {
-            "num_products": 5,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 20,
-            "category_ratio": 0.167
-          },
-          "크림": {
-            "num_products": 3,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 10,
-            "category_ratio": 0.1
-          },
-          "로션": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
-          },
-          "보디케어": {
-            "num_products": 1,
-            "num_unique_sellers": 1,
-            "avg_price": 3327.13,
-            "avg_rating": 0.0,
-            "avg_reviews": 0.0,
-            "competition_score": 0,
-            "category_ratio": 0.033
+        "rating": 4.8,
+        "review_count": 1109,
+        "reviews": [
+          {
+            "rating": 5.0,
+            "max_rating": 5.0,
+            "user_name": "duf***",
+            "date": "2026.03.09",
+            "options": [
+              "Type:ムファバター【イチジク＋ココアバター】",
+              "(1+1メガ割ギフト付き)パックスクラブ 210g:ムファバター【イチジク＋ココアバター】(+1495円)",
+              "Gift:選択しない"
+            ],
+            "option_detail": "オプション : Type:ムファバター【イチジク＋ココアバター】 / (1+1メガ割ギフト付き)パックスクラブ 210g:ムファバター【イチジク＋ココアバター】(+1495円) / Gift:選択しない",
+            "text": "お肌ほわほわふわふわすべすべ！お肌や床がベタベタぬるぬるしないのもポイント高い。お風呂においてても可愛い。香りがすごく癒される！香水みたいなキツさもなく、でもナチュラルすぎず、洗い上がり後香りがほのかに続いて幸せ♡ 毎日使いたくなっちゃう！",
+            "images": [
+              "https://dp.image-qoo10.jp/GMKT.IMG/loading_2017/qoo10_loading.s_150-w-fs_s.v_20170420.png"
+            ],
+            "like_count": 0
+          },
+          {
+            "rating": 5.0,
+            "max_rating": 5.0,
+            "user_name": "lin***",
+            "date": "2026.03.08",
+            "options": [
+              "Type:ムファバター【イチジク＋ココアバター】",
+              "(1+1メガ割ギフト付き)パックスクラブ 210g:選択しない",
+              "Gift:選択しない"
+            ],
+            "option_detail": "オプション : Type:ムファバター【イチジク＋ココアバター】 / (1+1メガ割ギフト付き)パックスクラブ 210g:選択しない / Gift:選択しない",
+            "text": "スクラブはこれじゃないとダメって言うくらい何個もリピしてます！いつもピンクだから今回緑買おうと思ったけど売り切れてたからまたピンクにしました！甘い匂いでスクラブも粗すぎずほんとにいい！週に2回くらい使いますがいつもすべすべになります",
+            "images": [
+              "https://dp.image-qoo10.jp/GMKT.IMG/loading_2017/qoo10_loading.s_150-w-fs_s.v_20170420.png"
+            ],
+            "like_count": 0
+          },
+          {
+            "rating": 5.0,
+            "max_rating": 5.0,
+            "user_name": "jxy***",
+            "date": "2026.03.06",
+            "options": [
+              "Type:ムファバター【イチジク＋ココアバター】",
+              "(1+1メガ割ギフト付き)パックスクラブ 210g:ムファバター【イチジク＋ココアバター】(+1495円)",
+              "Gift:選択しない"
+            ],
+            "option_detail": "オプション : Type:ムファバター【イチジク＋ココアバター】 / (1+1メガ割ギフト付き)パックスクラブ 210g:ムファバター【イチジク＋ココアバター】(+1495円) / Gift:選択しない",
+            "text": "以前マグツリークレンザーを購入した際に、おまけでいただいたスクラブ。その分は使い切ってしまったので、念願のメガ割りでの購入となりました！ムファバターの香りがお気に入りで、苦手なお風呂時間が癒し時間になっています。使用期限も2028年5月だったので、このメガ割り期間で、もう1セットをストックとして購入しようか悩み中です。",
+            "images": [
+              "https://dp.image-qoo10.jp/GMKT.IMG/loading_2017/qoo10_loading.s_150-w-fs_s.v_20170420.png"
+            ],
+            "like_count": 0
+          },
+          {
+            "rating": 5.0,
+            "max_rating": 5.0,
+            "user_name": "nan***",
+            "date": "2025.12.07",
+            "options": [
+              "Type:ムファバター【イチジク＋ココアバター】",
+              "(1+1)パックスクラブ 210g(メガ割GIFT付き):ラボカド【ライム＋アボカド】(+1495円)",
+              "Gift wrap:選択しない"
+            ],
+            "option_detail": "オプション : Type:ムファバター【イチジク＋ココアバター】 / (1+1)パックスクラブ 210g(メガ割GIFT付き):ラボカド【ライム＋アボカド】(+1495円) / Gift wrap:選択しない",
+            "text": "友達におすすめされて購入✨これパックしてスクラブして流した後ゆで卵🥚みたいな手触りになる！ちゅるんちゅるん🥹お風呂上がったあとは乾燥するけどピリピリしたりしなかった！スキンケアしてる時もいつもと感触違くて自分の肌じゃないみたい🫶鼻にあった角栓も見事に無くなった😭他のブランドのやつマジで乾燥酷いし塗ってる傍からピリピリやばくて自分には合わないかも…って思ってたけどこれは全然余裕🫶乾燥肌でパックスクラブ探してる人試して欲しい😍",
+            "images": [
+              "https://dp.image-qoo10.jp/GMKT.IMG/loading_2017/qoo10_loading.s_150-w-fs_s.v_20170420.png",
+              "https://dp.image-qoo10.jp/GMKT.IMG/loading_2017/qoo10_loading.s_150-w-fs_s.v_20170420.png"
+            ],
+            "like_count": 1
+          },
+          {
+            "rating": 5.0,
+            "max_rating": 5.0,
+            "user_name": "say***",
+            "date": "2025.12.07",
+            "options": [
+              "Type:ムファバター【イチジク＋ココアバター】",
+              "(1+1)パックスクラブ 210g(メガ割GIFT付き):ムファバター【イチジク＋ココアバター】(+1495円)",
+              "Gift wrap:選択しない"
+            ],
+            "option_detail": "オプション : Type:ムファバター【イチジク＋ココアバター】 / (1+1)パックスクラブ 210g(メガ割GIFT付き):ムファバター【イチジク＋ココアバター】(+1495円) / Gift wrap:選択しない",
+            "text": "売り切れてたけど、在庫復活してたので、速攻購入しました。匂いがめちゃくちゃ良い。パッケージも可愛い♡サイズ感も良かった。メガ割でまとめ買いしたので、これから使ってみようと思います。口コミよいしYouTubeでもおすすめだったので、楽しみ。",
+            "images": [
+              "https://dp.image-qoo10.jp/GMKT.IMG/loading_2017/qoo10_loading.s_150-w-fs_s.v_20170420.png",
+              "https://dp.image-qoo10.jp/GMKT.IMG/loading_2017/qoo10_loading.s_150-w-fs_s.v_20170420.png"
+            ],
+            "like_count": 1
+          },
+          {
+            "rating": 5.0,
+            "max_rating": 5.0,
+            "user_name": "25r***",
+            "date": "2025.12.03",
+            "options": [
+              "Type:ムファバター【イチジク＋ココアバター】",
+              "(1+1)パックスクラブ 210g(メガ割GIFT付き):選択しない",
+              "Gift wrap:選択しない"
+            ],
+            "option_detail": "オプション : Type:ムファバター【イチジク＋ココアバター】 / (1+1)パックスクラブ 210g(メガ割GIFT付き):選択しない / Gift wrap:選択しない",
+            "text": "以前、小さいのを試したら良かったのでメガ割でリピ購入。粒々が丸いからか肌への負担が少なく、洗い上がりはすっきりしながらも保湿されている感じがします。おまけのサシェは袋を開けていないのにすごく香ってます。香りはフィグそのもので、クリスマスぽいデザインが可愛く早速飾っています。",
+            "images": [
+              "https://dp.image-qoo10.jp/GMKT.IMG/loading_2017/qoo10_loading.s_150-w-fs_s.v_20170420.png"
+            ],
+            "like_count": 0
+          },
+          {
+            "rating": 5.0,
+            "max_rating": 5.0,
+            "user_name": "nin***",
+            "date": "2025.03.20",
+            "options": [
+              "Type:マグツリー（鎮静・毛穴ケア）",
+              "オプション:選択しない",
+              "Gift wrap:選択しない"
+            ],
+            "option_detail": "オプション : Type:マグツリー（鎮静・毛穴ケア） / オプション:選択しない / Gift wrap:選択しない",
+            "text": "黒毛穴の方へ！！韓国に行ったとき流行ってるというホイップドに行って、このグリーンのつぶつぶつぶつぶスクラブを黒毛穴の思春期息子非常に気に入り日本に帰ってからも欲しい〜と探していたところQ10にあるということで購入しました。アボガドのクレンザータイプはめっちゃしっとりですが、スクラブはしっかり黒毛穴と戦ってくれます。ヴィーガンパックって名前がなんとも気持ちを上げてくださるパックです。たーだーーー（粗品風に）ジャータイプにするメリットはなんですか？可愛さだけじゃろう。どうかチューブタイプにしてくだされーーワーワーありますか？スクラブのチューブタイプ。小さいサイズと同じようにどうかどうかチューブタイププリーズ。大きいタイプのチューブタイプがありましたら教えてください。でも、次回買うときは赤を買います♡だっていーにおいなんだもーん",
+            "images": [
+              "https://dp.image-qoo10.jp/GMKT.IMG/loading_2017/qoo10_loading.s_150-w-fs_s.v_20170420.png"
+            ],
+            "like_count": 3
+          },
+          {
+            "rating": 5.0,
+            "max_rating": 5.0,
+            "user_name": "sak***",
+            "date": "2025.03.15",
+            "options": [
+              "Type:ムファバター（肌バリア機能回復）",
+              "オプション:選択しない",
+              "Gift wrap:選択しない"
+            ],
+            "option_detail": "オプション : Type:ムファバター（肌バリア機能回復） / オプション:選択しない / Gift wrap:選択しない",
+            "text": "今回メガ割を機に洗顔フォームとスクラブを買ってみました！！写真2枚目が全部おまけなんですけど、思ってた以上に沢山入ってて、特にミニサイズのやつ旅行とかに便利そうで嬉しかったです！（おまけ内容→巾着、洗顔ヘアバンド、めちゃいい匂いの入浴剤、ミニサイズのサンプルジャータイプ×2、チューブタイプ×3、パウチ×2）肝心の使い心地なんですが、まず匂いとテクスチャーが良すぎて出した瞬間からテンション上がりました笑特にスクラブのテクスチャー大好きすぎてバスグッズコレクションしてる中で早くも一軍入り確定の予感です！でもちょっと値段が、、メガ割とかの機会まで待ってまたリピ買いしようと思います︎👍🏻効果はまだあんまりわからないけど、使い心地良すぎるのとお風呂に置いとくだけでテンション上がるので迷ってるなら絶対に買うべきです🛀",
+            "images": [
+              "https://dp.image-qoo10.jp/GMKT.IMG/loading_2017/qoo10_loading.s_150-w-fs_s.v_20170420.png",
+              "https://dp.image-qoo10.jp/GMKT.IMG/loading_2017/qoo10_loading.s_150-w-fs_s.v_20170420.png"
+            ],
+            "like_count": 2
+          },
+          {
+            "rating": 5.0,
+            "max_rating": 5.0,
+            "user_name": "yuz***",
+            "date": "2025.03.14",
+            "options": [
+              "Type:ホホベンダー（肌バリア回復）",
+              "オプション:選択しない",
+              "Gift wrap:選択しない"
+            ],
+            "option_detail": "オプション : Type:ホホベンダー（肌バリア回復） / オプション:選択しない / Gift wrap:選択しない",
+            "text": "２回目のリピ買いです！！！ザラザラした感じのこのタイプのスクラブがめちゃ好きで、しかもこれ塗って数分置き、洗い流すとモッコモコ泡になってしっかり洗い流せるし、なにより肌が…⋆꙳︎︎⟡︎︎𓂃︎︎.·⋆꙳✮チュルンッチュルンッッッ(☆∀☆)になります！！！ホンマに毎週しないと無理なくらい必須のアイテムです！！！おまけの石鹸？入浴剤？の袋が破れて漏れてて嫌でした。",
+            "images": [
+              "https://dp.image-qoo10.jp/GMKT.IMG/loading_2017/qoo10_loading.s_150-w-fs_s.v_20170420.png",
+              "https://dp.image-qoo10.jp/GMKT.IMG/loading_2017/qoo10_loading.s_150-w-fs_s.v_20170420.png"
+            ],
+            "like_count": 0
+          },
+          {
+            "rating": 5.0,
+            "max_rating": 5.0,
+            "user_name": "yur***",
+            "date": "2025.03.13",
+            "options": [
+              "Type:ラボカド（潤いチャージ）",
+              "オプション:選択しない",
+              "Gift wrap:選択しない"
+            ],
+            "option_detail": "オプション : Type:ラボカド（潤いチャージ） / オプション:選択しない / Gift wrap:選択しない",
+            "text": "今回リピートです。前回は初購入でミニサイズの色んな香りのミニサイズ４つ入りクレンザーセットを買ったらスクラブのオマケやカヌレ型の入浴剤が入っていて、後日すぐに現品大きいサイズのクレンザーとスクラブを再注文、その時もオマケ多数入ってました！今回はクレンザー4本とスクラブラボがド1つを購入しましたが、この下の方のミニサイズ（ミニと言ってもミニ３本の現品商品までも入ってる！）多数（入浴剤、スクラブみにチューブ３本、ハンド＆ボディバター３本セットの現品、ボディバターミニ1、マグツリーパッククレンザーミニ2個、マグツリーホイップクリーム1、とこれだけのものを買ったとしても相当な額になりそうなオマケに驚きと感謝！いやー、ホイップドさん、凄いや！そしてもちろん商品も最高ですよ。スクラブと言ってもサボン、ラリン等のボディスクラブのようなザラザラではないので、物足りなく思う方もいるかもですが、基盤の液（？クリーム状）はネットリ系にスクラブは果実の種や等、顔につけても刺激はほぼ感じませんが、ちゃんとスクラブの仕事はしてくれて、更に保湿も？しっとりします。身体にも顔にも。そして洗浄出来るので、サボンラリンのように洗浄後にスクラブという、二度手間ではなくて一度で済むので楽です。いやほんとにめっちゃ良いです！そして香りがそれぞれホント良い！私は、柑橘が好きなのでユジャモンと、ラボガドが好きかな！でもピンクのいちごの香りのやつも好き！甘酸っぱいいちごミルクの香り！ラベンダーの香りのホホベンダーも？良いです！ティーツリーの緑のマグツリーも爽やかで突っ張らず良いです。元々ティーツリー系は乾燥肌の私には合わないものが多い中、ホイップドのマグツリーはしっとりなので揺らいだ時、少しニキビがある時はコチラを使ったりもします😊まだ使ったことない友達におすすめしまくってます笑",
+            "images": [
+              "https://dp.image-qoo10.jp/GMKT.IMG/loading_2017/qoo10_loading.s_150-w-fs_s.v_20170420.png",
+              "https://dp.image-qoo10.jp/GMKT.IMG/loading_2017/qoo10_loading.s_150-w-fs_s.v_20170420.png"
+            ],
+            "like_count": 1
           }
-        },
+        ],
+        "negative_ratio": 0.0,
+        "recommendations": []
+      },
+      "seo_analysis": {
+        "score": 100,
+        "keywords_in_name": true,
+        "keywords_in_description": true,
+        "category_set": true,
+        "brand_set": true,
+        "recommendations": []
+      },
+      "page_structure_analysis": {
+        "score": 0,
+        "total_classes": 0,
+        "key_elements_present": {},
+        "structure_completeness": {},
+        "element_quality": {},
+        "element_relationships": {},
+        "semantic_depth": {},
+        "correlation_analysis": {},
+        "accessibility_seo_score": 0,
         "recommendations": [
-          "카테고리별 경쟁력 강화가 필요합니다",
-          "상품 라인업 확대가 필요합니다"
-        ]
+          "에러 페이지가 감지되었습니다. 크롤러가 페이지를 제대로 로드하지 못했을 수 있습니다."
+        ],
+        "is_error_page": true,
+        "error_indicators": [
+          "error_text_found"
+        ],
+        "elements": []
       },
-      "level_analysis": {
-        "current_level": "normal",
-        "settlement_leadtime": 15,
-        "target_level": "excellent",
-        "requirements": [
-          "월 매출 100만엔 이상",
-          "평점 4.5 이상"
-        ],
-        "recommendations": [
-          "우수 셀러 레벨 달성을 위해 매출 및 평점 향상 필요"
-        ]
+      "product_name": "ホイップド 【3/10限定特価】【低刺激スクラブ】ヴ : スキンケア",
+      "qpoint_info": {
+        "max_points": 1,
+        "receive_confirmation_points": 1,
+        "review_points": 170,
+        "auto_points": null
       },
-      "shop_specialty": {
-        "is_brand_shop": true,
-        "brand_name": "ホイップド",
-        "product_lineup_type": "mixed",
-        "target_customer": "sensitive_skin",
-        "unique_features": [
-          "대규모 팔로워 보유",
-          "4종의 쿠폰 제공"
-        ],
-        "specialty_score": 60,
-        "product_type_distribution": {
-          "기타": 4,
-          "클렌저": 16,
-          "마스크팩": 5,
-          "크림": 3,
-          "로션": 1,
-          "보디케어": 1
-        }
+      "coupon_info": {
+        "has_coupon": true,
+        "coupon_type": "auto",
+        "max_discount": null
       },
-      "product_type_analysis": {
-        "product_type_distribution": {
-          "기타": 4,
-          "클렌저": 16,
-          "마스크팩": 5,
-          "크림": 3,
-          "로션": 1,
-          "보디케어": 1
-        },
-        "type_performance": {
-          "기타": {
-            "count": 4,
-            "avg_rating": 0,
-            "total_reviews": 0,
-            "avg_price": 5350.0,
-            "performance_score": 20
-          },
-          "클렌저": {
-            "count": 16,
-            "avg_rating": 0,
-            "total_reviews": 0,
-            "avg_price": 3148.0,
-            "performance_score": 30
-          },
-          "마스크팩": {
-            "count": 5,
-            "avg_rating": 0,
-            "total_reviews": 0,
-            "avg_price": 2442.0,
-            "performance_score": 30
-          },
-          "크림": {
-            "count": 3,
-            "avg_rating": 0,
-            "total_reviews": 0,
-            "avg_price": 3190.0,
-            "performance_score": 20
-          },
-          "로션": {
-            "count": 1,
-            "avg_rating": 0,
-            "total_reviews": 0,
-            "avg_price": 2970.0,
-            "performance_score": 0
-          },
-          "보디케어": {
-            "count": 1,
-            "avg_rating": 0,
-            "total_reviews": 0,
-            "avg_price": 3300.0,
-            "performance_score": 0
-          }
-        },
-        "recommended_types": [
-          "클렌저",
-          "마스크팩",
-          "기타"
-        ],
-        "underrepresented_types": [
-          "로션",
-          "보디케어"
-        ],
-        "score": 16
-      },
-      "customized_insights": {
-        "shop_positioning": "ホイップド 공식 브랜드 샵",
-        "strengths": [
-          "대규모 팔로워(51,982명) 보유로 높은 브랜드 인지도"
-        ],
-        "opportunities": [
-          "상품 라인업 확대 (현재 18개)로 매출 증대 가능"
-        ],
-        "recommendations": [
-          "sensitive skin 타겟 고객층을 위한 맞춤형 마케팅 전략 수립"
-        ],
-        "competitive_advantages": [
-          "공식 브랜드 샵으로 제품 신뢰도 및 품질 보장"
-        ],
-        "score": 60
+      "shipping_info": {
+        "free_shipping": true,
+        "shipping_fee": 0,
+        "return_policy": "return_available"
       }
     }
   },
-  "recommendations_count": 2,
-  "checklist_overall_completion": 26,
+  "recommendations_count": 0,
+  "checklist_overall_completion": 84,
   "validation_result": {
     "is_valid": true,
     "mismatches": [],
     "missing_items": [],
     "validation_score": 100.0,
-    "timestamp": "2026-02-20T17:01:17.560631",
-    "corrected_fields": [],
+    "timestamp": "2026-03-11T18:35:53.085720",
+    "corrected_fields": [
+      "product_name",
+      "qpoint_info",
+      "coupon_info",
+      "shipping_info"
+    ],
     "data_source": "playwright",
     "has_api_data": false,
     "structure_comparison": {
       "missing_fields": [],
       "extra_fields": [],
       "type_mismatches": [],
-      "value_mismatches": [],
+      "value_mismatches": [
+        {
+          "field": "ImageUrlList",
+          "expected": 0,
+          "actual": 23
+        }
+      ],
       "structure_match": true
     },
     "elements_validation": [],
+    "elements_validation_note": "page_structure.elements_detail이 없어 요소 단위 검증을 수행하지 않았습니다. Crawl 단계에서 요소 추출을 활성화하면 항목별 일치 여부가 채워집니다.",
     "message": "OK"
   },
   "missing_analysis": {
     "fields_empty": [],
     "expected_vs_actual": [
       {
-        "field": "follower_count",
-        "expected": 51981,
-        "actual": 51982
+        "field": "sale_price",
+        "expected": 2990,
+        "actual": 2392
+      },
+      {
+        "field": "review_count",
+        "expected": 1063,
+        "actual": 1109
       }
     ],
-    "suggestions": []
-  },
-  "manual_missing_analysis": {
-    "missing_sections": [],
-    "missing_links": [
-      {
-        "url": "https://article-university.qoo10.jp/qoo10-selling-tips_kor#box_3",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/160/",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/164",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/150",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/qoo10-selling-tips_kor#box_2",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/qoo10-selling-tips_kor#box_4",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/qoo10-selling-tips_kor#box_8",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/2025/08/05",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/category/단계별 교육 (초급)",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/2026/02/02/114318",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/100/",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/135/",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/171",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/qoo10-selling-tips_kor#box_10",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/165",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/163",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/146",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/58/",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/144",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/138",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/143",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/162/",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/158",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/qoo10-selling-tips",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/2025/11/27",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/159",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/category/입점검토",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/2025/09/02",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/154",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/2025/09/30",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/125",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/2025/09/18",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/99/",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/qoo10-selling-tips_kor#box_9",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/142",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/qoo10-selling-tips_kor#box_6",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/124",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/category/광고・프로모션",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/#contents_korean",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/155",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/qoo10-selling-tips_kor#box_5",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/145",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/category/매출증대",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/161",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/2026/01/06",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/97",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/category/%EB%8B%A8%EA%B3%84%EB%B3%84%20%EA%B5%90%EC%9C%A1%20%28%EC%B4%88%EA%B8%89%29",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/139",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/156",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/104",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/2026/02/20/000000",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/category/판매준비",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/170",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/category/판매 데이터관리・분석",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/qoo10-selling-tips_kor",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/qoo10-selling-tips_kor#box_1",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/75/",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/category/주문・배송・고객관리",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/122",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/172",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/2025/10/16",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/qoo10-selling-tips_kor#box_7",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/141",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/169",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/112",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/2025/10/28",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/115/",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/category/세미나 다시보기",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/category/메가할인・메가포",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/archive/category/트렌드 인사이트",
-        "source": "crawled"
-      },
-      {
-        "url": "https://article-university.qoo10.jp/entry/46/",
-        "source": "crawled"
-      }
-    ],
-    "missing_in_manual_items": [
-      {
-        "section": "입점 검토하기",
-        "item_title": "지금 바로 실천할 수 있는 매출 상승을 위한 10가지 전략 Part1.",
-        "url": "https://article-university.qoo10.jp/entry/159"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "한국발 배송사 7개 전격 해부! 효율적으로 일본 배송을 시작하세요",
-        "url": "https://article-university.qoo10.jp/entry/164"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "MOVE 상품 등록하는 방법 총정리!",
-        "url": "https://article-university.qoo10.jp/entry/172"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "JQSM(판매 관리 툴) 용어 모음",
-        "url": "https://article-university.qoo10.jp/entry/170"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "고객 클레임을 최소화하는 취소 처리 대응 방법",
-        "url": "https://article-university.qoo10.jp/entry/144"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "일본 해외배송을 효율적으로 시작하는 방법",
-        "url": "https://article-university.qoo10.jp/entry/75/"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "상품 발송 처리, 이렇게 하시면 페널티 대상이 됩니다!",
-        "url": "https://article-university.qoo10.jp/entry/46/"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "샵 운영에 필수적인 주문 관리 방법",
-        "url": "https://article-university.qoo10.jp/entry/112"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "상품 할인과 광고를 활용하는 것부터 시작하세요!",
-        "url": "https://article-university.qoo10.jp/entry/125"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "놓치기 쉬운 판매 데이터 분석 및 활용 방법",
-        "url": "https://article-university.qoo10.jp/entry/107"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "매출 성장에 필수적인 JQSM·Qoo10 Analytics 활용법",
-        "url": "https://article-university.qoo10.jp/entry/97"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "히트상품을 만드는 「시장 분석 방법 3가지」",
-        "url": "https://article-university.qoo10.jp/entry/104"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "계절 시즌 상품 판매 노하우",
-        "url": "https://article-university.qoo10.jp/entry/138"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "매출 증대를 위한 '샘플마켓' 참가 가이드",
-        "url": "https://article-university.qoo10.jp/entry/157"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "고객을 사로잡는 입구 상품을 만드는 방법",
-        "url": "https://article-university.qoo10.jp/entry/122"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "잘 나가는 샵은 어떻게 매출을 늘리고 있을까?",
-        "url": "https://article-university.qoo10.jp/entry/124"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "메가할인 기간 매출 극대화 전략 : Qoo10 Japan 광고 활용법",
-        "url": "https://article-university.qoo10.jp/entry/158"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "2025년 최신! Qoo10 Japan 광고・프로모션 총정리",
-        "url": "https://article-university.qoo10.jp/entry/115/"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "상품 할인과 광고를 활용하는 것부터 시작하세요!",
-        "url": "https://article-university.qoo10.jp/entry/125"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "알고리즘이 최적의 위치에 상품을 노출하는 '스마트세일즈'",
-        "url": "https://article-university.qoo10.jp/entry/58/"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "「메가할인」 정산 완벽 가이드! 선차감과 환급 과정 이해하기",
-        "url": "https://article-university.qoo10.jp/entry/162/"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "'메가포' 정산 완전 정복! 포인트와 쿠폰의 정산 흐름 파악하기",
-        "url": "https://article-university.qoo10.jp/entry/160/"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "메가할인 기간 매출 극대화 전략 : Qoo10 Japan 광고 활용법",
-        "url": "https://article-university.qoo10.jp/entry/158"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "메가포 환원포인트를 활용하고 재방문 고객을 늘리세요",
-        "url": "https://article-university.qoo10.jp/entry/135/"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "초보 셀러를 위한 메가할인 성공 가이드",
-        "url": "https://article-university.qoo10.jp/entry/156"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "Q1 메가할인 트렌드 분석ㅣ바로 실천할 수 있는 메가할인 전략",
-        "url": "https://article-university.qoo10.jp/entry/145"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "메가포 인기 상품의 '썸네일&가격설정' 기술",
-        "url": "https://article-university.qoo10.jp/entry/139"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "메가포 환원포인트를 활용하여 재방문고객을 늘리세요",
-        "url": "https://article-university.qoo10.jp/entry/136"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "일본에서 건강식품 판매 시 “허용 표현 & 금지 표현” 정리!",
-        "url": "https://article-university.qoo10.jp/entry/165"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "일본 브랜드를 사로잡은 히트 브랜드로 성장! '메가데뷔' 성공 공식",
-        "url": "https://article-university.qoo10.jp/entry/161"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "리셀러샵이 밝히는 일본 틈새시장 공략법",
-        "url": "https://article-university.qoo10.jp/entry/case_aurora_video"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "Qoo10 Japan 광고 & 신규 프로모션 완벽 정리",
-        "url": "https://article-university.qoo10.jp/entry/141"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "초급 단계별 교육 1탄! 반드시 알아야할 정보 알아보기",
-        "url": "https://article-university.qoo10.jp/entry/142"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "초급 단계별 교육 2탄! 어떤 상품을 판매해야 할까요?",
-        "url": "https://article-university.qoo10.jp/entry/143"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "초급 단계별 교육 3탄! 고객의 마음을 사로잡는 방법",
-        "url": "https://article-university.qoo10.jp/entry/146"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "초급 단계별 교육 4탄! 큐텐재팬 광고 완전 정복하기",
-        "url": "https://article-university.qoo10.jp/entry/150"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "지금 바로 실천할 수 있는 매출 상승을 위한 10가지 전략 Part1.",
-        "url": "https://article-university.qoo10.jp/entry/159"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "한국발 배송사 7개 전격 해부! 효율적으로 일본 배송을 시작하세요",
-        "url": "https://article-university.qoo10.jp/entry/164"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "MOVE 상품 등록하는 방법 총정리!",
-        "url": "https://article-university.qoo10.jp/entry/172"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "JQSM(판매 관리 툴) 용어 모음",
-        "url": "https://article-university.qoo10.jp/entry/170"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "고객 클레임을 최소화하는 취소 처리 대응 방법",
-        "url": "https://article-university.qoo10.jp/entry/144"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "일본 해외배송을 효율적으로 시작하는 방법",
-        "url": "https://article-university.qoo10.jp/entry/75/"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "상품 발송 처리, 이렇게 하시면 페널티 대상이 됩니다!",
-        "url": "https://article-university.qoo10.jp/entry/46/"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "샵 운영에 필수적인 주문 관리 방법",
-        "url": "https://article-university.qoo10.jp/entry/112"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "상품 할인과 광고를 활용하는 것부터 시작하세요!",
-        "url": "https://article-university.qoo10.jp/entry/125"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "놓치기 쉬운 판매 데이터 분석 및 활용 방법",
-        "url": "https://article-university.qoo10.jp/entry/107"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "매출 성장에 필수적인 JQSM·Qoo10 Analytics 활용법",
-        "url": "https://article-university.qoo10.jp/entry/97"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "히트상품을 만드는 「시장 분석 방법 3가지」",
-        "url": "https://article-university.qoo10.jp/entry/104"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "계절 시즌 상품 판매 노하우",
-        "url": "https://article-university.qoo10.jp/entry/138"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "매출 증대를 위한 '샘플마켓' 참가 가이드",
-        "url": "https://article-university.qoo10.jp/entry/157"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "고객을 사로잡는 입구 상품을 만드는 방법",
-        "url": "https://article-university.qoo10.jp/entry/122"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "잘 나가는 샵은 어떻게 매출을 늘리고 있을까?",
-        "url": "https://article-university.qoo10.jp/entry/124"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "메가할인 기간 매출 극대화 전략 : Qoo10 Japan 광고 활용법",
-        "url": "https://article-university.qoo10.jp/entry/158"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "2025년 최신! Qoo10 Japan 광고・프로모션 총정리",
-        "url": "https://article-university.qoo10.jp/entry/115/"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "상품 할인과 광고를 활용하는 것부터 시작하세요!",
-        "url": "https://article-university.qoo10.jp/entry/125"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "알고리즘이 최적의 위치에 상품을 노출하는 '스마트세일즈'",
-        "url": "https://article-university.qoo10.jp/entry/58/"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "「메가할인」 정산 완벽 가이드! 선차감과 환급 과정 이해하기",
-        "url": "https://article-university.qoo10.jp/entry/162/"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "'메가포' 정산 완전 정복! 포인트와 쿠폰의 정산 흐름 파악하기",
-        "url": "https://article-university.qoo10.jp/entry/160/"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "메가할인 기간 매출 극대화 전략 : Qoo10 Japan 광고 활용법",
-        "url": "https://article-university.qoo10.jp/entry/158"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "메가포 환원포인트를 활용하고 재방문 고객을 늘리세요",
-        "url": "https://article-university.qoo10.jp/entry/135/"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "초보 셀러를 위한 메가할인 성공 가이드",
-        "url": "https://article-university.qoo10.jp/entry/156"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "Q1 메가할인 트렌드 분석ㅣ바로 실천할 수 있는 메가할인 전략",
-        "url": "https://article-university.qoo10.jp/entry/145"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "메가포 인기 상품의 '썸네일&가격설정' 기술",
-        "url": "https://article-university.qoo10.jp/entry/139"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "메가포 환원포인트를 활용하여 재방문고객을 늘리세요",
-        "url": "https://article-university.qoo10.jp/entry/136"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "일본에서 건강식품 판매 시 “허용 표현 & 금지 표현” 정리!",
-        "url": "https://article-university.qoo10.jp/entry/165"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "일본 브랜드를 사로잡은 히트 브랜드로 성장! '메가데뷔' 성공 공식",
-        "url": "https://article-university.qoo10.jp/entry/161"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "리셀러샵이 밝히는 일본 틈새시장 공략법",
-        "url": "https://article-university.qoo10.jp/entry/case_aurora_video"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "Qoo10 Japan 광고 & 신규 프로모션 완벽 정리",
-        "url": "https://article-university.qoo10.jp/entry/141"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "초급 단계별 교육 1탄! 반드시 알아야할 정보 알아보기",
-        "url": "https://article-university.qoo10.jp/entry/142"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "초급 단계별 교육 2탄! 어떤 상품을 판매해야 할까요?",
-        "url": "https://article-university.qoo10.jp/entry/143"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "초급 단계별 교육 3탄! 고객의 마음을 사로잡는 방법",
-        "url": "https://article-university.qoo10.jp/entry/146"
-      },
-      {
-        "section": "입점 검토하기",
-        "item_title": "초급 단계별 교육 4탄! 큐텐재팬 광고 완전 정복하기",
-        "url": "https://article-university.qoo10.jp/entry/150"
-      },
-      {
-        "section": "매출 증대시키기",
-        "item_title": "계절 시즌 상품 판매 노하우",
-        "url": "https://article-university.qoo10.jp/entry/138"
-      },
-      {
-        "section": "트렌드 인사이트",
-        "item_title": "일본에서 건강식품 판매 시 “허용 표현 & 금지 표현” 정리!",
-        "url": "https://article-university.qoo10.jp/entry/165"
-      },
-      {
-        "section": "단계별 교육 (초급)",
-        "item_title": "초급 단계별 교육 1탄! 반드시 알아야할 정보 알아보기",
-        "url": "https://article-university.qoo10.jp/entry/142"
-      },
-      {
-        "section": "단계별 교육 (초급)",
-        "item_title": "초급 단계별 교육 2탄! 어떤 상품을 판매해야 할까요?",
-        "url": "https://article-university.qoo10.jp/entry/143"
-      },
-      {
-        "section": "단계별 교육 (초급)",
-        "item_title": "초급 단계별 교육 3탄! 고객의 마음을 사로잡는 방법",
-        "url": "https://article-university.qoo10.jp/entry/146"
-      },
-      {
-        "section": "단계별 교육 (초급)",
-        "item_title": "초급 단계별 교육 4탄! 큐텐재팬 광고 완전 정복하기",
-        "url": "https://article-university.qoo10.jp/entry/150"
-      },
-      {
-        "section": "Qoo10管理画面はこちら",
-        "item_title": "https://article-university.qoo10.jp/qoo10-selling-tips",
-        "url": "https://article-university.qoo10.jp/qoo10-selling-tips"
-      },
-      {
-        "section": "Qoo10管理画面はこちら",
-        "item_title": "https://article-university.qoo10.jp/qoo10-selling-tips_kor",
-        "url": "https://article-university.qoo10.jp/qoo10-selling-tips_kor"
-      },
-      {
-        "section": "Qoo10管理画面はこちら",
-        "item_title": "ショップ運営ノウハウ",
-        "url": "https://article-university.qoo10.jp/"
-      }
-    ],
-    "extra_in_manual": [
-      "https://article-university.qoo10.jp/entry/133"
-    ],
-    "coverage_score": 12.1,
     "suggestions": [
-      "크롤링된 링크 중 메뉴얼에 반영되지 않은 URL이 72건 있습니다. 해당 항목에 **[더보기](url)** 를 추가하세요.",
-      "섹션별 항목 제목이 메뉴얼에 없습니다. 항목 및 더보기 링크를 추가하세요.",
-      "메뉴얼에만 있는 URL이 1건 있습니다. 삭제/이동된 페이지면 정리하세요."
-    ],
-    "summary": {
-      "crawled_links_count": 77,
-      "manual_더보기_count": 12,
-      "missing_links_count": 72,
-      "missing_sections_count": 0
-    }
+      "상품 페이지에서 'レビュー (N)' 또는 '4.8 (N)' 패턴으로 총 리뷰 수 추출 (쉼표 허용), crawler._extract_reviews / Playwright JS"
+    ]
   },
-  "shop_data_summary": {
-    "shop_name": "ホイップド公式",
-    "shop_id": "whippedofficial",
-    "shop_level": "normal",
-    "follower_count": 51982,
-    "product_count": 18,
-    "products_len": 30,
-    "coupons_len": 4,
-    "categories_len": 82,
-    "has_page_structure": true
-  },
-  "product_data_summary": null
+  "manual_missing_analysis": null,
+  "shop_data_summary": null,
+  "product_data_summary": {
+    "product_name": "ホイップド 【3/10限定特価】【低刺激スクラブ】ヴ : スキンケア",
+    "product_code": "1093098159",
+    "has_price": true,
+    "images_count": 23
+  }
 }
