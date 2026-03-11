@@ -99,7 +99,7 @@
 - **[Report-Output-Agent.md](./Report-Output-Agent.md)** – 결과 조립, 저장, 히스토리, 알림, 리포트 다운로드, 데이터 흐름.
 - **[Manual-Agent.md](./Manual-Agent.md)** – 큐텐 대학 한국어 메뉴얼 수집·검증·누락 분석(독립 파이프라인).
 
-**관련**: [../QC_QA_REPORT_1093098159.md](../QC_QA_REPORT_1093098159.md) (상품 페이지 QC/QA), [../SERVICE_IMPROVEMENT_LOG.md](../SERVICE_IMPROVEMENT_LOG.md) (서비스 개선 로그).
+**관련**: [../SERVICE_QA_QC_REPORT.md](../SERVICE_QA_QC_REPORT.md) (서비스 전체 진단·QA/QC), [../../tests/docs/QC_QA_REPORT_1093098159.md](../../tests/docs/QC_QA_REPORT_1093098159.md) (상품 페이지 QC/QA).
 
 ---
 
