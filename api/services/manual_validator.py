@@ -12,13 +12,29 @@ from urllib.parse import urlparse, urlunparse, quote, unquote
 
 logger = logging.getLogger(__name__)
 
+# Known item titles → correct section (overrides crawler section when building missing_in_manual_items)
+ITEM_TITLE_SECTION_OVERRIDES: List[Tuple[str, str]] = [
+    ("JQSM(판매 관리 툴) 용어 모음", "판매 준비하기"),
+    ("고객 클레임을 최소화하는 취소 처리 대응 방법", "주문・배송・고객 관리하기"),
+    ("메가할인 기간 매출 극대화 전략", "광고・프로모션 활용하기"),
+]
+
+
+def _section_for_missing_item(section_from_crawler: str, item_title: str) -> str:
+    """Apply explicit overrides for known titles; otherwise use crawler section."""
+    for key, section in ITEM_TITLE_SECTION_OVERRIDES:
+        if key in (item_title or "") or (item_title or "").startswith(key):
+            return section
+    return section_from_crawler
+
 
 def normalize_url_for_comparison(u: Optional[str]) -> str:
     """
     URL을 비교/병합 시 일관되게 쓰기 위해 정규화합니다.
     - 앞뒤 공백 제거, trailing slash 제거
-    - percent-encoding 정규화 (path unquote 후 quote)
-    - fragment(#) 제거, query(?) 제거 (동일 페이지를 하나로 묶기 위함)
+    - path: percent-encoding 정규화 (unquote 후 UTF-8 quote로 통일, raw 한글과 %EB%8B... 등 동일하게 비교)
+    - scheme/host 소문자, 기본 포트(80/443) 제거
+    - fragment(#), query(?) 제거
     """
     if u is None or not isinstance(u, str):
         return ""
@@ -27,9 +43,16 @@ def normalize_url_for_comparison(u: Optional[str]) -> str:
         return ""
     try:
         p = urlparse(u)
-        path = (p.path or "/").rstrip("/") or "/"
-        path = quote(unquote(path), safe="/")
-        return urlunparse((p.scheme, p.netloc, path, "", "", ""))
+        scheme = (p.scheme or "https").lower()
+        hostname = (p.hostname or p.netloc or "").lower()
+        port = p.port
+        if port is not None and (scheme, port) in (("http", 80), ("https", 443)):
+            port = None
+        netloc = f"{hostname}:{port}" if port is not None else hostname
+        path = (p.path or "/").strip()
+        path = path.rstrip("/") or "/"
+        path = quote(unquote(path), safe="/", encoding="utf-8")
+        return urlunparse((scheme, netloc, path, "", "", ""))
     except Exception:
         return (u or "").strip().rstrip("/") or ""
 
@@ -192,9 +215,11 @@ def validate_manual_vs_crawled(
         extra_in_manual.append(url)
 
     # 4) 크롤링된 섹션별 항목 제목이 메뉴얼에 없는 경우 (section, item_title, url) 기준 중복 제거)
+    # section_index로 동일 section_title이 반복될 때 구분 가능 (고유 식별자)
     seen_missing_key: set = set()  # (section, item_title, url) tuple
     for sec in topic.get("sections") or []:
         section_title = sec.get("section_title") or ""
+        section_index = sec.get("section_index")
         for link in sec.get("links") or []:
             title = (link.get("title") or "").strip()
             if not title or title == "더보기":
@@ -214,11 +239,15 @@ def validate_manual_vs_crawled(
                 key = (section_title, title, url_val)
                 if key not in seen_missing_key:
                     seen_missing_key.add(key)
-                    missing_in_manual_items.append({
-                        "section": section_title,
+                    section_assigned = _section_for_missing_item(section_title, title)
+                    item = {
+                        "section": section_assigned,
                         "item_title": title,
                         "url": link.get("url"),
-                    })
+                    }
+                    if section_index is not None:
+                        item["section_index"] = section_index
+                    missing_in_manual_items.append(item)
 
     # Dedupe missing_in_manual_items by normalized URL (first occurrence wins, order preserved)
     seen_url: Set[str] = set()

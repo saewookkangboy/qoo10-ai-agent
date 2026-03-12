@@ -96,16 +96,18 @@ def main() -> None:
     for s in (val.get("suggestions") or [])[:5]:
         print(f"    - 제안: {s}")
 
-    # JSON 저장 (직렬화 가능한 것만; depth/limit 완화로 placeholder 재발 방지)
+    # JSON 저장: depth 초과 시 해당 노드는 생략(omit). "<<max depth>>" 플레이스홀더는 사용하지 않음.
     def _serializable(obj: Any, depth: int = 0):
         if depth > 18:
-            return "<<max depth>>"
+            return None
         if obj is None or isinstance(obj, (bool, int, float, str)):
             return obj
         if isinstance(obj, (list, tuple)):
-            return [_serializable(x, depth + 1) for x in obj[:400]]
+            out = [_serializable(x, depth + 1) for x in obj[:400]]
+            return [x for x in out if x is not None]
         if isinstance(obj, dict):
-            return {k: _serializable(v, depth + 1) for k, v in list(obj.items())[:150]}
+            out = {k: _serializable(v, depth + 1) for k, v in list(obj.items())[:150]}
+            return {k: v for k, v in out.items() if v is not None}
         return str(obj)
 
     out_path = args.output

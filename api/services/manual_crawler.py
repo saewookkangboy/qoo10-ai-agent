@@ -6,18 +6,58 @@ article-university.qoo10.jp 페이지에서 유형별 판매 노하우 및 단�
 import re
 import asyncio
 import logging
-from typing import Dict, Any, List, Optional
-from urllib.parse import urljoin
+from typing import Dict, Any, List, Optional, Tuple
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
+
+def _link_title_fallback(url: str) -> str:
+    """
+    Human-friendly title when anchor text is missing, so we never persist title == url.
+    Uses last path segment (with -/_ → space), or hostname for root paths.
+    """
+    if not url or not isinstance(url, str):
+        return "링크"
+    parsed = urlparse(url)
+    path = (parsed.path or "").strip().rstrip("/")
+    netloc = (parsed.netloc or "").strip()
+    if path:
+        segment = path.split("/")[-1]
+        if segment:
+            # e.g. qoo10-selling-tips_kor → Qoo10 selling tips Kor
+            human = segment.replace("-", " ").replace("_", " ").strip()
+            if human:
+                return human[:80]
+    if "article-university.qoo10.jp" in netloc:
+        return "Qoo10 대학"
+    if netloc:
+        return netloc.split(".")[0] if "." in netloc else netloc
+    return "링크"
+
+
 # 큐텐 대학 한국어 메인 페이지
 QOO10_UNIVERSITY_KR_TOPIC = "https://article-university.qoo10.jp/qoo10-selling-tips_kor"
 # 단계별 교육 (초급) 카테고리
 QOO10_UNIVERSITY_KR_BEGINNER = "https://article-university.qoo10.jp/archive/category/%EB%8B%A8%EA%B3%84%EB%B3%84%20%EA%B5%90%EC%9C%A1%20(%EC%B4%88%EA%B8%89)"
+
+# 카테고리 자체 링크로 수집 제외 (articles에는 실제 글만 포함)
+BEGINNER_CATEGORY_TITLE = "단계별 교육 (초급)"
+
+
+def _is_category_link(title: str, url: str) -> bool:
+    """제목이 카테고리명이거나 URL이 카테고리 아카이브이면 True (articles에 넣지 않음)."""
+    if not url or "/archive/category/" in url:
+        return True
+    t = (title or "").strip()
+    if t == BEGINNER_CATEGORY_TITLE:
+        return True
+    if t.startswith(BEGINNER_CATEGORY_TITLE) and (t == BEGINNER_CATEGORY_TITLE or t[len(BEGINNER_CATEGORY_TITLE) :].strip() in ("", ">", "　>")):
+        return True
+    return False
 
 
 class Qoo10ManualCrawler:
@@ -59,62 +99,59 @@ class Qoo10ManualCrawler:
     def _parse_topic_page(self, html: str, base_url: str) -> Dict[str, Any]:
         """
         유형별 판매 노하우 메인 페이지 파싱.
-        섹션(제목), 항목(제목+링크), 더보기 링크를 추출합니다.
+        각 링크에 대해 DOM 상 가장 가까운 앞쪽 섹션 헤딩(h2/h3/h4)을 해당 링크의 섹션으로 사용합니다.
         """
         soup = BeautifulSoup(html, "html.parser")
-        sections: List[Dict[str, Any]] = []
-        all_links: List[Dict[str, str]] = []
         _norm_url = lambda u: (u or "").strip().rstrip("/")
+        current_section = ""
+        link_entries: List[Tuple[str, str, str]] = []
 
-        # 목차에 해당하는 섹션: listitem / heading + list
-        for block in soup.find_all(["section", "li", "div"], recursive=True):
-            heading = block.find(["h2", "h3", "h4"])
-            if not heading:
-                continue
-            title = (heading.get_text() or "").strip()
-            if not title or title in ("日本語", "한국어", "Qoo10大学"):
-                continue
+        def is_heading(tag) -> bool:
+            return tag.name in ("h2", "h3", "h4")
 
-            links_in_block: List[Dict[str, str]] = []
-            for a in block.find_all("a", href=True):
-                href = a.get("href", "")
-                text = (a.get_text() or "").strip()
+        def is_link_with_href(tag) -> bool:
+            return tag.name == "a" and tag.get("href")
+
+        for elem in soup.find_all(lambda t: is_heading(t) or is_link_with_href(t)):
+            if is_heading(elem):
+                current_section = (elem.get_text() or "").strip()
+                if current_section in ("日本語", "한국어", "Qoo10大学"):
+                    current_section = ""
+            else:
+                href = elem.get("href", "")
                 if not href or href.startswith("#"):
                     continue
                 full_url = urljoin(base_url, href)
                 if "article-university.qoo10.jp" not in full_url:
                     continue
-                links_in_block.append({"title": text or full_url, "url": full_url})
-                u_norm = _norm_url(full_url)
-                if not any(_norm_url(x["url"]) == u_norm for x in all_links):
-                    all_links.append({"title": text or full_url, "url": full_url})
+                text = (elem.get_text() or "").strip()
+                title = text or _link_title_fallback(full_url)
+                section_title = current_section if current_section else "기타"
+                link_entries.append((section_title, title, full_url))
 
-            if title and (links_in_block or "더보기" in block.get_text()):
-                # 더보기 링크만 있는 경우도 수집
-                for a in block.find_all("a", href=True):
-                    if (a.get_text() or "").strip() == "더보기":
-                        href = a.get("href", "")
-                        if href and "article-university" in urljoin(base_url, href):
-                            full_url = urljoin(base_url, href)
-                            if not any(l["url"] == full_url for l in links_in_block):
-                                links_in_block.append({"title": "더보기", "url": full_url})
-                                if not any(_norm_url(x["url"]) == _norm_url(full_url) for x in all_links):
-                                    all_links.append({"title": "더보기", "url": full_url})
-                sections.append({
-                    "section_title": title,
-                    "links": links_in_block,
-                })
-
-        # 링크만 있고 섹션으로 묶이지 않은 경우: a[href*="article-university"] 전부 수집
-        for a in soup.find_all("a", href=True):
-            href = a.get("href", "")
-            if "article-university.qoo10.jp" not in urljoin(base_url, href):
-                continue
-            full_url = urljoin(base_url, href)
-            text = (a.get_text() or "").strip()
+        # Group by section (preserve order of first occurrence of each section)
+        sections_map: Dict[str, List[Dict[str, str]]] = {}
+        for sec_title, title, full_url in link_entries:
+            if sec_title not in sections_map:
+                sections_map[sec_title] = []
             u_norm = _norm_url(full_url)
-            if not any(_norm_url(x["url"]) == u_norm for x in all_links):
-                all_links.append({"title": text or full_url, "url": full_url})
+            if any(_norm_url(x["url"]) == u_norm for x in sections_map[sec_title]):
+                continue
+            sections_map[sec_title].append({"title": title, "url": full_url})
+
+        sections = [
+            {"section_title": st, "section_index": i, "links": links}
+            for i, (st, links) in enumerate(sections_map.items())
+        ]
+
+        # all_links: dedupe by normalized URL (first occurrence wins); keep section_title for later repopulation of sections[].links
+        seen_url: set = set()
+        all_links: List[Dict[str, Any]] = []
+        for sec_title, title, full_url in link_entries:
+            u_norm = _norm_url(full_url)
+            if u_norm not in seen_url:
+                seen_url.add(u_norm)
+                all_links.append({"title": title, "url": full_url, "section_title": sec_title})
 
         return {
             "source_url": base_url,
@@ -133,6 +170,8 @@ class Qoo10ManualCrawler:
                 continue
             full_url = urljoin(base_url, href)
             text = (a.get_text() or "").strip()
+            if _is_category_link(text, full_url):
+                continue
             # 긴 제목(교육 제목)만 수집. 날짜 패턴(2025-11-27 등) 옆 제목
             if len(text) > 5 and "단계별" in text or "초보" in text or "교육" in text or "탄!" in text:
                 articles.append({"title": text, "url": full_url})
@@ -143,7 +182,7 @@ class Qoo10ManualCrawler:
                     next_heading = parent.find(["h2", "h3", "h4"])
                     if next_heading:
                         t = (next_heading.get_text() or "").strip()
-                        if t and t not in [x["title"] for x in articles]:
+                        if t and not _is_category_link(t, full_url) and t not in [x["title"] for x in articles]:
                             articles.append({"title": t, "url": full_url})
 
         # heading 링크 조합: section > a + heading
@@ -156,7 +195,7 @@ class Qoo10ManualCrawler:
                     continue
                 full_url = urljoin(base_url, href)
                 title = (heading.get_text() or "").strip()
-                if title and not any(x["url"] == full_url for x in articles):
+                if title and not _is_category_link(title, full_url) and not any(x["url"] == full_url for x in articles):
                     articles.append({"title": title, "url": full_url})
 
         return {

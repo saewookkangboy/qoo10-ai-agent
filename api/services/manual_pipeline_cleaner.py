@@ -2,10 +2,12 @@
 Manual pipeline result data cleaner.
 Post-crawl step: remove placeholders, dedupe, normalize URLs/language, merge duplicate blocks, schema validation.
 Prevents regrowth of "<<max depth>>", duplicated validation/missing_analysis, and mixed-language entries.
+Ensures no link record has title equal to url (replaced with human-friendly fallback).
 """
 import re
 import logging
 from typing import Dict, Any, List, Optional, Set, Tuple
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,26 @@ def _norm_url(u: Optional[str]) -> str:
     if u is None or not isinstance(u, str):
         return ""
     return u.strip().rstrip("/") or ""
+
+
+def _title_fallback_from_url(url: Optional[str]) -> str:
+    """Human-friendly title when title was missing (e.g. title == url). Keeps saved records from having title equal to url."""
+    if not url or not isinstance(url, str):
+        return "링크"
+    parsed = urlparse(url)
+    path = (parsed.path or "").strip().rstrip("/")
+    netloc = (parsed.netloc or "").strip()
+    if path:
+        segment = path.split("/")[-1]
+        if segment:
+            human = segment.replace("-", " ").replace("_", " ").strip()
+            if human:
+                return human[:80]
+    if "article-university.qoo10.jp" in netloc:
+        return "Qoo10 대학"
+    if netloc:
+        return netloc.split(".")[0] if "." in netloc else netloc
+    return "링크"
 
 
 def _is_placeholder(v: Any) -> bool:
@@ -150,6 +172,108 @@ def dedupe_all_links(links: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return dedupe_by_url_title(links, url_key="url", title_key="title")
 
 
+# 카테고리 아카이브 링크/제목: articles 배열에서 제외 (실제 글만 유지)
+BEGINNER_CATEGORY_TITLE = "단계별 교육 (초급)"
+
+
+def _is_category_article_entry(art: Dict[str, Any]) -> bool:
+    """항목이 카테고리 링크(자기 자신 또는 아카이브)이면 True → 제외."""
+    if not isinstance(art, dict):
+        return True
+    url = (art.get("url") or "").strip()
+    if "/archive/category/" in url:
+        return True
+    title = (art.get("title") or "").strip()
+    if title == BEGINNER_CATEGORY_TITLE:
+        return True
+    if title.startswith(BEGINNER_CATEGORY_TITLE):
+        suffix = title[len(BEGINNER_CATEGORY_TITLE) :].strip()
+        if suffix in ("", ">", "　>"):
+            return True
+    return False
+
+
+def deduplicate_beginner_articles(articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Deduplicate beginner_category.articles by normalized URL and by title.
+    Drops category self-links (title "단계별 교육 (초급)" or URL /archive/category/).
+    Same title with different URL forms (e.g. entry/171 vs archive/2026/01/06) is collapsed;
+    /entry/ form is preferred as canonical when the same article appears twice.
+    Preserves order; first occurrence wins unless a later one has a preferred (entry) URL for the same title.
+    """
+    if not articles:
+        return []
+    result: List[Dict[str, Any]] = []
+    seen_url_norm: Set[str] = set()
+    seen_title_to_article: Dict[str, Dict[str, Any]] = {}
+    for art in articles:
+        if not isinstance(art, dict):
+            continue
+        if _is_category_article_entry(art):
+            continue
+        url = art.get("url") or ""
+        url_norm = _norm_url(url)
+        if url_norm in seen_url_norm:
+            continue
+        title = (art.get("title") or "").strip()
+        if title not in seen_title_to_article:
+            seen_title_to_article[title] = dict(art)
+            seen_url_norm.add(url_norm)
+            result.append(seen_title_to_article[title])
+        else:
+            prev = seen_title_to_article[title]
+            prev_url = prev.get("url") or ""
+            prev_norm = _norm_url(prev_url)
+            if "/entry/" in url and "/entry/" not in prev_url:
+                seen_title_to_article[title] = dict(art)
+                seen_url_norm.discard(prev_norm)
+                seen_url_norm.add(url_norm)
+                for i, a in enumerate(result):
+                    if ((a.get("title") or "").strip()) == title:
+                        result[i] = dict(art)
+                        break
+    return result
+
+
+def dedupe_consecutive_sections(
+    sections: List[Dict[str, Any]],
+    links_key: str = "links",
+) -> List[Dict[str, Any]]:
+    """
+    Collapse consecutive sections with identical section_title by merging their links.
+    Removes duplicate section entries (e.g. three "입점 검토하기" with empty links become one).
+    Preserves order; first occurrence keeps section_title, section_index (if present), and accumulates links from following dupes.
+    """
+    if not sections:
+        return []
+    out: List[Dict[str, Any]] = []
+    current: Optional[Dict[str, Any]] = None
+    for sec in sections:
+        if not isinstance(sec, dict):
+            if current is not None:
+                out.append(current)
+                current = None
+            out.append(sec)
+            continue
+        title = (sec.get("section_title") or "").strip()
+        links = sec.get(links_key) or []
+        if not isinstance(links, list):
+            links = []
+        if current is None:
+            current = dict(sec)
+            current[links_key] = list(links)
+            continue
+        if (current.get("section_title") or "").strip() == title:
+            current[links_key] = (current.get(links_key) or []) + list(links)
+        else:
+            out.append(current)
+            current = dict(sec)
+            current[links_key] = list(links)
+    if current is not None:
+        out.append(current)
+    return out
+
+
 def normalize_section_title(title: Optional[str]) -> str:
     """Normalize section title: strip, optional Japanese→Korean map."""
     if not title or not isinstance(title, str):
@@ -174,18 +298,23 @@ def normalize_anchor(anchor: Optional[str]) -> str:
 
 
 def normalize_language_and_urls_in_links(links: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Normalize URL (strip, rstrip /) and ensure title is string; prefer Korean '더보기' over mixed."""
+    """Normalize URL (strip, rstrip /), ensure title is string; prefer Korean '더보기'; never leave title == url."""
     out: List[Dict[str, Any]] = []
     for it in links:
         if not isinstance(it, dict):
             continue
         it = dict(it)
-        it["url"] = _norm_url(it.get("url"))
+        url_val = it.get("url")
+        it["url"] = _norm_url(url_val)
         title = it.get("title")
         if title is not None and not isinstance(title, str):
             it["title"] = str(title).strip()
         elif title == "More" or (isinstance(title, str) and title.strip().lower() == "more"):
             it["title"] = "더보기"
+        t = (it.get("title") or "").strip()
+        url_norm = it["url"]
+        if not t or t == url_norm or t == (url_val or "").strip().rstrip("/"):
+            it["title"] = _title_fallback_from_url(it["url"] or url_val)
         out.append(it)
     return out
 
@@ -259,6 +388,38 @@ def schema_validate(data: Dict[str, Any]) -> Dict[str, Any]:
     return report
 
 
+def _repopulate_section_links_from_all_links(
+    sections: List[Dict[str, Any]],
+    all_links: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Populate each section's links from all_links by matching section_title.
+    When all_links items have section_title (from crawler), each section gets links from matching entries.
+    When none have section_title (legacy data), sections keep their existing links.
+    """
+    if not sections:
+        return sections
+    has_section_key = any(
+        isinstance(l, dict) and l.get("section_title") for l in (all_links or [])
+    )
+    if not has_section_key or not all_links:
+        return sections
+    out: List[Dict[str, Any]] = []
+    for sec in sections:
+        if not isinstance(sec, dict):
+            out.append(sec)
+            continue
+        sec_title = (sec.get("section_title") or "").strip()
+        matched = [
+            {"title": (l.get("title") or "").strip(), "url": l.get("url") or ""}
+            for l in all_links
+            if isinstance(l, dict) and (l.get("section_title") or "").strip() == sec_title
+        ]
+        links = dedupe_all_links(normalize_language_and_urls_in_links(matched))
+        out.append(dict(sec, links=links))
+    return out
+
+
 def clean_manual_pipeline_result(data: Dict[str, Any], mark_placeholders: bool = False) -> Dict[str, Any]:
     """
     Full clean: placeholders, merge validation/missing_analysis, dedupe, normalize, schema validate.
@@ -272,18 +433,26 @@ def clean_manual_pipeline_result(data: Dict[str, Any], mark_placeholders: bool =
         topic = crawled.get("topic") or {}
         if isinstance(topic, dict):
             sections = topic.get("sections") or []
-            if isinstance(sections, list):
-                sections = remove_or_mark_placeholders_in_sections(sections, mark=mark_placeholders)
-                sections = [
-                    dict(s, links=dedupe_all_links(normalize_language_and_urls_in_links(s.get("links") or [])))
-                    if isinstance(s, dict) else s
-                    for s in sections
-                ]
-                topic = dict(topic, sections=sections)
             all_links = topic.get("all_links") or []
             if isinstance(all_links, list):
-                topic = dict(topic, all_links=dedupe_all_links(normalize_language_and_urls_in_links(all_links)))
+                all_links = dedupe_all_links(normalize_language_and_urls_in_links(all_links))
+            if isinstance(sections, list):
+                sections = remove_or_mark_placeholders_in_sections(sections, mark=mark_placeholders)
+                sections = dedupe_consecutive_sections(sections, links_key="links")
+                # Repopulate each section's links from all_links by section_title so sections reflect intended mapping
+                sections = _repopulate_section_links_from_all_links(sections, all_links)
+                topic = dict(topic, sections=sections)
+            if isinstance(all_links, list):
+                # Strip section_title from all_links for output schema (keep only title, url)
+                all_links_out = [{"title": (l.get("title") or "").strip(), "url": l.get("url") or ""} for l in all_links if isinstance(l, dict)]
+                topic = dict(topic, all_links=dedupe_all_links(normalize_language_and_urls_in_links(all_links_out)))
             crawled = dict(crawled, topic=topic)
+        beginner = crawled.get("beginner_category") or {}
+        if isinstance(beginner, dict):
+            articles = beginner.get("articles") or []
+            if isinstance(articles, list):
+                beginner = dict(beginner, articles=deduplicate_beginner_articles(articles))
+            crawled = dict(crawled, beginner_category=beginner)
         if "expected_section_titles" not in crawled and EXPECTED_SECTION_TITLES:
             crawled = dict(crawled, expected_section_titles=EXPECTED_SECTION_TITLES)
         data["crawled"] = crawled
