@@ -1,10 +1,12 @@
 import axios from 'axios'
 import { AnalyzeRequest, AnalyzeResponse, AnalysisResult } from '../types'
 
-// Vite 프록시를 사용하므로 상대 경로 사용
-// 개발 환경: Vite 프록시가 /api 요청을 http://localhost:8000으로 전달
-// 프로덕션: VITE_API_URL 환경 변수 사용 (미설정 시 같은 오리진으로 요청 → Vercel에서 405 발생)
-const API_BASE_URL = import.meta.env.VITE_API_URL || ''
+// 개발: VITE_API_URL 미설정 시 백엔드 직접 호출(8080). Cursor 미리보기(8081) 등 프록시 없이 열어도 405 방지.
+// 프로덕션: VITE_API_URL 필수 (미설정 시 에러 안내)
+const DEFAULT_DEV_API_URL = 'http://localhost:8080'
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? DEFAULT_DEV_API_URL : '')
 
 /** 배포 환경에서 API URL 미설정 시 사용자 안내용 */
 function ensureApiBaseUrl(): void {

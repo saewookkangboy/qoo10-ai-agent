@@ -189,6 +189,12 @@ GET /api/v1/analyze/{analysis_id}/download?format=pdf|excel
 Response: File
 ```
 
+## 로컬 실행 (405 / WebSocket 관련)
+
+- **백엔드**: 기본 포트 **8080** (`cd api && uvicorn main:app --reload`). 상세는 [START.md](./START.md) 참고.
+- **프론트**: 개발 시 API 미설정이면 `http://localhost:8080`으로 직접 요청합니다. Cursor 미리보기(8081) 등에서 열어도 **405 없이** 분석이 동작합니다.
+- **WebSocket (refresh.js, ws://localhost:8081 failed)**: Cursor 내장 미리보기에서 나오는 HMR 관련 메시지는 무시해도 됩니다. 브라우저에서 `http://localhost:3000`으로 열면 해당 오류는 발생하지 않습니다.
+
 ## 배포
 
 프로젝트 배포 가이드는 [DEPLOYMENT.md](./DEPLOYMENT.md)를 참조하세요.

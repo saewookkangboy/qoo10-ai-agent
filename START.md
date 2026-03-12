@@ -3,21 +3,22 @@
 ## 1. 백엔드 (API 서버)
 
 **프로젝트 루트**에서 실행 (qoo10-ai-agent 폴더):
-cd backend
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-cd /Users/chunghyo/qoo10-ai-agent/api
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+```bash
+cd api
+uvicorn main:app --reload --host 0.0.0.0 --port 8080
 ```
 
 또는 이미 루트에 있다면:
 
 ```bash
 cd api
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uvicorn main:app --reload --host 0.0.0.0 --port 8080
 ```
 
-- 주소: http://localhost:8000  
-- API 문서: http://localhost:8000/docs  
+- 주소: http://localhost:8080  
+- API 문서: http://localhost:8080/docs  
+- (기본 포트는 `main.py`의 PORT 기본값 8080과 동일합니다. 8000으로 쓰려면 프론트엔드 `.env`에 `VITE_API_URL=http://localhost:8000` 설정)  
 
 ## 2. 프론트엔드 (Vite 개발 서버)
 
@@ -31,11 +32,11 @@ npm run dev
 또는 `frontend` 폴더에 있다면 그대로 `npm run dev` 만 실행하면 됩니다.
 
 - 브라우저에서 **Vite가 안내하는 주소**로 접속 (예: http://localhost:3000)
-- 프론트는 `/api`, `/health` 요청을 백엔드(8000)로 프록시합니다.
+- 프론트는 `/api`, `/health` 요청을 백엔드(8080)로 프록시합니다.
 
 ## 3. 한 번에 확인
 
-- 백엔드: http://localhost:8000/health → `{"status":"healthy"}`
+- 백엔드: http://localhost:8080/health → `{"status":"healthy"}`
 - 프론트: 터미널에 나온 주소(예: http://localhost:3000) 접속
 
 ## 선택: 빠른 기동 (임베딩 보완 모델 건너뛰기)
@@ -60,7 +61,7 @@ playwright install chromium
 ## 문제 해결
 
 - **"API 서버에 연결할 수 없습니다"**  
-  → 백엔드를 먼저 실행했는지 확인. 포트 8000에서 떠 있어야 합니다.
+  → 백엔드를 먼저 실행했는지 확인. 기본 포트 8080에서 떠 있어야 합니다.
 
 - **ERR_CONNECTION_REFUSED (localhost:3000)**  
   → **프론트엔드가 꺼져 있습니다.** 새 터미널에서 실행하세요:
