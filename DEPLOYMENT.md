@@ -108,17 +108,25 @@ ALLOWED_ORIGINS=https://your-vercel-app.vercel.app,https://your-custom-domain.co
 
 ## Vercel 프론트엔드 배포
 
-### 1. Vercel 프로젝트 생성
+**권장**: 저장소 루트를 프로젝트 루트로 사용하면 루트 `vercel.json`이 적용되어 빌드/출력 경로가 자동 설정됩니다.
 
-1. [Vercel](https://vercel.com)에 로그인 또는 회원가입
-2. "Add New Project" 클릭
-3. GitHub 저장소 선택
-4. 프로젝트 설정:
-   - **Root Directory**: `frontend`
-   - **Framework Preset**: Vite (자동 감지)
-   - **Build Command**: `npm run build` (자동 감지)
-   - **Output Directory**: `dist` (자동 감지)
-   - **Install Command**: `npm install` (자동 감지)
+### 방식 A: 저장소 루트 사용 (권장)
+
+1. [Vercel](https://vercel.com)에 로그인 후 "Add New Project" → GitHub 저장소 선택
+2. **Root Directory**: 비워 둠 (저장소 루트)
+3. 루트 `vercel.json`에 의해 자동 설정됨:
+   - **Build Command**: `cd frontend && npm ci && npm run build`
+   - **Output Directory**: `frontend/dist`
+   - **Install Command**: `cd frontend && npm ci`
+4. 환경 변수 `VITE_API_URL`만 설정 (백엔드 URL)
+
+### 방식 B: frontend 폴더만 사용
+
+1. **Root Directory**: `frontend` 로 설정
+2. **Framework Preset**: Vite (자동 감지)
+3. **Build Command**: `npm run build` (자동 감지)
+4. **Output Directory**: `dist` (자동 감지)
+5. 환경 변수 `VITE_API_URL` 설정
 
 ### 2. 환경 변수 설정
 
@@ -128,7 +136,7 @@ Vercel 대시보드 → 프로젝트 → Settings → Environment Variables에�
 VITE_API_URL=https://your-railway-backend-url.railway.app
 ```
 
-> **중요**: Railway 백엔드 배포 후 URL을 설정해야 합니다.
+> **중요**: Railway(또는 백엔드) 배포 후 URL을 설정하고, 변경 시 재배포해야 합니다.
 
 ### 3. 배포
 

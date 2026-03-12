@@ -1,0 +1,10 @@
+# 프론트엔드만 배포하므로 백엔드/테스트/대용량 제외
+api/
+tests/
+doc/
+docs/
+.git/
+*.db
+*.db-shm
+*.db-wal
+node_modules/

@@ -32,16 +32,17 @@
 
 ## Vercel 프론트엔드 배포 체크리스트
 
-### 프로젝트 설정
+### 프로젝트 설정 (권장: 저장소 루트)
 - [ ] Vercel 프로젝트 생성
 - [ ] GitHub 저장소 연결
-- [ ] Root Directory를 `frontend`로 설정
-- [ ] Framework Preset: Vite (자동 감지)
-- [ ] Build Command: `npm run build` (자동 감지)
-- [ ] Output Directory: `dist` (자동 감지)
+- [ ] Root Directory **비움** (저장소 루트) → 루트 `vercel.json` 사용
+- [ ] Build/Output은 vercel.json에 정의됨 (`frontend` 빌드 → `frontend/dist`)
+
+### 대안: Root Directory = `frontend`
+- [ ] Root Directory를 `frontend`로 설정 시 Build/Output은 `frontend/vercel.json` 기준
 
 ### 환경 변수
-- [ ] `VITE_API_URL` 설정 (Railway 백엔드 URL)
+- [ ] `VITE_API_URL` 설정 (Railway 등 백엔드 URL)
 
 ### 배포 확인
 - [ ] 배포 완료 확인
