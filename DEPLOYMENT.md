@@ -243,13 +243,21 @@ curl https://your-railway-app.railway.app/health
   2. 로컬에서 `npm run build` 테스트
   3. `package.json`의 의존성 확인
 
-#### API 연결 오류
+#### API 연결 오류 / 분석 시작 실패 (405)
 
-- **원인**: `VITE_API_URL` 미설정 또는 잘못된 URL
+- **증상**: 콘솔에 `Failed to load resource: the server responded with a status of 405 ()`, `/api/v1/analyze` 요청 실패, "분석 시작에 실패했습니다."
+- **원인**: Vercel에 `VITE_API_URL`이 설정되지 않아 프론트엔드가 같은 오리진(Vercel)으로 API를 호출하고, Vercel은 모든 요청을 `index.html`로 보내므로 POST `/api/v1/analyze`에 대해 405(Method Not Allowed)가 발생합니다.
 - **해결**:
-  1. Vercel 환경 변수에서 `VITE_API_URL` 확인
-  2. Railway 백엔드 URL이 올바른지 확인
-  3. 브라우저 개발자 도구 → Network 탭에서 요청 URL 확인
+  1. Vercel 대시보드 → 프로젝트 → **Settings** → **Environment Variables**
+  2. `VITE_API_URL` 추가, 값에 Railway 백엔드 URL 입력 (예: `https://your-app.railway.app`) — 프로토콜 포함, 끝에 `/` 없음
+  3. **Save** 후 **Redeploy** (환경 변수는 빌드 시점에 주입되므로 재배포 필요)
+  4. 배포 후 브라우저 개발자 도구 → Network 탭에서 `/api/v1/analyze` 요청이 Railway URL로 나가는지 확인
+
+#### WebSocket `ws://localhost:8081` 오류 (refresh.js)
+
+- **증상**: 콘솔에 `WebSocket connection to 'ws://localhost:8081/' failed` (refresh.js)
+- **원인**: Cursor IDE 내장 미리보기 등 특정 환경에서 Vite HMR(Hot Module Replacement) 클라이언트가 주입되거나, 개발용 스크립트가 참조될 때 발생합니다. 프로덕션 빌드에는 HMR이 포함되지 않습니다.
+- **해결**: 실제 서비스 동작에는 영향 없습니다. **일반 브라우저**(Chrome, Safari 등)에서 배포된 URL을 직접 열어 테스트하면 해당 메시지는 나오지 않으며, 나와도 무시해도 됩니다.
 
 #### 라우팅 오류 (404)
 

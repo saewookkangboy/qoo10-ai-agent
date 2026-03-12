@@ -3,8 +3,21 @@ import { AnalyzeRequest, AnalyzeResponse, AnalysisResult } from '../types'
 
 // Vite 프록시를 사용하므로 상대 경로 사용
 // 개발 환경: Vite 프록시가 /api 요청을 http://localhost:8000으로 전달
-// 프로덕션: VITE_API_URL 환경 변수 사용
+// 프로덕션: VITE_API_URL 환경 변수 사용 (미설정 시 같은 오리진으로 요청 → Vercel에서 405 발생)
 const API_BASE_URL = import.meta.env.VITE_API_URL || ''
+
+/** 배포 환경에서 API URL 미설정 시 사용자 안내용 */
+function ensureApiBaseUrl(): void {
+  if (API_BASE_URL) return
+  const isProduction = typeof window !== 'undefined' &&
+    window.location.hostname !== 'localhost' &&
+    window.location.hostname !== '127.0.0.1'
+  if (isProduction) {
+    throw new Error(
+      'API 서버 URL이 설정되지 않았습니다. Vercel 프로젝트 설정 → Environment Variables에서 VITE_API_URL에 백엔드 URL(예: https://xxx.railway.app)을 넣은 뒤 재배포해주세요.'
+    )
+  }
+}
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -29,6 +42,7 @@ export const analyzeService = {
    * 분석 시작 (백엔드가 즉시 analysis_id 반환, 분석은 백그라운드 진행)
    */
   async startAnalysis(request: AnalyzeRequest): Promise<AnalyzeResponse> {
+    ensureApiBaseUrl()
     try {
       const response = await api.post<AnalyzeResponse>('/api/v1/analyze', request, {
         timeout: 60000,  // 분석 시작 요청: 60초 (프록시/콜드스타트 대비)
