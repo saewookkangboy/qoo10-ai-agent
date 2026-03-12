@@ -77,8 +77,8 @@ class GeminiService:
 `.env` 파일에 다음 환경 변수를 추가하세요:
 
 ```bash
-# Google Gemini API 키
-GEMINI_API_KEY=AIzaSyC6ZVqQ_rKLR7ijX2PicVJWeCIo8Eq0jd0
+# Google Gemini API 키 (실제 키는 .env에만 설정하고, 이 문서/저장소에는 절대 커밋하지 마세요)
+GEMINI_API_KEY=<YOUR_GEMINI_API_KEY>
 ```
 
 **API 키 발급 방법**:

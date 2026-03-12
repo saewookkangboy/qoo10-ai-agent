@@ -113,6 +113,8 @@ Vercel → 해당 API 프로젝트 → Settings → Environment Variables:
 | `ALLOWED_ORIGINS` | CORS (예: `https://프론트도메인.vercel.app`) | 권장 |
 | `ENABLE_LEARNING_TRAJECTORY` | AI 강화학습 trajectory 저장 (1/0) | 선택(기본 1) |
 
+> **보안**: API 키(`GEMINI_API_KEY`, `OPENAI_API_KEY` 등)는 **Vercel 대시보드의 환경 변수에만** 입력하세요. 코드나 문서, 저장소에는 절대 실제 키를 커밋하지 마세요. 배포 시 해당 환경 변수가 주입되어 동작합니다.
+
 ### B.4 제한 사항
 
 - **실행 시간**: 함수 최대 실행 시간(기본 10초, Pro 60초). 장시간 분석은 타임아웃 가능성이 있으므로 모니터링 권장.

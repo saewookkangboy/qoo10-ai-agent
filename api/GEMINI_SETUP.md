@@ -2,10 +2,10 @@
 
 ## 환경 변수 설정
 
-`.env` 파일에 다음을 추가하세요:
+`.env` 파일에 다음을 추가하세요 (실제 키 값은 저장소에 커밋하지 마세요. 배포 시에는 플랫폼 환경 변수로만 설정):
 
 ```bash
-GEMINI_API_KEY=AIzaSyC6ZVqQ_rKLR7ijX2PicVJWeCIo8Eq0jd0
+GEMINI_API_KEY=<YOUR_GEMINI_API_KEY>
 ```
 
 ## 설정 확인
