@@ -1,14 +1,21 @@
 import axios from 'axios'
 import { AnalyzeRequest, AnalyzeResponse, AnalysisResult } from '../types'
 
-// 개발: VITE_API_URL 미설정 시 백엔드 직접 호출(8080). Cursor 미리보기(8081) 등 프록시 없이 열어도 405 방지.
-// 프로덕션: VITE_API_URL 필수 (미설정 시 에러 안내)
+// 개발: VITE_API_URL 미설정 시 백엔드 직접 호출(8080). Cursor 미리보기(8081) 등 프록시 없이 열어도 동작.
+// 프로덕션(vercel.app 등): VITE_API_URL 필수. 로컬(hostname localhost)이면 빌드가 production이어도 기본값 사용.
 const DEFAULT_DEV_API_URL = 'http://localhost:8080'
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.DEV ? DEFAULT_DEV_API_URL : '')
+function getApiBaseUrl(): string {
+  const fromEnv = import.meta.env.VITE_API_URL
+  if (fromEnv) return fromEnv
+  if (import.meta.env.DEV) return DEFAULT_DEV_API_URL
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return DEFAULT_DEV_API_URL
+  }
+  return ''
+}
+const API_BASE_URL = getApiBaseUrl()
 
-/** 배포 환경에서 API URL 미설정 시 사용자 안내용 */
+/** 배포 환경(vercel.app 등)에서 API URL 미설정 시 사용자 안내용 */
 function ensureApiBaseUrl(): void {
   if (API_BASE_URL) return
   const isProduction = typeof window !== 'undefined' &&

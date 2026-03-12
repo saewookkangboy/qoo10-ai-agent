@@ -81,6 +81,14 @@ playwright install chromium
   ```
   저장 후 프론트를 다시 실행하세요.
 
+- **"API 서버 URL이 설정되지 않았습니다" (Vercel 배포 후)**  
+  → Vercel 대시보드 → 해당 프론트 프로젝트 → **Settings** → **Environment Variables**에서 **VITE_API_URL**을 추가하고, 백엔드 URL(예: `https://your-api.railway.app` 또는 API 전용 Vercel URL)을 넣은 뒤 **재배포**하세요.  
+  → 로컬에서 **localhost**로 열면 `VITE_API_URL` 없이도 기본값 `http://localhost:8080`이 사용됩니다.
+
+- **WebSocket connection to 'ws://localhost:8081/' failed**  
+  → Cursor 내장 미리보기(8081) 등에서 나올 수 있는 메시지입니다. **기능에는 영향 없습니다.**  
+  → 브라우저에서 직접 **http://localhost:3000** 으로 접속하면 해당 경고가 없을 수 있습니다.
+
 ## Git 워크플로우
 
 - **팀 정책:** **main** 및 **dev**에는 직접 푸시할 수 없습니다. 모든 변경은 **Pull Request**를 통해서만 반영합니다.
