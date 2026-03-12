@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "echo '개발 서버 시작'",
-    "build": "echo '빌드'",
+    "build": "cd frontend && npm ci && npm run build",
     "test": "echo '테스트 실행'",
     "lint": "echo '린트 검사'",
     "format": "echo '코드 포맷팅'"
@@ -21,7 +21,7 @@
   "author": "Park chunghyo",
   "license": "MIT",
   "engines": {
-    "node": ">=18.0.0"
+    "node": "18.x"
   },
   "dependencies": {},
   "devDependencies": {}

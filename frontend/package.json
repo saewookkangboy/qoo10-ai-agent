@@ -2,6 +2,9 @@
   "name": "qoo10-ai-agent-frontend",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": "18.x"
+  },
   "dependencies": {
     "@visactor/react-vchart": "^2.0.13",
     "@visactor/vchart": "^2.0.13",
