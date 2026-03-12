@@ -241,7 +241,6 @@ def dedupe_consecutive_sections(
 ) -> List[Dict[str, Any]]:
     """
     Collapse consecutive sections with identical section_title by merging their links.
-    Removes duplicate section entries (e.g. three "입점 검토하기" with empty links become one).
     Preserves order; first occurrence keeps section_title, section_index (if present), and accumulates links from following dupes.
     """
     if not sections:
@@ -272,6 +271,49 @@ def dedupe_consecutive_sections(
     if current is not None:
         out.append(current)
     return out
+
+
+def dedupe_sections_by_title(
+    sections: List[Dict[str, Any]],
+    links_key: str = "links",
+) -> List[Dict[str, Any]]:
+    """
+    Collapse all sections with the same section_title (not only consecutive) into one; merge links.
+    First occurrence wins for section metadata (section_index etc.); links from all dupes are merged and deduped.
+    """
+    if not sections:
+        return []
+    by_title: Dict[str, Dict[str, Any]] = {}
+    order: List[str] = []
+    for sec in sections:
+        if not isinstance(sec, dict):
+            continue
+        title = (sec.get("section_title") or "").strip()
+        if not title:
+            continue
+        links = sec.get(links_key) or []
+        if not isinstance(links, list):
+            links = []
+        if title not in by_title:
+            by_title[title] = dict(sec)
+            by_title[title][links_key] = list(links)
+            order.append(title)
+        else:
+            by_title[title][links_key] = (by_title[title].get(links_key) or []) + list(links)
+    result = [by_title[t] for t in order]
+    for s in result:
+        s[links_key] = dedupe_all_links(s.get(links_key) or [])
+    return result
+
+
+def filter_empty_sections(
+    sections: List[Dict[str, Any]],
+    links_key: str = "links",
+) -> List[Dict[str, Any]]:
+    """Remove sections where links (or items) is an empty array."""
+    if not sections:
+        return []
+    return [s for s in sections if isinstance(s, dict) and (s.get(links_key) or [])]
 
 
 def normalize_section_title(title: Optional[str]) -> str:
@@ -441,6 +483,8 @@ def clean_manual_pipeline_result(data: Dict[str, Any], mark_placeholders: bool =
                 sections = dedupe_consecutive_sections(sections, links_key="links")
                 # Repopulate each section's links from all_links by section_title so sections reflect intended mapping
                 sections = _repopulate_section_links_from_all_links(sections, all_links)
+                sections = dedupe_sections_by_title(sections, links_key="links")
+                sections = filter_empty_sections(sections, links_key="links")
                 topic = dict(topic, sections=sections)
             if isinstance(all_links, list):
                 # Strip section_title from all_links for output schema (keep only title, url)
@@ -481,6 +525,22 @@ def clean_manual_pipeline_result(data: Dict[str, Any], mark_placeholders: bool =
             if "manual_더보기_count" not in summary and isinstance(urls, list):
                 summary = dict(summary, manual_더보기_count=len(urls))
                 validation = dict(validation, summary=summary)
+        # Sanitize manual_path: single top-level only, no absolute local paths
+        mp = validation.get("manual_path")
+        if isinstance(mp, str) and (mp.startswith("/") or "/Users/" in mp or "/home/" in mp):
+            mp = "doc/Qoo10_큐텐대학_한국어_메뉴얼.md"
+        if not isinstance(mp, str):
+            mp = "doc/Qoo10_큐텐대학_한국어_메뉴얼.md"
+        # Normalize summary: only allowed keys, no manual_path (single manual_path at validation top-level)
+        summary = validation.get("summary") or {}
+        if isinstance(summary, dict):
+            summary = {
+                "crawled_links_count": summary.get("crawled_links_count") if isinstance(summary.get("crawled_links_count"), (int, float)) else 0,
+                "manual_더보기_count": summary.get("manual_더보기_count") if isinstance(summary.get("manual_더보기_count"), (int, float)) else 0,
+                "missing_links_count": summary.get("missing_links_count") if isinstance(summary.get("missing_links_count"), (int, float)) else 0,
+                "missing_sections_count": summary.get("missing_sections_count") if isinstance(summary.get("missing_sections_count"), (int, float)) else 0,
+            }
+            validation = dict(validation, summary=summary, manual_path=mp)
         data["validation"] = validation
 
     report = schema_validate(data)

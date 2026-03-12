@@ -7,7 +7,7 @@ import re
 import asyncio
 import logging
 from typing import Dict, Any, List, Optional, Tuple
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, urlunparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -55,9 +55,38 @@ def _is_category_link(title: str, url: str) -> bool:
     t = (title or "").strip()
     if t == BEGINNER_CATEGORY_TITLE:
         return True
-    if t.startswith(BEGINNER_CATEGORY_TITLE) and (t == BEGINNER_CATEGORY_TITLE or t[len(BEGINNER_CATEGORY_TITLE) :].strip() in ("", ">", "　>")):
+    if not t.startswith(BEGINNER_CATEGORY_TITLE):
+        return False
+    rest = t[len(BEGINNER_CATEGORY_TITLE):].strip()
+    if rest in ("", ">", "　>", "　"):
         return True
     return False
+
+
+def _normalize_article_url(url: str, base_url: str) -> str:
+    """트래킹 파라미터·fragment 제거, 상대 경로 해석, trailing slash 제거."""
+    if not url or not isinstance(url, str):
+        return ""
+    u = urljoin(base_url, (url or "").strip())
+    try:
+        p = urlparse(u)
+        path = (p.path or "/").rstrip("/") or "/"
+        return urlunparse((p.scheme, p.netloc, path, "", "", ""))
+    except Exception:
+        return (u or "").strip().rstrip("/") or ""
+
+
+def _article_dedup_key(url: str, title: str) -> Tuple[str, str]:
+    """
+    entry/ID 있으면 (norm_title, 'entry:ID') 반환(동일 글의 archive URL과 통합), 없으면 (norm_title, norm_url).
+    정규화된 제목은 공백·전각 공백 정규화.
+    """
+    t = (title or "").strip().replace("\u3000", " ")
+    norm_title = re.sub(r"\s+", " ", t).strip()[:200] if t else ""
+    m = re.search(r"/entry/(\d+)(?:/|$)", url)
+    if m:
+        return (norm_title, f"entry:{m.group(1)}")
+    return (norm_title, url)
 
 
 class Qoo10ManualCrawler:
@@ -161,31 +190,38 @@ class Qoo10ManualCrawler:
         }
 
     def _parse_beginner_category_page(self, html: str, base_url: str) -> Dict[str, Any]:
-        """단계별 교육 (초급) 카테고리 페이지 파싱. 글 제목 + 링크 수집."""
+        """단계별 교육 (초급) 카테고리 페이지 파싱. 글 제목 + 링크 수집. URL 정규화 후 entry/archive 중복 제거."""
         soup = BeautifulSoup(html, "html.parser")
-        articles: List[Dict[str, str]] = []
+        candidates: List[Tuple[str, str, str, str]] = []  # (norm_title, key, title, url)
+
+        def add_candidate(title: str, full_url: str) -> None:
+            if _is_category_link(title, full_url):
+                return
+            norm_url = _normalize_article_url(full_url, base_url)
+            if not norm_url or "article-university.qoo10.jp" not in norm_url:
+                return
+            norm_title, key = _article_dedup_key(norm_url, title)
+            if not norm_title:
+                return
+            candidates.append((norm_title, key, title, norm_url))
+
         for a in soup.find_all("a", href=True):
             href = a.get("href", "")
             if "article-university.qoo10.jp" not in urljoin(base_url, href):
                 continue
             full_url = urljoin(base_url, href)
             text = (a.get_text() or "").strip()
-            if _is_category_link(text, full_url):
-                continue
-            # 긴 제목(교육 제목)만 수집. 날짜 패턴(2025-11-27 등) 옆 제목
-            if len(text) > 5 and "단계별" in text or "초보" in text or "교육" in text or "탄!" in text:
-                articles.append({"title": text, "url": full_url})
+            if len(text) > 5 and ("단계별" in text or "초보" in text or "교육" in text or "탄!" in text):
+                add_candidate(text, full_url)
             elif re.match(r"^\d{4}\s*-\s*\d{2}\s*-\s*\d{2}", text):
-                # 날짜만 있는 링크는 다음 형제에서 제목 찾기
                 parent = a.parent
                 if parent:
                     next_heading = parent.find(["h2", "h3", "h4"])
                     if next_heading:
                         t = (next_heading.get_text() or "").strip()
-                        if t and not _is_category_link(t, full_url) and t not in [x["title"] for x in articles]:
-                            articles.append({"title": t, "url": full_url})
+                        if t:
+                            add_candidate(t, full_url)
 
-        # heading 링크 조합: section > a + heading
         for section in soup.find_all(["section", "article", "div"], class_=re.compile(r"entry|article|card")):
             link = section.find("a", href=True)
             heading = section.find(["h1", "h2", "h3", "h4"])
@@ -195,9 +231,22 @@ class Qoo10ManualCrawler:
                     continue
                 full_url = urljoin(base_url, href)
                 title = (heading.get_text() or "").strip()
-                if title and not _is_category_link(title, full_url) and not any(x["url"] == full_url for x in articles):
-                    articles.append({"title": title, "url": full_url})
+                if title:
+                    add_candidate(title, full_url)
 
+        # Dedupe by (norm_title): prefer entry/ URL over archive/ when same title (first occurrence wins, entry over archive)
+        seen: Dict[str, Tuple[str, str, str]] = {}  # norm_title -> (key, title, url)
+        for norm_title, key, title, url in candidates:
+            if norm_title not in seen:
+                seen[norm_title] = (key, title, url)
+            else:
+                old_key, old_title, old_url = seen[norm_title]
+                if key.startswith("entry:") and not old_key.startswith("entry:"):
+                    seen[norm_title] = (key, title, url)
+
+        articles = [{"title": t, "url": u} for (_, t, u) in seen.values()]
+        # Final filter: ensure no category self-links slip through (e.g. encoding variants)
+        articles = [a for a in articles if not _is_category_link(a.get("title") or "", a.get("url") or "")]
         return {
             "source_url": base_url,
             "category": "단계별 교육 (초급)",

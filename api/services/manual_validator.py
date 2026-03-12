@@ -60,6 +60,21 @@ def normalize_url_for_comparison(u: Optional[str]) -> str:
 DEFAULT_MANUAL_PATH = "doc/Qoo10_큐텐대학_한국어_메뉴얼.md"
 
 
+def _manual_path_for_output(path: Path) -> str:
+    """Return a relative path for JSON output so no absolute local path is exposed."""
+    path = path.resolve()
+    try:
+        return str(path.relative_to(Path.cwd()))
+    except ValueError:
+        pass
+    try:
+        root = Path(__file__).resolve().parent.parent.parent
+        return str(path.relative_to(root))
+    except ValueError:
+        pass
+    return DEFAULT_MANUAL_PATH
+
+
 def find_manual_path(manual_path: Optional[str] = None) -> Optional[Path]:
     """메뉴얼 파일 절대 경로 반환. api/에서 실행 시 상위 doc/ 검색."""
     if manual_path and os.path.isfile(manual_path):
@@ -326,8 +341,8 @@ def load_and_validate(
             "suggestions": [f"메뉴얼 파일 읽기 실패: {e}"],
             "summary": {},
             "error": str(e),
-            "manual_path": str(path),
+            "manual_path": _manual_path_for_output(path),
         }
     result = validate_manual_vs_crawled(content, crawled, manual_path)
-    result["manual_path"] = str(path)
+    result["manual_path"] = _manual_path_for_output(path)
     return result
