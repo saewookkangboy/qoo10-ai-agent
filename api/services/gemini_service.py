@@ -131,6 +131,60 @@ class GeminiService:
         
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, _sync_generate)
+
+    async def extract_text_from_image_url(self, image_url: str) -> Optional[str]:
+        """
+        상세 이미지 URL에서 텍스트 추출 (Vision).
+        이미지를 다운로드한 뒤 generate_content에 전달.
+        """
+        if not self.model or not image_url or not image_url.strip().startswith("http"):
+            return None
+        import io
+        try:
+            import httpx
+            from PIL import Image
+        except ImportError:
+            return None
+        prompt = (
+            "이 상품 상세 이미지에 보이는 모든 텍스트를 추출해 주세요. "
+            "원문 언어(일본어/한국어/영어 등)를 유지하고, 제목·불릿·표는 구조를 나누어 작성해 주세요. "
+            "텍스트가 없으면 '텍스트 없음'이라고만 답하세요."
+        )
+
+        async def _download_and_extract():
+            try:
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    resp = await client.get(image_url)
+                    if resp.status_code != 200:
+                        return None
+                    raw = resp.content
+                img = Image.open(io.BytesIO(raw))
+
+                def _sync_gemini_vision():
+                    generation_config = genai.types.GenerationConfig(
+                        temperature=0.2,
+                        max_output_tokens=1024,
+                    )
+                    return self.model.generate_content(
+                        [prompt, img],
+                        generation_config=generation_config,
+                    )
+
+                loop = asyncio.get_event_loop()
+                response = await loop.run_in_executor(None, _sync_gemini_vision)
+                if not response or not response.text:
+                    return None
+                text = response.text.strip()
+                return None if text == "텍스트 없음" else text
+            except Exception as e:
+                logger.debug("Gemini Vision 이미지 텍스트 추출 실패 (%s): %s", image_url[:50], str(e))
+                return None
+
+        try:
+            return await _download_and_extract()
+        except Exception as e:
+            logger.debug("Gemini extract_text_from_image_url 오류: %s", str(e))
+            return None
     
     async def analyze_product_with_ai(
         self,

@@ -124,51 +124,60 @@ class ProductAnalyzer:
         return analysis
     
     def _analyze_description(self, product_data: Dict[str, Any]) -> Dict[str, Any]:
-        """상품 설명 분석"""
+        """상품 설명 분석. 상세 이미지에서 추출한 텍스트(detail_image_text_merged)가 있으면 합산 반영."""
         description = product_data.get("description", "")
+        detail_merged = (product_data.get("detail_image_text_merged") or "").strip()
+        effective_description = f"{description}\n{detail_merged}".strip() if detail_merged else description
         description_length = len(description)
-        
+        effective_length = len(effective_description)
+        detail_image_text_length = effective_length - description_length if detail_merged else 0
+
         analysis = {
             "score": 0,
             "description_length": description_length,
+            "effective_description_length": effective_length,
+            "detail_image_text_length": detail_image_text_length,
             "seo_keywords": [],
             "structure_quality": "unknown",
             "recommendations": []
         }
-        
-        # 설명 길이 평가
-        if description_length >= 500:
+
+        # 설명 길이 평가: 상세 이미지 텍스트를 반영한 effective_length 사용
+        if effective_length >= 500:
             analysis["score"] += 40
-        elif description_length >= 300:
+        elif effective_length >= 300:
             analysis["score"] += 25
-            analysis["recommendations"].append("상품 설명을 500자 이상으로 늘리세요")
+            if not detail_merged:
+                analysis["recommendations"].append("상품 설명을 500자 이상으로 늘리세요")
         else:
             analysis["score"] += 10
-            analysis["recommendations"].append("상품 설명을 최소 500자 이상 작성하세요")
-        
-        # 구조화 여부 평가
-        if "\n" in description or "<br>" in description or "<li>" in description:
+            if not detail_merged:
+                analysis["recommendations"].append("상품 설명을 최소 500자 이상 작성하세요")
+
+        # 구조화 여부 평가 (effective_description 기준)
+        if "\n" in effective_description or "<br>" in effective_description or "<li>" in effective_description:
             analysis["structure_quality"] = "good"
             analysis["score"] += 20
         else:
             analysis["structure_quality"] = "poor"
             analysis["recommendations"].append("줄바꿈이나 리스트를 사용하여 설명을 구조화하세요")
-        
+
         # 키워드 추출
         keywords = product_data.get("search_keywords", [])
         if keywords:
             analysis["seo_keywords"] = keywords
             analysis["score"] += 20
-        
-        # 일본어 품질 (간단한 휴리스틱)
-        japanese_chars = len(re.findall(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]', description))
-        if japanese_chars > description_length * 0.5:
+
+        # 일본어 품질 (effective_description 기준)
+        japanese_chars = len(re.findall(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]', effective_description))
+        ref_len = effective_length or 1
+        if japanese_chars > ref_len * 0.5:
             analysis["score"] += 20
         else:
             analysis["recommendations"].append("일본어 설명의 비율을 높이세요")
-        
+
         analysis["score"] = min(100, analysis["score"])
-        
+
         return analysis
     
     def _analyze_price(self, price_data: Dict[str, Any]) -> Dict[str, Any]:

@@ -416,8 +416,8 @@ async def main():
             print("\n[메뉴얼] 수집·검증·누락 분석...")
             manual_result = await run_manual_pipeline_step()
             if manual_result:
-                ma = manual_result.get("missing_analysis", {})
-                print(f"    ✓ coverage_score: {ma.get('coverage_score', 0)}%, 누락 링크: {len(ma.get('missing_links') or [])}건")
+                val = manual_result.get("validation", {})
+                print(f"    ✓ coverage_score: {val.get('coverage_score', 0)}%, 누락 링크: {len(val.get('missing_links') or [])}건")
 
         # JSON 저장 시 바이트/중첩 객체 제한
         def _serializable(obj: Any, depth: int = 0):
@@ -440,7 +440,7 @@ async def main():
             "validation_result": result.get("validation_result"),
             "missing_analysis": missing_analysis,
             "manual_missing_analysis": (
-                manual_result.get("missing_analysis") if manual_result else None
+                manual_result.get("validation") if manual_result else None
             ),
             "shop_data_summary": None,
             "product_data_summary": None,

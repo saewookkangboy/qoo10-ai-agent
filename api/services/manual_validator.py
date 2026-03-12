@@ -6,10 +6,32 @@ Qoo10 큐텐 대학 한국어 메뉴얼 검증 서비스
 import re
 import os
 import logging
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Set
 from pathlib import Path
+from urllib.parse import urlparse, urlunparse, quote, unquote
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_url_for_comparison(u: Optional[str]) -> str:
+    """
+    URL을 비교/병합 시 일관되게 쓰기 위해 정규화합니다.
+    - 앞뒤 공백 제거, trailing slash 제거
+    - percent-encoding 정규화 (path unquote 후 quote)
+    - fragment(#) 제거, query(?) 제거 (동일 페이지를 하나로 묶기 위함)
+    """
+    if u is None or not isinstance(u, str):
+        return ""
+    u = u.strip()
+    if not u:
+        return ""
+    try:
+        p = urlparse(u)
+        path = (p.path or "/").rstrip("/") or "/"
+        path = quote(unquote(path), safe="/")
+        return urlunparse((p.scheme, p.netloc, path, "", "", ""))
+    except Exception:
+        return (u or "").strip().rstrip("/") or ""
 
 # 프로젝트 루트 기준 메뉴얼 파일 경로
 DEFAULT_MANUAL_PATH = "doc/Qoo10_큐텐대학_한국어_메뉴얼.md"
@@ -113,7 +135,14 @@ def validate_manual_vs_crawled(
     extra_in_manual: List[str] = []
     suggestions: List[str] = []
 
-    manual_urls = set(manual_parsed.get("all_더보기_urls") or [])
+    # 정규화된 URL로 비교하여 trailing slash / encoding / fragment 차이로 인한 오매칭 방지
+    _all_더보기 = manual_parsed.get("all_더보기_urls") or []
+    manual_urls_normalized: Set[str] = {normalize_url_for_comparison(u) for u in _all_더보기}
+    manual_entry_ids: Set[str] = set()
+    for u in _all_더보기:
+        m = re.search(r"/entry/(\d+)", u)
+        if m:
+            manual_entry_ids.add(m.group(1))
     manual_section_titles = {s["title"] for s in manual_parsed.get("sections") or []}
     # 목차/헤딩에서 숫자 제거 후 비교용
     manual_section_titles_normalized = set()
@@ -127,36 +156,40 @@ def validate_manual_vs_crawled(
             if not any(exp in t for t in manual_section_titles):
                 missing_sections.append(exp)
 
-    # 2) 크롤링된 링크 중 메뉴얼 더보기에 없는 URL
-    crawled_urls = set()
+    # 2) 크롤링된 링크 중 메뉴얼 더보기에 없는 URL (정규화된 URL로 비교)
+    crawled_url_list: List[str] = []
     for link in topic.get("all_links") or []:
         url = link.get("url") or ""
         if url and "article-university.qoo10.jp" in url:
-            crawled_urls.add(url)
+            crawled_url_list.append(url)
     for art in beginner.get("articles") or []:
         url = art.get("url") or ""
         if url:
-            crawled_urls.add(url)
+            crawled_url_list.append(url)
+    crawled_urls_normalized: Set[str] = {normalize_url_for_comparison(u) for u in crawled_url_list}
 
-    for url in crawled_urls:
-        if url not in manual_urls:
-            # entry/130 등 상세 페이지는 메뉴얼에 있으면 동일 도메인으로만 체크
-            if "entry/" in url:
-                # 메뉴얼에 같은 entry가 있는지
-                entry_id = re.search(r"/entry/(\d+)", url)
-                if entry_id:
-                    if not any(entry_id.group(1) in u for u in manual_urls):
-                        missing_links.append({"url": url, "source": "crawled"})
-            else:
-                missing_links.append({"url": url, "source": "crawled"})
-
-    # 3) 메뉴얼에만 있는 URL (크롤러에 없음) → 삭제/이동된 페이지 가능
-    for url in manual_urls:
-        if url not in crawled_urls and "article-university.qoo10.jp" in url:
-            # 카테고리/해시 링크는 제외
-            if "#" in url and url.split("#")[0] in crawled_urls:
+    for url in crawled_url_list:
+        u_norm = normalize_url_for_comparison(url)
+        if u_norm in manual_urls_normalized:
+            continue
+        if "entry/" in url:
+            entry_id = re.search(r"/entry/(\d+)", url)
+            if entry_id and entry_id.group(1) in manual_entry_ids:
                 continue
-            extra_in_manual.append(url)
+            missing_links.append({"url": url, "source": "crawled"})
+        else:
+            missing_links.append({"url": url, "source": "crawled"})
+
+    # 3) 메뉴얼에만 있는 URL (크롤러에 없음) → 삭제/이동된 페이지 가능 (정규화된 URL로 비교)
+    for url in _all_더보기:
+        u_norm = normalize_url_for_comparison(url)
+        if u_norm in crawled_urls_normalized:
+            continue
+        if "article-university.qoo10.jp" not in url:
+            continue
+        if "#" in url and normalize_url_for_comparison(url.split("#")[0]) in crawled_urls_normalized:
+            continue
+        extra_in_manual.append(url)
 
     # 4) 크롤링된 섹션별 항목 제목이 메뉴얼에 없는 경우 (section, item_title, url) 기준 중복 제거)
     seen_missing_key: set = set()  # (section, item_title, url) tuple
@@ -187,8 +220,19 @@ def validate_manual_vs_crawled(
                         "url": link.get("url"),
                     })
 
+    # Dedupe missing_in_manual_items by normalized URL (first occurrence wins, order preserved)
+    seen_url: Set[str] = set()
+    deduped: List[Dict[str, Any]] = []
+    for it in missing_in_manual_items:
+        u = it.get("url") or ""
+        u_norm = normalize_url_for_comparison(u)
+        if u_norm not in seen_url:
+            seen_url.add(u_norm)
+            deduped.append(it)
+    missing_in_manual_items = deduped
+
     # 5) coverage_score
-    total_expected = len(crawled_urls) + len(expected_titles)
+    total_expected = len(crawled_url_list) + len(expected_titles)
     if total_expected == 0:
         coverage_score = 100.0
     else:
@@ -213,8 +257,8 @@ def validate_manual_vs_crawled(
         "coverage_score": round(coverage_score, 1),
         "suggestions": suggestions,
         "summary": {
-            "crawled_links_count": len(crawled_urls),
-            "manual_더보기_count": len(manual_urls),
+            "crawled_links_count": len(crawled_url_list),
+            "manual_더보기_count": len(_all_더보기),
             "missing_links_count": len(missing_links),
             "missing_sections_count": len(missing_sections),
         },

@@ -893,6 +893,41 @@ class ReportGenerator:
             lines.append(f"| 상품 수 | {shop_data.get('product_count', 0)}개 |")
             lines.append("\n")
         
+        # 운영 포인트 & 의사결정 (Qoo10 판매자 관점)
+        operational_summary = analysis_result.get("operational_summary") or {}
+        if operational_summary and (operational_summary.get("operational_points") or operational_summary.get("key_decisions")):
+            lines.append("## 🎯 운영 포인트 & 의사결정")
+            lines.append("")
+            if operational_summary.get("summary_text"):
+                lines.append(operational_summary["summary_text"])
+                lines.append("")
+            ops = operational_summary.get("operational_points") or []
+            if ops:
+                lines.append("### 운영 포인트")
+                lines.append("")
+                for p in ops:
+                    area = p.get("area", "")
+                    point = p.get("point", "")
+                    impact = p.get("impact", "")
+                    lines.append(f"- **{area}**: {point}")
+                    if impact:
+                        lines.append(f"  - 영향: {impact}")
+                lines.append("")
+            decisions = operational_summary.get("key_decisions") or []
+            if decisions:
+                lines.append("### 핵심 의사결정")
+                lines.append("")
+                for i, d in enumerate(decisions, 1):
+                    priority = (d.get("priority") or "medium").upper()
+                    priority_emoji = {"HIGH": "🔴", "MEDIUM": "🟡", "LOW": "🟢"}.get(priority, "⚪")
+                    lines.append(f"{i}. {priority_emoji} **{d.get('decision', 'N/A')}**")
+                    if d.get("reason"):
+                        lines.append(f"   - {d['reason'][:200]}{'...' if len(d.get('reason', '')) > 200 else ''}")
+                    if d.get("action"):
+                        lines.append(f"   - 실행: {d['action']}")
+                    lines.append("")
+            lines.append("---\n")
+        
         # 상품 분석 결과
         if "product_analysis" in analysis_result:
             product_analysis = analysis_result["product_analysis"]

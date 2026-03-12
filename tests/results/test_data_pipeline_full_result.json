@@ -1,4 +1,6 @@
-{
+Verify each finding against the current code and only fix it if needed.
+
+In @tests/results/test_data_pipeline_full_result.json around lines 275 - 295, The test fixture shows validation_score: 100.0 while structure_comparison.value_mismatches contains an ImageUrlList mismatch; update the scoring logic so value_mismatches are reflected (or explicitly mark them as allowed). Locate the validation routine (e.g., calculate_validation_score or similar that sets validation_score) and either subtract penalties based on structure_comparison.value_mismatches length/details or add an allowed_mismatches/notes flag in the JSON and set validation_score calculation to ignore only those declared allowed mismatches; then update the fixture (tests/results/test_data_pipeline_full_result.json) so validation_score is consistent with the presence or allowance of the ImageUrlList mismatch.{
   "url": "https://www.qoo10.jp/g/1093098159",
   "url_type": "product",
   "analysis_result": {
@@ -268,7 +270,7 @@
   },
   "recommendations_count": 0,
   "checklist_overall_completion": 84,
-  "validation_result": {
+    "validation_result": {
     "is_valid": true,
     "mismatches": [],
     "missing_items": [],
@@ -295,6 +297,7 @@
       ],
       "structure_match": true
     },
+    "allowed_value_mismatch_fields": ["ImageUrlList"],
     "elements_validation": [],
     "elements_validation_note": "page_structure.elements_detail이 없어 요소 단위 검증을 수행하지 않았습니다. Crawl 단계에서 요소 추출을 활성화하면 항목별 일치 여부가 채워집니다.",
     "message": "OK"

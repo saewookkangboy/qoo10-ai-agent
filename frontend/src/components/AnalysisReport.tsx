@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ProductAnalysis, Recommendation, ChecklistResult, CompetitorAnalysis, ValidationResult, ProductData, ShopAnalysis, ShopData } from '../types'
+import { ProductAnalysis, Recommendation, ChecklistResult, CompetitorAnalysis, ValidationResult, ProductData, ShopAnalysis, ShopData, OperationalSummary } from '../types'
 import ScoreCard from './ScoreCard'
 import RecommendationCard from './RecommendationCard'
 import ChecklistCard from './ChecklistCard'
@@ -20,6 +20,7 @@ interface AnalysisReportProps {
     product_data?: ProductData
     shop_data?: ShopData
     validation?: ValidationResult
+    operational_summary?: OperationalSummary
   }
   analysisId?: string
 }
@@ -31,10 +32,13 @@ const safeScore = (obj: { score?: number } | null | undefined): number =>
     : 0
 
 function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
-  const { product_analysis, shop_analysis, recommendations, checklist, competitor_analysis, validation } = result
+  const { product_analysis, shop_analysis, recommendations, checklist, competitor_analysis, validation, operational_summary } = result
   const overallScore = product_analysis?.overall_score ?? shop_analysis?.overall_score ?? 0
   const [activeTab, setActiveTab] = useState<'recommendations' | 'checklist'>('recommendations')
   const [isValidationModalOpen, setIsValidationModalOpen] = useState(false)
+  const ops = operational_summary?.operational_points ?? []
+  const decisions = operational_summary?.key_decisions ?? []
+  const summaryText = operational_summary?.summary_text ?? ''
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return {
@@ -111,6 +115,60 @@ function AnalysisReport({ result, analysisId }: AnalysisReportProps) {
               </span>
               <span className="text-gray-400 dark:text-gray-500">→</span>
             </button>
+          )}
+
+          {/* 운영 포인트 & 의사결정 — Qoo10 판매자 관점 한눈에 보기 */}
+          {(summaryText || ops.length > 0 || decisions.length > 0) && (
+            <div className="mb-6 rounded-xl border border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50/80 to-indigo-50/60 dark:from-blue-900/20 dark:to-indigo-900/20 p-4 sm:p-5">
+              <h2 className="text-sm font-semibold text-blue-800 dark:text-blue-300 uppercase tracking-wider mb-2">
+                운영 포인트 & 의사결정
+              </h2>
+              {summaryText && (
+                <p className="text-sm text-gray-700 dark:text-gray-300 mb-4 leading-relaxed">
+                  {summaryText}
+                </p>
+              )}
+              {ops.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">운영 포인트</h3>
+                  <ul className="space-y-1.5">
+                    {ops.map((p, i) => (
+                      <li key={`op-${i}`} className="flex gap-2 text-sm">
+                        <span className="shrink-0 w-1.5 h-1.5 rounded-full mt-1.5 bg-blue-500 dark:bg-blue-400" />
+                        <span>
+                          <span className="font-medium text-gray-800 dark:text-gray-200">{p.area}</span>
+                          {' · '}
+                          <span className="text-gray-600 dark:text-gray-400">{p.point}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {decisions.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">핵심 의사결정</h3>
+                  <ol className="space-y-3">
+                    {decisions.map((d, i) => (
+                      <li key={`dec-${i}`} className="flex gap-3 text-sm">
+                        <span className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-blue-500 dark:bg-blue-600 text-white text-xs font-bold">
+                          {i + 1}
+                        </span>
+                        <div>
+                          <span className="font-medium text-gray-900 dark:text-gray-100">{d.decision}</span>
+                          {d.reason && (
+                            <p className="mt-0.5 text-gray-600 dark:text-gray-400 line-clamp-2">{d.reason}</p>
+                          )}
+                          {d.action && (
+                            <p className="mt-1 text-blue-600 dark:text-blue-400 text-xs">실행: {d.action}</p>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+            </div>
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">

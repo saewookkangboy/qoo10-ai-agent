@@ -58,6 +58,7 @@ Orchestrator: perform_analysis(analysis_id, url, url_type)
 
 - **Qoo10 API**: `Qoo10APIService` 연동 시 API 우선·크롤러 폴백으로 정규화된 데이터 반환.
 - **메뉴얼 파이프라인**: 상품/Shop과 별도로 `Qoo10ManualCrawler`가 큐텐 대학 한국어 페이지를 수집하며, 동일 수집→검증 패턴으로 Manual Validator와 연결됨.
+- **상세 이미지 내용 추출**: Crawl 직후 `detail_image_extractor.extract_detail_image_contents()` 호출(환경 변수 `ENABLE_DETAIL_IMAGE_EXTRACTION=true` 시). Vision API(OpenAI/Gemini)로 상세 이미지 내 텍스트 추출 후 `product_data["detail_image_contents"]`, `detail_image_text_merged` 설정. [Detail-Image-Content-Research.md](./Detail-Image-Content-Research.md) 참고.
 
 ---
 

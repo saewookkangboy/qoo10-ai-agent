@@ -64,6 +64,7 @@ class Qoo10ManualCrawler:
         soup = BeautifulSoup(html, "html.parser")
         sections: List[Dict[str, Any]] = []
         all_links: List[Dict[str, str]] = []
+        _norm_url = lambda u: (u or "").strip().rstrip("/")
 
         # 목차에 해당하는 섹션: listitem / heading + list
         for block in soup.find_all(["section", "li", "div"], recursive=True):
@@ -84,7 +85,9 @@ class Qoo10ManualCrawler:
                 if "article-university.qoo10.jp" not in full_url:
                     continue
                 links_in_block.append({"title": text or full_url, "url": full_url})
-                all_links.append({"title": text or full_url, "url": full_url})
+                u_norm = _norm_url(full_url)
+                if not any(_norm_url(x["url"]) == u_norm for x in all_links):
+                    all_links.append({"title": text or full_url, "url": full_url})
 
             if title and (links_in_block or "더보기" in block.get_text()):
                 # 더보기 링크만 있는 경우도 수집
@@ -95,7 +98,8 @@ class Qoo10ManualCrawler:
                             full_url = urljoin(base_url, href)
                             if not any(l["url"] == full_url for l in links_in_block):
                                 links_in_block.append({"title": "더보기", "url": full_url})
-                                all_links.append({"title": "더보기", "url": full_url})
+                                if not any(_norm_url(x["url"]) == _norm_url(full_url) for x in all_links):
+                                    all_links.append({"title": "더보기", "url": full_url})
                 sections.append({
                     "section_title": title,
                     "links": links_in_block,
@@ -108,7 +112,8 @@ class Qoo10ManualCrawler:
                 continue
             full_url = urljoin(base_url, href)
             text = (a.get_text() or "").strip()
-            if full_url not in [x["url"] for x in all_links]:
+            u_norm = _norm_url(full_url)
+            if not any(_norm_url(x["url"]) == u_norm for x in all_links):
                 all_links.append({"title": text or full_url, "url": full_url})
 
         return {

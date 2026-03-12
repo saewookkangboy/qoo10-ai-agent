@@ -17,6 +17,10 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# structure_comparison.value_mismatches 중 점수/is_valid에 반영하지 않을 필드
+# (스키마는 길이 0/고정값, 크롤러는 실제 N개 등으로 차이가 나는 허용 케이스)
+ALLOWED_VALUE_MISMATCH_FIELDS = frozenset(["ImageUrlList"])
+
 
 class DataValidator:
     """데이터 검증기"""
@@ -291,15 +295,23 @@ class DataValidator:
         #           image_count, description_length, qpoint_info, coupon_info, shipping_info
         total_fields = 10  # 실제 검증 필드 수 (discount_rate는 재계산만 수행)
         error_count = len([m for m in mismatches if not m.get("corrected", False)]) + len(missing_items)
+        # structure_comparison.value_mismatches 반영 (허용 목록 제외)
+        value_mismatches = (structure_comparison or {}).get("value_mismatches") or []
+        def _value_mismatch_field_name(v: Dict[str, Any]) -> str:
+            return ((v.get("field") or "").split(".")[-1]).strip()
+        non_allowed_value = [v for v in value_mismatches if _value_mismatch_field_name(v) not in ALLOWED_VALUE_MISMATCH_FIELDS]
+        error_count += len(non_allowed_value)
         validation_score = max(0, 100 - (error_count / total_fields * 100))
-        
+        uncorrected_ok = len([m for m in mismatches if not m.get("corrected", False)]) == 0 and len(missing_items) == 0
+        is_valid = uncorrected_ok and len(non_allowed_value) == 0
         validation_result.update({
-            "is_valid": len([m for m in mismatches if not m.get("corrected", False)]) == 0 and len(missing_items) == 0,
+            "is_valid": is_valid,
             "mismatches": mismatches,
             "missing_items": missing_items,
-            "validation_score": validation_score,
+            "validation_score": round(validation_score, 1),
             "corrected_fields": corrected_fields,
-            "message": "OK" if validation_result.get("is_valid") else "일부 불일치 또는 누락이 있습니다.",
+            "allowed_value_mismatch_fields": list(ALLOWED_VALUE_MISMATCH_FIELDS),
+            "message": "OK" if is_valid else "일부 불일치 또는 누락이 있습니다.",
         })
         
         return validation_result

@@ -35,8 +35,8 @@ run_manual_pipeline() | test_data_pipeline_full --manual
     → load_and_validate(crawled, manual_path)
         → parse_manual_markdown(content) → sections, all_더보기_urls, toc_titles
         → validate_manual_vs_crawled(manual_content, crawled)
-    → missing_analysis (missing_sections, missing_links, ...), coverage_score, suggestions
-    → JSON 저장 / result.manual_missing_analysis 에 포함
+    → validation (missing_sections, missing_links, missing_in_manual_items, ...), coverage_score, suggestions
+    → JSON 저장 / result.validation; --manual 시 result.manual_missing_analysis = validation
 ```
 
 ---

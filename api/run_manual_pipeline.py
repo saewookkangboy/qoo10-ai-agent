@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from services.manual_crawler import Qoo10ManualCrawler
 from services.manual_validator import load_and_validate, find_manual_path, parse_manual_markdown
+from services.manual_pipeline_cleaner import clean_manual_pipeline_result
 
 
 async def run_manual_pipeline(
@@ -33,20 +34,14 @@ async def run_manual_pipeline(
         crawled = await crawler.crawl_all()
         # Stage 2: 검증 (Validation Agent) + 누락 분석
         validation = load_and_validate(crawled, manual_path=manual_path)
-        return {
+        result = {
             "pipeline": "manual",
             "crawled": crawled,
             "validation": validation,
-            "missing_analysis": {
-                "missing_sections": validation.get("missing_sections", []),
-                "missing_links": validation.get("missing_links", []),
-                "missing_in_manual_items": validation.get("missing_in_manual_items", []),
-                "extra_in_manual": validation.get("extra_in_manual", []),
-                "coverage_score": validation.get("coverage_score", 0),
-                "suggestions": validation.get("suggestions", []),
-                "summary": validation.get("summary", {}),
-            },
         }
+        # Post-crawl clean: placeholders, dedupe, normalize, schema validation
+        result = clean_manual_pipeline_result(result, mark_placeholders=False)
+        return result
     finally:
         await crawler.close()
 
@@ -56,11 +51,28 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Qoo10 큐텐 대학 한국어 메뉴얼 파이프라인")
     parser.add_argument("--output", "-o", default="manual_pipeline_result.json", help="결과 JSON 저장 경로")
     parser.add_argument("--manual-path", default=None, help="메뉴얼 마크다운 파일 경로 (기본: doc/Qoo10_큐텐대학_한국어_메뉴얼.md)")
+    parser.add_argument("--clean-file", default=None, help="기존 JSON 파일 경로; 지정 시 크롤 없이 클린만 수행 후 저장")
     args = parser.parse_args()
 
     print("=" * 80)
     print("Qoo10 큐텐 대학 한국어 메뉴얼 데이터 파이프라인")
     print("=" * 80)
+
+    if args.clean_file:
+        clean_path = args.clean_file if os.path.isabs(args.clean_file) else os.path.join(os.path.dirname(__file__), args.clean_file)
+        if not os.path.isfile(clean_path):
+            print(f"오류: 파일을 찾을 수 없습니다: {clean_path}")
+            sys.exit(1)
+        with open(clean_path, "r", encoding="utf-8") as f:
+            result = json.load(f)
+        from services.manual_pipeline_cleaner import clean_manual_pipeline_result
+        result = clean_manual_pipeline_result(result, mark_placeholders=False)
+        out_path = args.output if os.path.isabs(args.output) else os.path.join(os.path.dirname(__file__), args.output)
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(result, f, ensure_ascii=False, indent=2)
+        print(f"클린 완료. 저장: {out_path}")
+        print("=" * 80)
+        return
 
     result = asyncio.run(run_manual_pipeline(manual_path=args.manual_path))
 
@@ -69,7 +81,6 @@ def main() -> None:
     topic = crawled.get("topic", {})
     beginner = crawled.get("beginner_category", {})
     val = result.get("validation", {})
-    missing = result.get("missing_analysis", {})
 
     print("\n[1] 수집 (Crawl)")
     print(f"    - 메인 토픽 섹션 수: {len(topic.get('sections') or [])}")
@@ -77,24 +88,24 @@ def main() -> None:
     print(f"    - 단계별 교육(초급) 글 수: {len(beginner.get('articles') or [])}")
 
     print("\n[2] 검증 (Validation) & 누락 데이터 정밀 분석")
-    print(f"    - coverage_score: {missing.get('coverage_score', 0)}%")
-    print(f"    - 누락 섹션: {len(missing.get('missing_sections') or [])}건")
-    print(f"    - 누락 링크: {len(missing.get('missing_links') or [])}건")
-    print(f"    - 메뉴얼에 없는 항목: {len(missing.get('missing_in_manual_items') or [])}건")
-    print(f"    - 메뉴얼에만 있는 URL: {len(missing.get('extra_in_manual') or [])}건")
-    for s in (missing.get("suggestions") or [])[:5]:
+    print(f"    - coverage_score: {val.get('coverage_score', 0)}%")
+    print(f"    - 누락 섹션: {len(val.get('missing_sections') or [])}건")
+    print(f"    - 누락 링크: {len(val.get('missing_links') or [])}건")
+    print(f"    - 메뉴얼에 없는 항목: {len(val.get('missing_in_manual_items') or [])}건")
+    print(f"    - 메뉴얼에만 있는 URL: {len(val.get('extra_in_manual') or [])}건")
+    for s in (val.get("suggestions") or [])[:5]:
         print(f"    - 제안: {s}")
 
-    # JSON 저장 (직렬화 가능한 것만)
+    # JSON 저장 (직렬화 가능한 것만; depth/limit 완화로 placeholder 재발 방지)
     def _serializable(obj: Any, depth: int = 0):
-        if depth > 6:
+        if depth > 18:
             return "<<max depth>>"
         if obj is None or isinstance(obj, (bool, int, float, str)):
             return obj
         if isinstance(obj, (list, tuple)):
-            return [_serializable(x, depth + 1) for x in obj[:200]]
+            return [_serializable(x, depth + 1) for x in obj[:400]]
         if isinstance(obj, dict):
-            return {k: _serializable(v, depth + 1) for k, v in list(obj.items())[:100]}
+            return {k: _serializable(v, depth + 1) for k, v in list(obj.items())[:150]}
         return str(obj)
 
     out_path = args.output

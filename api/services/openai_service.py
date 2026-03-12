@@ -115,6 +115,44 @@ class OpenAIService:
             logger.error("OpenAI 텍스트 생성 오류: %s", str(e), exc_info=True)
             return None
 
+    async def extract_text_from_image_url(self, image_url: str) -> Optional[str]:
+        """
+        상세 이미지 URL에서 텍스트 추출 (Vision API).
+        gpt-4o-mini / gpt-4o 등 vision 지원 모델 사용.
+        """
+        if not self._client or not image_url or not image_url.strip().startswith("http"):
+            return None
+        vision_model = os.getenv("AI_MODEL_OPENAI_VISION") or "gpt-4o-mini"
+        prompt = (
+            "이 상품 상세 이미지에 보이는 모든 텍스트를 추출해 주세요. "
+            "원문 언어(일본어/한국어/영어 등)를 유지하고, 제목·불릿·표는 구조를 나누어 작성해 주세요. "
+            "텍스트가 없으면 '텍스트 없음'이라고만 답하세요."
+        )
+        messages: List[Dict[str, Any]] = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": image_url}},
+                ],
+            }
+        ]
+        try:
+            response = await self._client.chat.completions.create(
+                model=vision_model,
+                messages=messages,
+                max_tokens=1024,
+                temperature=0.2,
+            )
+            choice = response.choices[0] if response.choices else None
+            if choice and getattr(choice, "message", None) and choice.message.content:
+                text = choice.message.content.strip()
+                return None if text == "텍스트 없음" else text
+            return None
+        except Exception as e:
+            logger.debug("OpenAI Vision 이미지 텍스트 추출 실패 (%s): %s", image_url[:50], str(e))
+            return None
+
     def _build_analysis_context(
         self,
         product_data: Dict[str, Any],
@@ -296,9 +334,7 @@ JSON 형식으로 응답해주세요:
     ) -> Dict[str, Any]:
         """기존 분석 결과를 AI로 강화 (product_analysis 또는 shop_analysis 구조 유지)"""
         if not self._client:
-import copy
-
-            enhanced_result = copy.deepcopy(analysis_result)
+            return analysis_result
 
         try:
             ai_analysis = await self.analyze_product_with_ai(product_data, analysis_result)

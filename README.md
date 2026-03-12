@@ -16,6 +16,7 @@ Qoo10 Japan 입점 브랜드의 URL을 입력하면, AI가 상품/샵을 분석�
 2. **To-do 관리**: 개발 작업 추적
 3. **FastAPI 백엔드**: RESTful API 서버
 4. **SEO 최적화**: 웹 최적화 기능
+5. **AI 강화학습 (Agent Lightning 연동)**: 분석 결과 trajectory 수집 및 `learning_trajectory` 저장 — [doc/agents/AI-Reinforcement-Learning.md](doc/agents/AI-Reinforcement-Learning.md)
 
 ## 에이전트 오케스트레이션
 
@@ -55,6 +56,8 @@ qoo10-ai-agent/
 │   └── config.json           # 프로젝트 설정
 └── package.json
 ```
+
+
 
 ## 설치 및 설정
 

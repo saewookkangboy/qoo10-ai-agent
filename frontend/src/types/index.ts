@@ -27,8 +27,30 @@ export interface AnalysisResult {
     product_data?: ProductData
     shop_data?: ShopData
     validation?: ValidationResult
+    operational_summary?: OperationalSummary
   }
   error?: string
+}
+
+/** Qoo10 판매자 관점 운영 포인트·의사결정 요약 */
+export interface OperationalSummary {
+  summary_text: string
+  operational_points: OperationalPoint[]
+  key_decisions: KeyDecision[]
+}
+
+export interface OperationalPoint {
+  area: string
+  point: string
+  impact: string
+  source: string
+}
+
+export interface KeyDecision {
+  decision: string
+  reason: string
+  priority: string
+  action: string
 }
 
 export interface ValidationResult {

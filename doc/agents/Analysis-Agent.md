@@ -57,6 +57,7 @@ Orchestrator: product_data | shop_data 수신
 
 - **SEO/AIO/GEO**: 별도 라우트에서 Crawl 공유 후 Analysis만 SEO/AIO/GEO 전용 서비스로 분기 가능.
 - **요소 단위**: `page_structure_analysis.elements`는 Recommendation·Checklist·Validation·Report에서 동일 `element_id` 체계로 사용.
+- **상세 이미지 텍스트 반영**: `product_data["detail_image_text_merged"]`가 있으면 `_analyze_description()`에서 설명 길이·구조·일본어 비율을 **effective_description**(본문+상세 이미지 추출 텍스트) 기준으로 평가. `description_analysis`에 `effective_description_length`, `detail_image_text_length` 필드 추가. [Detail-Image-Content-Research.md](./Detail-Image-Content-Research.md) 참고.
 
 ---
 

@@ -98,6 +98,8 @@
 - **[Validation-Agent.md](./Validation-Agent.md)** – 크롤러 vs 리포트 검증·보정, 요소 단위 검증, API 연동, 메뉴얼 검증 확장.
 - **[Report-Output-Agent.md](./Report-Output-Agent.md)** – 결과 조립, 저장, 히스토리, 알림, 리포트 다운로드, 데이터 흐름.
 - **[Manual-Agent.md](./Manual-Agent.md)** – 큐텐 대학 한국어 메뉴얼 수집·검증·누락 분석(독립 파이프라인).
+- **[Detail-Image-Content-Research.md](./Detail-Image-Content-Research.md)** – 상세 이미지(긴 이미지) 내용 추출 리서치 및 분석 반영 방법.
+- **[AI-Reinforcement-Learning.md](./AI-Reinforcement-Learning.md)** – 분석 결과 저장 및 AI 강화학습(Agent Lightning) trajectory 수집·스키마·연동.
 
 **관련**: [../SERVICE_QA_QC_REPORT.md](../SERVICE_QA_QC_REPORT.md) (서비스 전체 진단·QA/QC), [../../tests/docs/QC_QA_REPORT_1093098159.md](../../tests/docs/QC_QA_REPORT_1093098159.md) (상품 페이지 QC/QA).
 

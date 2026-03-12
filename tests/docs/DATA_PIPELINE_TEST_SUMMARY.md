@@ -137,7 +137,7 @@ python run_manual_pipeline.py --output results/manual_pipeline_result.json --man
 
 ### 5.3 산출물
 
-- `manual_pipeline_result.json`: 크롤 결과 + 검증 결과 + `missing_analysis` (누락 섹션/링크/항목, 제안)
+- `manual_pipeline_result.json`: 크롤 결과 + 검증 결과 `validation` (누락 섹션/링크/항목, coverage_score, suggestions 등)
 - 콘솔: coverage_score, 누락 링크 수, 제안 요약
 
 ### 5.4 전체 파이프라인과 연동
@@ -148,7 +148,7 @@ python run_manual_pipeline.py --output results/manual_pipeline_result.json --man
 python test_data_pipeline_full.py "https://www.qoo10.jp/shop/whippedofficial" --manual
 ```
 
-- `--manual` 사용 시 `run_manual_pipeline`이 호출되고, 결과의 `manual_missing_analysis`가 `test_data_pipeline_full_result.json`에 포함됩니다.
+- `--manual` 사용 시 `run_manual_pipeline`이 호출되고, 결과의 `validation`이 `manual_missing_analysis` 키로 `test_data_pipeline_full_result.json`에 포함됩니다.
 - 누락 데이터가 있을 경우 제안(suggestions)에 따라 메뉴얼을 수동 보완하거나, 크롤러/검증기 규칙을 조정할 수 있습니다.
 
 ### 5.5 관련 파일

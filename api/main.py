@@ -8,6 +8,7 @@ from pydantic import BaseModel, HttpUrl, Field
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
 import uuid
+import asyncio
 from datetime import datetime
 import os
 import re
@@ -17,6 +18,7 @@ import json
 from dotenv import load_dotenv
 import httpx
 
+from services.ai_provider import get_ai_service_for_analysis, warm_ai_service
 from services.crawler import Qoo10Crawler
 from services.analyzer import ProductAnalyzer
 from services.recommender import SalesEnhancementRecommender
@@ -36,6 +38,8 @@ from services.data_validator import DataValidator
 from services.error_reporting_service import ErrorReportingService
 from services.pipeline_monitor import PipelineMonitor
 from services.chat_service import ChatService
+from services.operational_summary import build_operational_summary
+from services.learning_data_service import LearningDataService
 
 load_dotenv()
 
@@ -65,6 +69,17 @@ app.add_middleware(
 # 분석 결과 저장소 (임시 - 프로덕션에서는 DB 사용)
 analysis_store: Dict[str, Dict[str, Any]] = {}
 
+
+@app.on_event("startup")
+def _startup_warm_ai():
+    """앱 기동 시 AI 서비스를 미리 로드하여 첫 분석 30% 구간 지연을 줄입니다."""
+    try:
+        warm_ai_service()
+        logger.info("AI 서비스 프리웜 완료 (분석 강화 준비됨)")
+    except Exception as e:
+        logger.warning("AI 서비스 프리웜 실패 (첫 분석 시 초기화됨): %s", str(e))
+
+
 # 히스토리 관리자 및 알림 서비스 초기화
 history_manager = HistoryManager()
 notification_service = NotificationService()
@@ -74,6 +89,7 @@ data_validator = DataValidator()
 error_reporting_service = ErrorReportingService()
 pipeline_monitor = PipelineMonitor()
 chat_service = ChatService()
+learning_data_service = LearningDataService()
 
 
 class AnalyzeRequest(BaseModel):
@@ -304,6 +320,28 @@ async def start_analysis(
         )
 
 
+def _analysis_response_from_store_or_history(analysis_id: str):
+    """
+    analysis_store 또는 DB 히스토리에서 분석 데이터를 가져옵니다.
+    Vercel 등 서버리스 환경에서는 요청 간 메모리가 공유되지 않으므로 DB fallback이 필요합니다.
+    """
+    if analysis_id in analysis_store:
+        return analysis_store[analysis_id], "store"
+    history_item = history_manager.get_analysis_by_id(analysis_id)
+    if history_item:
+        return {
+            "analysis_id": history_item["analysis_id"],
+            "url": history_item["url"],
+            "url_type": history_item["url_type"],
+            "status": "completed",
+            "created_at": history_item.get("created_at", ""),
+            "updated_at": history_item.get("updated_at", ""),
+            "result": history_item.get("analysis_result"),
+            "progress": {"stage": "completed", "percentage": 100, "message": "분석이 완료되었습니다."},
+        }, "history"
+    return None, None
+
+
 @app.get("/api/v1/analyze/{analysis_id}")
 async def get_analysis_result(analysis_id: str):
     """
@@ -312,14 +350,14 @@ async def get_analysis_result(analysis_id: str):
     - analysis_id로 분석 결과를 조회합니다
     - status가 "completed"일 때만 결과를 반환합니다
     - 진행 상태(progress) 정보도 함께 반환합니다
+    - 서버리스 환경: 메모리(analysis_store)에 없으면 DB 히스토리에서 조회합니다.
     """
-    if analysis_id not in analysis_store:
+    analysis, _ = _analysis_response_from_store_or_history(analysis_id)
+    if analysis is None:
         raise HTTPException(
             status_code=404,
             detail="Analysis not found"
         )
-    
-    analysis = analysis_store[analysis_id]
     
     # 기본 응답 구조
     response = {
@@ -372,22 +410,25 @@ async def download_report(
     
     - analysis_id로 분석 리포트를 다운로드합니다
     - format: pdf, excel, markdown
+    - 서버리스 환경: 메모리에 없으면 DB 히스토리에서 조회합니다.
     """
-    if analysis_id not in analysis_store:
+    analysis, _ = _analysis_response_from_store_or_history(analysis_id)
+    if analysis is None:
         raise HTTPException(
             status_code=404,
             detail="Analysis not found"
         )
-    
-    analysis = analysis_store[analysis_id]
-    
-    if analysis["status"] != "completed":
+    if analysis.get("status") != "completed":
         raise HTTPException(
             status_code=400,
             detail="Analysis is not completed yet"
         )
-    
-    result = analysis["result"]
+    result = analysis.get("result")
+    if not result:
+        raise HTTPException(
+            status_code=400,
+            detail="Analysis result is empty"
+        )
     product_data = result.get("product_data")
     shop_data = result.get("shop_data")
     validation_result = result.get("validation")  # 검증 결과 가져오기
@@ -605,6 +646,19 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                 
                 logger.info(f"[{analysis_id}] Crawling completed - Product: {product_name}, Code: {product_data.get('product_code', 'N/A')}")
                 logger.debug(f"[{analysis_id}] Crawled data keys: {list(product_data.keys())}")
+
+                # 상세 이미지 내용 추출 (선택, ENABLE_DETAIL_IMAGE_EXTRACTION=true 시)
+                try:
+                    from services.detail_image_extractor import (
+                        extract_detail_image_contents,
+                        merge_detail_contents_into_product,
+                    )
+                    detail_contents = await extract_detail_image_contents(product_data)
+                    if detail_contents:
+                        merge_detail_contents_into_product(product_data, detail_contents)
+                        logger.info(f"[{analysis_id}] Detail image content extracted: {len(detail_contents)} images")
+                except Exception as ext_err:
+                    logger.debug(f"[{analysis_id}] Detail image extraction skipped: {ext_err}")
             except httpx.HTTPError as e:
                 crawl_duration_ms = int((time.time() - crawl_start_time) * 1000)
                 error_type = type(e).__name__
@@ -666,25 +720,26 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                 analyzer = ProductAnalyzer()
                 raw_analysis_result = await analyzer.analyze(product_data)
                 
-                # AI 분석 강화 (Gemini 우선, 없으면 OpenAI 폴백, 환경 변수 AI_PROVIDER로 지정 가능)
-                try:
-                    from services.ai_provider import get_ai_service_for_analysis
-                    ai_svc = get_ai_service_for_analysis()
-                    if ai_svc and (getattr(ai_svc, "model", None) or getattr(ai_svc, "available", False)):
-                        logger.info("[%s] Enhancing analysis with AI (Gemini/OpenAI)...", analysis_id)
-                        enhanced_result = await ai_svc.enhance_analysis_with_ai(
-                            product_data=product_data,
-                            analysis_result={"product_analysis": raw_analysis_result}
+                # AI 분석 강화 (캐시된 서비스 사용, 타임아웃으로 무한 대기 방지)
+                analysis_result = {"product_analysis": raw_analysis_result}
+                ai_svc = get_ai_service_for_analysis()
+                if ai_svc and (getattr(ai_svc, "model", None) or getattr(ai_svc, "available", False)):
+                    _update_progress(analysis_id, "analyzing", 32, "AI로 분석을 보강하는 중...")
+                    logger.info("[%s] Enhancing analysis with AI (Gemini/OpenAI)...", analysis_id)
+                    try:
+                        enhanced_result = await asyncio.wait_for(
+                            ai_svc.enhance_analysis_with_ai(
+                                product_data=product_data,
+                                analysis_result={"product_analysis": raw_analysis_result},
+                            ),
+                            timeout=45.0,
                         )
-                        if "product_analysis" in enhanced_result:
+                        if enhanced_result and "product_analysis" in enhanced_result:
                             analysis_result = enhanced_result
-                        else:
-                            analysis_result = {"product_analysis": raw_analysis_result}
-                    else:
-                        analysis_result = {"product_analysis": raw_analysis_result}
-                except Exception as e:
-                    logger.warning("[%s] AI enhancement skipped: %s", analysis_id, str(e))
-                    analysis_result = {"product_analysis": raw_analysis_result}
+                    except asyncio.TimeoutError:
+                        logger.warning("[%s] AI enhancement timeout (45s), using raw analysis", analysis_id)
+                    except Exception as e:
+                        logger.warning("[%s] AI enhancement skipped: %s", analysis_id, str(e))
                 
                 # 분석 결과 검증 (더 유연하게)
                 if not analysis_result:
@@ -954,6 +1009,16 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
             except Exception as e:
                 logger.warning(f"[{analysis_id}] Failed to add validation: {str(e)}")
                 final_result["validation"] = None
+
+            try:
+                final_result["operational_summary"] = build_operational_summary(
+                    product_analysis=final_result.get("product_analysis"),
+                    recommendations=final_result.get("recommendations"),
+                    checklist=final_result.get("checklist"),
+                )
+            except Exception as e:
+                logger.warning(f"[{analysis_id}] operational_summary failed: {str(e)}")
+                final_result["operational_summary"] = {"summary_text": "", "operational_points": [], "key_decisions": []}
             
             logger.info(f"[{analysis_id}] Final result constructed with {len(final_result)} keys")
             
@@ -1112,26 +1177,26 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                 # 초기 분석 (체크리스트 결과는 나중에 반영)
                 raw_analysis_result = await shop_analyzer.analyze(shop_data, checklist_result=None)
                 
-                # raw_analysis_result는 이미 shop_analysis 구조 (overall_score 포함)
-                # AI 분석 강화 (Gemini 우선, 없으면 OpenAI 폴백)
-                try:
-                    from services.ai_provider import get_ai_service_for_analysis
-                    ai_svc = get_ai_service_for_analysis()
-                    if ai_svc and (getattr(ai_svc, "model", None) or getattr(ai_svc, "available", False)):
-                        logger.info("[%s] Enhancing shop analysis with AI (Gemini/OpenAI)...", analysis_id)
-                        enhanced_result = await ai_svc.enhance_analysis_with_ai(
-                            product_data=shop_data,
-                            analysis_result={"shop_analysis": raw_analysis_result}
+                # AI 분석 강화 (캐시된 서비스 사용, 타임아웃으로 무한 대기 방지)
+                analysis_result = {"shop_analysis": raw_analysis_result}
+                ai_svc = get_ai_service_for_analysis()
+                if ai_svc and (getattr(ai_svc, "model", None) or getattr(ai_svc, "available", False)):
+                    _update_progress(analysis_id, "analyzing", 32, "AI로 분석을 보강하는 중...")
+                    logger.info("[%s] Enhancing shop analysis with AI (Gemini/OpenAI)...", analysis_id)
+                    try:
+                        enhanced_result = await asyncio.wait_for(
+                            ai_svc.enhance_analysis_with_ai(
+                                product_data=shop_data,
+                                analysis_result={"shop_analysis": raw_analysis_result},
+                            ),
+                            timeout=45.0,
                         )
-                        if "shop_analysis" in enhanced_result:
+                        if enhanced_result and "shop_analysis" in enhanced_result:
                             analysis_result = enhanced_result
-                        else:
-                            analysis_result = {"shop_analysis": raw_analysis_result}
-                    else:
-                        analysis_result = {"shop_analysis": raw_analysis_result}
-                except Exception as e:
-                    logger.warning("[%s] AI enhancement skipped: %s", analysis_id, str(e))
-                    analysis_result = {"shop_analysis": raw_analysis_result}
+                    except asyncio.TimeoutError:
+                        logger.warning("[%s] AI enhancement timeout (45s), using raw analysis", analysis_id)
+                    except Exception as e:
+                        logger.warning("[%s] AI enhancement skipped: %s", analysis_id, str(e))
                 
                 # 분석 결과 검증 (shop_analysis 내부의 overall_score 확인)
                 if not analysis_result or "shop_analysis" not in analysis_result:
@@ -1405,7 +1470,16 @@ async def perform_analysis(analysis_id: str, url: str, url_type: str):
                     "shop_data": shop_data,
                     "validation": validation_result
                 }
-                
+                try:
+                    final_result["operational_summary"] = build_operational_summary(
+                        product_analysis=None,
+                        recommendations=recommendations,
+                        checklist=checklist_result,
+                    )
+                except Exception as e:
+                    logger.warning(f"[{analysis_id}] shop operational_summary failed: {str(e)}")
+                    final_result["operational_summary"] = {"summary_text": "", "operational_points": [], "key_decisions": []}
+
                 # analysis_store 업데이트 (안전하게)
                 if analysis_id in analysis_store:
                     analysis_store[analysis_id]["result"] = final_result
@@ -1545,7 +1619,18 @@ async def _save_history_and_notify_async(
             url_type,
             final_result
         )
-        
+        # AI 강화학습용 trajectory 저장 (Agent Lightning 등 RL 연동)
+        try:
+            learning_data_service.save_trajectory(
+                analysis_id=analysis_id,
+                url=url,
+                url_type=url_type,
+                analysis_result=final_result,
+                reward=float(overall_score),
+            )
+        except Exception as e:
+            logger.debug("Learning trajectory save skipped: %s", e)
+
         # 알림 생성
         notification_service.notify_analysis_completed(
             analysis_id,
@@ -2191,15 +2276,14 @@ async def report_error(request: ErrorReportRequest):
     - 신고된 항목은 우선적으로 크롤링됩니다
     """
     try:
-        # 분석 결과 조회
-        if request.analysis_id not in analysis_store:
+        # 분석 결과 조회 (store 또는 DB 히스토리)
+        analysis, _ = _analysis_response_from_store_or_history(request.analysis_id)
+        if analysis is None:
             raise HTTPException(
                 status_code=404,
                 detail="Analysis not found"
             )
-        
-        analysis = analysis_store[request.analysis_id]
-        if analysis["status"] != "completed":
+        if analysis.get("status") != "completed":
             raise HTTPException(
                 status_code=400,
                 detail="Analysis is not completed yet"
@@ -2507,13 +2591,12 @@ async def chat_with_report(request: ChatRequest):
     - analysis_result: 분석 결과 데이터 (선택사항, 없으면 DB에서 조회)
     """
     try:
-        # analysis_result가 없고 analysis_id가 있으면 DB에서 조회
+        # analysis_result가 없고 analysis_id가 있으면 store 또는 DB에서 조회
         analysis_result = request.analysis_result
         if not analysis_result and request.analysis_id:
-            if request.analysis_id in analysis_store:
-                stored_result = analysis_store[request.analysis_id]
-                if stored_result.get("status") == "completed":
-                    analysis_result = stored_result.get("result")
+            analysis, _ = _analysis_response_from_store_or_history(request.analysis_id)
+            if analysis and analysis.get("status") == "completed":
+                analysis_result = analysis.get("result")
         
         response_text = await chat_service.generate_response(
             message=request.message,

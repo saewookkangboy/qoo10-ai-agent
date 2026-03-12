@@ -79,3 +79,14 @@ playwright install chromium
   VITE_API_PROXY_TARGET=http://localhost:8080
   ```
   저장 후 프론트를 다시 실행하세요.
+
+## Git 워크플로우
+
+- **팀 정책:** **main** 및 **dev**에는 직접 푸시할 수 없습니다. 모든 변경은 **Pull Request**를 통해서만 반영합니다.
+- **금지:** `main` 또는 `dev`를 로컬에서 병합한 뒤 `git push origin main`(또는 `dev`) 하는 행위. 브랜치 보호가 켜져 있으면 푸시가 거부됩니다.
+- **필수 절차**
+  1. 작업은 **feature 브랜치**에서 진행하고 원격에 푸시합니다.
+  2. **main** 또는 **dev**를 대상으로 **Pull Request**를 연다.
+  3. **CI가 통과**하고 **리뷰 승인**된 뒤에만 PR을 머지합니다. 머지는 GitHub UI에서 수행합니다.
+- **브랜치 이름 예시 (권장):** `feat/상세이미지-추출`, `feat/vercel-deploy`, `fix/placeholder-handling`, `p-work/분석-저장` 등. (`feat/*`, `fix/*`, `p-work/*` 패턴 사용 권장.)
+- **요약:** 로컬에서 main/dev로의 merge는 하지 말고, feature 브랜치 → PR 생성 → CI 및 리뷰 통과 → PR 머지 순서로 진행합니다.

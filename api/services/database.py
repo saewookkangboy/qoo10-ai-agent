@@ -228,6 +228,28 @@ class CrawlerDatabase:
                         UNIQUE(period_type, period_start, stage)
                     )
                 """)
+                # AI 강화학습용 trajectory (Agent Lightning 등 RL 연동)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS learning_trajectory (
+                        id SERIAL PRIMARY KEY,
+                        analysis_id TEXT NOT NULL UNIQUE,
+                        url TEXT NOT NULL,
+                        url_type TEXT NOT NULL,
+                        state_snapshot TEXT,
+                        actions_snapshot TEXT,
+                        reward REAL,
+                        metadata_json TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_learning_trajectory_analysis_id
+                    ON learning_trajectory(analysis_id)
+                """)
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_learning_trajectory_created_at
+                    ON learning_trajectory(created_at)
+                """)
             else:
                 # SQLite 테이블 생성
                 cursor.execute("""
@@ -387,6 +409,28 @@ class CrawlerDatabase:
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         UNIQUE(period_type, period_start, stage)
                     )
+                """)
+                # AI 강화학습용 trajectory (Agent Lightning 등 RL 연동)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS learning_trajectory (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        analysis_id TEXT NOT NULL UNIQUE,
+                        url TEXT NOT NULL,
+                        url_type TEXT NOT NULL,
+                        state_snapshot TEXT,
+                        actions_snapshot TEXT,
+                        reward REAL,
+                        metadata_json TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_learning_trajectory_analysis_id
+                    ON learning_trajectory(analysis_id)
+                """)
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_learning_trajectory_created_at
+                    ON learning_trajectory(created_at)
                 """)
             
             # 인덱스 생성
