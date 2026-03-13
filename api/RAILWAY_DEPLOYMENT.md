@@ -15,7 +15,7 @@
 4. **Root Directory는 비워 둠** (설정하지 않음)
    - 저장소 루트의 `Dockerfile`이 `api/`를 빌드·실행합니다.
    - Root Directory에 `api`를 넣으면 "Could not find root directory: api" 오류가 날 수 있으므로 사용하지 않습니다.
-5. 빌더: 루트에 `Dockerfile`이 있으면 Railway가 자동으로 Docker 빌드를 사용합니다.
+5. 빌더: 저장소 **루트**의 `railway.json`이 `"builder": "DOCKERFILE"`로 지정되어 있어, Railpack 대신 Dockerfile로 빌드됩니다. (루트에 `railway.json`과 `Dockerfile`이 모두 있어야 합니다.)
 
 ## 2. 환경 변수 설정
 
