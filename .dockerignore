@@ -1,0 +1,21 @@
+# API 폴더 내 배포에 불필요한 파일 제외 (루트 Dockerfile이 api/ 를 복사할 때)
+api/.env
+api/.env.*
+api/__pycache__
+api/**/__pycache__
+api/*.db
+api/*.db-shm
+api/*.db-wal
+api/.pytest_cache
+api/.cursor
+api/*.log
+api/manual_pipeline_result*.json
+api/crawl_result.json
+api/shop_crawl_result.json
+.git
+.gitignore
+*.md
+frontend
+doc
+tests
+mcp_servers

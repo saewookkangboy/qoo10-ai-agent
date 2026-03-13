@@ -12,10 +12,10 @@
 1. Railway 대시보드에서 "New Project" 클릭
 2. "Deploy from GitHub repo" 선택
 3. GitHub 저장소 선택
-4. 프로젝트 설정:
-   - **Root Directory**: `api`
-   - **Build Command**: 자동 감지 (railway.json 사용)
-   - **Start Command**: 자동 감지 (railway.json 사용)
+4. **Root Directory는 비워 둠** (설정하지 않음)
+   - 저장소 루트의 `Dockerfile`이 `api/`를 빌드·실행합니다.
+   - Root Directory에 `api`를 넣으면 "Could not find root directory: api" 오류가 날 수 있으므로 사용하지 않습니다.
+5. 빌더: 루트에 `Dockerfile`이 있으면 Railway가 자동으로 Docker 빌드를 사용합니다.
 
 ## 2. 환경 변수 설정
 
@@ -73,6 +73,14 @@ ALLOWED_ORIGINS=https://your-vercel-app.vercel.app,https://your-custom-domain.co
 ```
 
 ## 6. 문제 해결
+
+### "Could not find root directory: api"
+- **원인**: Railway에서 Root Directory를 `api`로 설정했을 때, 일부 환경에서 해당 경로를 찾지 못하는 경우가 있습니다.
+- **해결**: Root Directory를 **비우고**, 저장소 루트의 **Dockerfile**로 배포하세요. (이 레포에는 루트 `Dockerfile`이 있어 `api/`를 빌드합니다.)
+
+### "Railpack could not determine how to build the app"
+- **원인**: Root Directory를 비우면 Railpack이 루트만 보고 Python 앱을 못 찾을 수 있음.
+- **해결**: 루트에 `Dockerfile`이 있으면 Railway가 Docker 빌드를 사용하므로, Root Directory는 비워 두고 Dockerfile 방식으로 배포하면 됩니다.
 
 ### 빌드 실패
 - Railway 로그 확인: Deployments → 해당 배포 → Logs
